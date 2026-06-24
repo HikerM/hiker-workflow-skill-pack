@@ -1,0 +1,10 @@
+SELF_DISTILLATION_OUTPUT.md
+*.zip
+.backups/
+.codex-output/
+outputs/tmp/
+work/
+*.tmp
+*.temp
+*.bak
+*~

@@ -1,20 +1,75 @@
-# Skill Index
+# Skill 索引
 
-## Core Skills
+仓库包含三组，共 27 个 Skill。
 
-- `hiker-workflow-router`: Routes complex Hiker tasks to the shortest matching workflow.
-- `codex-thread-review`: Reviews pasted Codex results for scope, evidence, gaps, and next message.
-- `project-phase-review`: Judges P2.x or staged phase completion and next-phase readiness.
-- `evidence-first-testing`: Designs or evaluates real evidence, smoke, contract, chaos, concurrency, and performance tests.
-- `contract-boundary-audit`: Audits OpenAPI, DTO, provider adapter, DB/seed, result response, and frontend boundaries.
-- `nodets-execution-pipeline-guardrails`: Guards quote -> create -> result unified NodeTs execution chains.
-- `unity-codex-guardrails`: Protects Unity project changes through root/git/Editor/console/hierarchy checks.
+## 第一组：Hiker 工作流守护组（9 个）
 
-## Optional Skills
+| Skill | 作用 |
+|---|---|
+| `hiker-workflow-router` | 把复杂任务路由到最短匹配工作流 |
+| `codex-thread-review` | 复核 Codex 结果的范围、证据、缺口和下一步 |
+| `project-phase-review` | 判断阶段或里程碑能否进入下一阶段 |
+| `evidence-first-testing` | 设计真证据、Smoke、Contract、异常、并发和性能测试 |
+| `contract-boundary-audit` | 审计 OpenAPI、DTO、数据库、Provider 和前后端边界 |
+| `nodets-execution-pipeline-guardrails` | 守护 NodeTs 统一执行、结果和计费链路 |
+| `unity-codex-guardrails` | 保护 Unity Scene、Prefab、资源、`.meta` 和 GUID |
+| `design-output-discipline` | 约束 PPT、图片、SVG、PDF、Excel 等真实文件交付 |
+| `agent-architecture-consultant` | 输出架构、范围、工期、报价、风险和双方案 |
 
-- `design-output-discipline`: Enforces real file delivery and visual QA for PPT/image/SVG/PDF/Excel tasks.
-- `agent-architecture-consultant`: Produces architecture routes, timelines, quote framing, risks, and two-option plans.
+源码：`../.agents/skills/`
 
-## Recommended Installation
+## 第二组：AI 软件工程平台 Enterprise（17 个）
 
-Use `-Skills core` for engineering repositories. Add optional skills when the project also handles visual deliverables or client architecture proposals.
+### `ai-engineering-core`
+
+| Skill | 作用 |
+|---|---|
+| `project-bootstrap` | 识别真实技术栈和子项目，建立 `.ai/` 状态 |
+| `official-standards-resolver` | 按真实版本生成官方依据的项目规范 |
+| `interruptible-task-control` | 管理长期任务启动、暂停、继续和检查点 |
+| `context-recovery` | 从 `.ai/` 状态恢复目标、决策、分支和下一步 |
+
+### `ai-engineering-web`
+
+| Skill | 作用 |
+|---|---|
+| `web-ui-design` | 沿用现有 Web 技术栈设计信息架构、组件和状态 |
+| `web-component-implementation` | 复用现有组件和 Token 实现页面 |
+| `web-quality-review` | 只读审核复用、依赖、TypeScript、样式和响应式 |
+
+### `ai-engineering-unity`
+
+| Skill | 作用 |
+|---|---|
+| `unity-ui-design` | 按真实 Unity/UI 技术栈设计页面和 Prefab 层级 |
+| `unity-component-implementation` | 实现 Prefab、VisualElement、Renderer 或页面组件 |
+| `unity-quality-review` | 只读审核 Scene、Prefab、GUID、资源、GC 和平台兼容 |
+
+### `ai-engineering-workspace`
+
+| Skill | 作用 |
+|---|---|
+| `workspace-task-router` | 把大型需求拆到主会话、Subagent 或 Worktree |
+| `worktree-task-manager` | 安全创建、管理和清理 Worktree 与独立分支 |
+| `change-ownership-merge` | 检查所有权、冲突和证据，生成安全合并计划 |
+
+### `ai-engineering-quality`
+
+| Skill | 作用 |
+|---|---|
+| `full-change-risk-review` | 审核暂存、未暂存、未跟踪和提交范围的完整变更集 |
+| `knowledge-graph-maintenance` | 增量维护文件级关系图谱和限深影响分析 |
+| `regression-test-planner` | 根据风险和真实脚本生成最低必要回归范围 |
+| `release-readiness-review` | 综合风险、构建、测试、迁移和回滚审核发布状态 |
+
+源码：`../skill-groups/ai-software-engineering-platform-enterprise/`
+
+## 第三组：桌面软件等价重建（1 个）
+
+| Skill | 作用 |
+|---|---|
+| `desktop-app-reconstruction-zh` | 已授权桌面软件的证据盘点、技术指纹、完整库存、技术选型、实现、差分测试、性能、打包和交付门禁 |
+
+源码：`../skill-groups/desktop-app-reconstruction-zh/`
+
+完整中文说明见 [`THREE_SKILL_GROUPS_ZH.md`](THREE_SKILL_GROUPS_ZH.md)。

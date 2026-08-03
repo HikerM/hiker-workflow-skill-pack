@@ -1,0 +1,13 @@
+id,should_trigger,skill,prompt
+unity-01,true,unity-ui-design,"设计Unity电子教材个人信息页"
+unity-02,true,unity-ui-design,"为UGUI设计多分辨率教材阅读页"
+unity-03,false,unity-ui-design,"设计Vue管理后台"
+unity-04,true,unity-component-implementation,"按现有PageRenderer实现Unity页面"
+unity-05,true,unity-component-implementation,"复用已有Prefab增加资源Viewer"
+unity-06,false,unity-component-implementation,"把Unity升级到最新大版本"
+unity-07,true,unity-quality-review,"审核Prefab Missing Script和GUID"
+unity-08,true,unity-quality-review,"检查ARM64构建兼容但不要声称已经验证"
+unity-09,false,unity-quality-review,"直接修复前端React组件"
+unity-10,true,unity-ui-design,"设计加载空错误资源失败状态"
+unity-11,true,unity-component-implementation,"中途改Renderer方案但保留数据层"
+unity-12,false,unity-ui-design,"解释Unity是什么"

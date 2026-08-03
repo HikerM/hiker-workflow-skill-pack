@@ -1,0 +1,13 @@
+schema_version: "1.1"
+status: "UNVERIFIED"
+modules:
+  - module_id: "MOD-0001"
+    name: "模块名称"
+    layer: "Presentation|Application|Domain|Infrastructure|Integrations|Platform|Shared"
+    paths: []
+    owned_scope_ids: []
+    owned_spec_ids: []
+    owned_test_ids: []
+    dependencies: []
+    owner: ""
+    status: "UNVERIFIED"

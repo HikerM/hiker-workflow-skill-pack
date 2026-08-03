@@ -1,0 +1,1 @@
+﻿interaction_id,module,page_id,control_ids,name,interaction_type,priority,in_scope,status,preconditions,trigger,success_effects,failure_effects,cancel_behavior,timeout_behavior,undo_redo_behavior,persistence_behavior,evidence_ids,spec_ids,task_ids,implementation_ids,test_case_ids,test_result,defect_ids,waiver_id,notes

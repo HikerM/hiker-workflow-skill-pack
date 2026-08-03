@@ -1,0 +1,5 @@
+interface:
+  display_name: "上下文恢复"
+  short_description: "从统一状态和检查点恢复长期任务"
+policy:
+  allow_implicit_invocation: true

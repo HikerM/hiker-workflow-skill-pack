@@ -1,0 +1,154 @@
+from __future__ import annotations
+import argparse,json,os,re,tomllib
+import xml.etree.ElementTree as ET
+from pathlib import Path
+from typing import Any
+from corelib import git_info
+
+IGNORED={".git",".hg",".svn","node_modules","Library","Temp","obj","bin","dist","build",".venv","venv","__pycache__",".idea",".vs","DerivedData","Pods"}
+MANIFESTS={"package.json","pyproject.toml","requirements.txt","pom.xml","build.gradle","build.gradle.kts","go.mod","Cargo.toml","composer.json","ProjectVersion.txt","CMakeLists.txt","Package.swift","Gemfile","pubspec.yaml"}
+
+def safe_json(path:Path)->dict[str,Any]:
+    try:
+        data=json.loads(path.read_text(encoding="utf-8"));return data if isinstance(data,dict) else {}
+    except Exception:return {}
+def first_text(*paths:Path)->str|None:
+    for p in paths:
+        try:
+            value=p.read_text(encoding="utf-8",errors="ignore").strip()
+            if value:return value.splitlines()[0].strip()
+        except OSError:pass
+    return None
+def exact_node_version(root:Path,package:str,declared:str|None)->str|None:
+    installed=safe_json(root/"node_modules"/package/"package.json").get("version")
+    if installed:return str(installed)
+    lock=safe_json(root/"package-lock.json");packages=lock.get("packages",{}) if isinstance(lock,dict) else {};item=packages.get(f"node_modules/{package}",{}) if isinstance(packages,dict) else {}
+    return str(item.get("version")) if isinstance(item,dict) and item.get("version") else declared
+
+def detect_package_json(path:Path)->dict[str,Any]:
+    root=path.parent;data=safe_json(path);deps={}
+    for key in ("dependencies","devDependencies","peerDependencies","optionalDependencies"):
+        value=data.get(key,{})
+        if isinstance(value,dict):deps.update({str(k):str(v) for k,v in value.items()})
+    mapping=[("vue","Vue"),("react","React"),("next","Next.js"),("nuxt","Nuxt"),("@angular/core","Angular"),("svelte","Svelte"),("vite","Vite"),("element-plus","Element Plus"),("antd","Ant Design"),("@mui/material","MUI"),("express","Express"),("nestjs","NestJS")]
+    frameworks=[{"name":name,"package":pkg,"version":exact_node_version(root,pkg,deps.get(pkg))} for pkg,name in mapping if pkg in deps]
+    pm_raw=data.get("packageManager");pm_name=None;pm_version=None
+    if isinstance(pm_raw,str) and "@" in pm_raw:pm_name,pm_version=pm_raw.rsplit("@",1)
+    elif isinstance(pm_raw,str):pm_name=pm_raw
+    if not pm_name:
+        if (root/"pnpm-lock.yaml").exists():pm_name="pnpm"
+        elif (root/"yarn.lock").exists():pm_name="yarn"
+        elif (root/"bun.lockb").exists() or (root/"bun.lock").exists():pm_name="bun"
+        elif (root/"package-lock.json").exists():pm_name="npm"
+    node_version=(data.get("engines",{}) or {}).get("node") if isinstance(data.get("engines",{}),dict) else None
+    volta=data.get("volta",{}) if isinstance(data.get("volta",{}),dict) else {}
+    node_version=volta.get("node") or first_text(root/".nvmrc",root/".node-version") or node_version
+    ts_version=exact_node_version(root,"typescript",deps.get("typescript")) if "typescript" in deps or (root/"tsconfig.json").exists() else None
+    languages=[{"name":"TypeScript","version":ts_version}] if ts_version or (root/"tsconfig.json").exists() else [{"name":"JavaScript","version":None}]
+    return {"kind":"web-node","root":str(root),"name":data.get("name") or root.name,"languages":languages,"runtimes":[{"name":"Node.js","version":node_version}],"frameworks":frameworks,"package_manager":{"name":pm_name,"version":pm_version},"scripts":data.get("scripts",{}),"manifest":str(path)}
+
+def detect_unity(path:Path)->dict[str,Any]|None:
+    if path.parent.name!="ProjectSettings":return None
+    root=path.parent.parent;manifest=root/"Packages/manifest.json";text=path.read_text(encoding="utf-8",errors="ignore");m=re.search(r"m_EditorVersion:\s*([^\r\n]+)",text);packages=safe_json(manifest).get("dependencies",{}) if manifest.exists() else {}
+    ui=[]
+    if isinstance(packages,dict):
+        if "com.unity.ugui" in packages:ui.append("UGUI")
+        if "com.unity.ui" in packages:ui.append("UI Toolkit")
+    return {"kind":"unity","root":str(root),"name":root.name,"languages":[{"name":"C#","version":"Unity-managed"}],"frameworks":[{"name":"Unity","version":m.group(1).strip() if m else None}],"ui_systems":ui or ["unknown"],"packages":packages,"manifest":str(path)}
+
+def detect_python(path:Path)->dict[str,Any]:
+    root=path.parent;deps=[];version=first_text(root/".python-version")
+    if path.name=="pyproject.toml":
+        try:data=tomllib.loads(path.read_text(encoding="utf-8"))
+        except Exception:data={}
+        project=data.get("project",{}) if isinstance(data,dict) else {}
+        if isinstance(project,dict):version=version or project.get("requires-python");raw=project.get("dependencies",[]);deps.extend(map(str,raw if isinstance(raw,list) else []))
+        poetry=(data.get("tool",{}) or {}).get("poetry",{}) if isinstance(data,dict) else {}
+        if isinstance(poetry,dict) and isinstance(poetry.get("dependencies"),dict):deps.extend(str(x) for x in poetry["dependencies"].keys())
+    else:
+        try:deps=[x.strip() for x in path.read_text(encoding="utf-8",errors="ignore").splitlines() if x.strip() and not x.lstrip().startswith("#")]
+        except OSError:pass
+    low="\n".join(deps).lower();frameworks=[name for token,name in [("fastapi","FastAPI"),("django","Django"),("flask","Flask"),("sqlalchemy","SQLAlchemy"),("pydantic","Pydantic")] if token in low]
+    return {"kind":"python","root":str(root),"name":root.name,"languages":[{"name":"Python","version":version}],"frameworks":frameworks,"dependencies":deps[:500],"manifest":str(path)}
+
+def detect_dotnet(path:Path)->dict[str,Any]:
+    root=path.parent;targets=[];packages=[];lang=None
+    try:
+        tree=ET.parse(path)
+        for node in tree.iter():
+            tag=node.tag.split("}")[-1]
+            if tag in {"TargetFramework","TargetFrameworks"} and node.text:targets.extend(x.strip() for x in node.text.split(";") if x.strip())
+            elif tag=="LangVersion" and node.text:lang=node.text.strip()
+            elif tag=="PackageReference":packages.append({"name":node.attrib.get("Include","") or node.attrib.get("Update",""),"version":node.attrib.get("Version")})
+    except Exception:pass
+    return {"kind":"dotnet","root":str(root),"name":root.name,"languages":[{"name":"C#","version":lang}],"frameworks":[{"name":".NET","version":",".join(targets) or None}],"packages":packages,"manifest":str(path)}
+
+def detect_maven(path:Path)->dict[str,Any]:
+    root=path.parent;props={};artifacts=[]
+    try:
+        tree=ET.parse(path)
+        for node in tree.iter():
+            tag=node.tag.split("}")[-1]
+            if tag in {"java.version","maven.compiler.source","maven.compiler.target"} and node.text:props[tag]=node.text.strip()
+            elif tag=="artifactId" and node.text:artifacts.append(node.text.strip())
+    except Exception:pass
+    frameworks=[{"name":"Spring Boot","version":None}] if any("spring-boot" in x for x in artifacts) else []
+    return {"kind":"java","root":str(root),"name":root.name,"languages":[{"name":"Java","version":props.get("java.version") or props.get("maven.compiler.source")}],"frameworks":frameworks,"manifest":str(path)}
+
+def detect_simple(path:Path)->dict[str,Any]|None:
+    root=path.parent;text=path.read_text(encoding="utf-8",errors="ignore")
+    if path.name=="go.mod":
+        m=re.search(r"^go\s+([^\s]+)",text,re.M);return {"kind":"go","root":str(root),"name":root.name,"languages":[{"name":"Go","version":m.group(1) if m else None}],"manifest":str(path)}
+    if path.name=="Cargo.toml":
+        try:data=tomllib.loads(text)
+        except Exception:data={}
+        pkg=data.get("package",{}) if isinstance(data,dict) else {};return {"kind":"rust","root":str(root),"name":pkg.get("name") or root.name,"languages":[{"name":"Rust","version":pkg.get("rust-version")}],"manifest":str(path)}
+    if path.name=="composer.json":
+        data=safe_json(path);deps=data.get("require",{}) if isinstance(data,dict) else {};frameworks=[{"name":"Laravel","version":deps.get("laravel/framework")}] if isinstance(deps,dict) and "laravel/framework" in deps else []
+        return {"kind":"php","root":str(root),"name":data.get("name") or root.name,"languages":[{"name":"PHP","version":deps.get("php") if isinstance(deps,dict) else None}],"frameworks":frameworks,"manifest":str(path)}
+    if path.name in {"build.gradle","build.gradle.kts"}:
+        m=re.search(r"JavaLanguageVersion\.of\((\d+)\)|sourceCompatibility\s*=\s*['\"]?([^'\"\s]+)",text);version=next((g for g in (m.groups() if m else []) if g),None);frameworks=[{"name":"Spring Boot","version":None}] if "org.springframework.boot" in text else []
+        return {"kind":"java-gradle","root":str(root),"name":root.name,"languages":[{"name":"Java","version":version}],"frameworks":frameworks,"manifest":str(path)}
+    if path.name=="CMakeLists.txt":
+        m=re.search(r"cmake_minimum_required\s*\(\s*VERSION\s+([^\s\)]+)",text,re.I);return {"kind":"cmake","root":str(root),"name":root.name,"languages":[{"name":"C/C++","version":None}],"build_system":{"name":"CMake","version":m.group(1) if m else None},"manifest":str(path)}
+    if path.name=="Package.swift":return {"kind":"swift","root":str(root),"name":root.name,"languages":[{"name":"Swift","version":None}],"manifest":str(path)}
+    if path.name=="Gemfile":return {"kind":"ruby","root":str(root),"name":root.name,"languages":[{"name":"Ruby","version":first_text(root/".ruby-version")}],"frameworks":[{"name":"Rails","version":None}] if "rails" in text.lower() else [],"manifest":str(path)}
+    if path.name=="pubspec.yaml":
+        sdk=re.search(r"sdk:\s*['\"]?([^'\"\n]+)",text);flutter="flutter:" in text
+        return {"kind":"flutter" if flutter else "dart","root":str(root),"name":root.name,"languages":[{"name":"Dart","version":sdk.group(1).strip() if sdk else None}],"frameworks":[{"name":"Flutter","version":None}] if flutter else [],"manifest":str(path)}
+    return None
+
+def candidates(root:Path,max_depth:int)->list[Path]:
+    result=[]
+    for dirpath,dirnames,filenames in os.walk(root):
+        current=Path(dirpath)
+        try:rel=current.relative_to(root)
+        except ValueError:continue
+        depth=len(rel.parts)
+        if depth>=max_depth:dirnames[:]=[]
+        else:dirnames[:]=[name for name in dirnames if name not in IGNORED]
+        for filename in filenames:
+            candidate=current/filename
+            if filename in MANIFESTS or candidate.suffix==".csproj":result.append(candidate)
+    return sorted(set(result))
+def detect(root:Path,max_depth:int=6)->dict[str,Any]:
+    root=root.resolve();projects=[];seen=set()
+    for path in candidates(root,max_depth):
+        item=None
+        if path.name=="package.json":item=detect_package_json(path)
+        elif path.name=="ProjectVersion.txt":item=detect_unity(path)
+        elif path.name in {"pyproject.toml","requirements.txt"}:item=detect_python(path)
+        elif path.suffix==".csproj":item=detect_dotnet(path)
+        elif path.name=="pom.xml":item=detect_maven(path)
+        else:item=detect_simple(path)
+        if not item:continue
+        key=(str(item.get("root")),str(item.get("kind")))
+        if key in seen:continue
+        seen.add(key);projects.append(item)
+    return {"schema_version":"1.0.0","repository":git_info(root),"scan_root":str(root),"projects":projects,"monorepo":len(projects)>1,"unknown":not projects,"uncertainties":["未安装依赖时框架版本可能保留声明范围"] if projects else ["未找到受支持的工程清单"]}
+def main()->int:
+    ap=argparse.ArgumentParser();ap.add_argument("--root",default=".");ap.add_argument("--max-depth",type=int,default=6);ap.add_argument("--output");a=ap.parse_args();data=detect(Path(a.root),a.max_depth);text=json.dumps(data,ensure_ascii=False,indent=2)
+    if a.output:Path(a.output).write_text(text+"\n",encoding="utf-8")
+    else:print(text)
+    return 0
+if __name__=="__main__":raise SystemExit(main())

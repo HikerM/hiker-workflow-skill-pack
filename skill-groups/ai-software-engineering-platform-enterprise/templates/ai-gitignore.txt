@@ -1,0 +1,10 @@
+# 建议提交：.ai/context、.ai/governance、.ai/quality/policy.json
+# 建议忽略以下运行时与机器相关内容：
+.ai/runtime/checkpoints/
+.ai/logs/
+.ai/knowledge/*.db
+.ai/knowledge/*.db-shm
+.ai/knowledge/*.db-wal
+.ai/workspace/worktrees.json
+.ai/evidence/
+.ai-install-backup/

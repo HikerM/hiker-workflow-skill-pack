@@ -1,0 +1,34 @@
+{
+  "name": "ai-engineering-unity",
+  "version": "4.0.0",
+  "description": "Unity UI、Prefab、页面实现和跨平台审核",
+  "author": {
+    "name": "AI Engineering Toolkit"
+  },
+  "license": "UNLICENSED",
+  "keywords": [
+    "software-engineering",
+    "codex",
+    "quality",
+    "chinese"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "03 Unity C/S工程",
+    "shortDescription": "Unity UI、Prefab、页面实现和跨平台审核",
+    "longDescription": "自动读取 Unity 版本、Packages、UI 技术栈和目标平台，完成 UGUI/UI Toolkit 设计、Prefab 组件化、页面实现及性能兼容审核。",
+    "developerName": "AI Engineering Toolkit",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "按当前Unity工程架构设计并实现页面。",
+      "审核Unity页面、多分辨率、资源和性能风险。"
+    ],
+    "brandColor": "#32363F",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.png"
+  }
+}

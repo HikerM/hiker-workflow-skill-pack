@@ -1,0 +1,1 @@
+﻿task_id,title,module,priority,related_scope_ids,related_inventory_ids,related_spec_ids,dependencies,files_to_modify,forbidden_scope,acceptance_criteria,test_commands,rollback_point,status,owner,notes

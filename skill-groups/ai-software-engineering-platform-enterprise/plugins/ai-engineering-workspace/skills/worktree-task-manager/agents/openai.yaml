@@ -1,0 +1,5 @@
+interface:
+  display_name: "Worktree任务管理"
+  short_description: "安全创建、暂停、恢复和清理并行开发工作树"
+policy:
+  allow_implicit_invocation: true

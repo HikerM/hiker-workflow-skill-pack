@@ -1,0 +1,35 @@
+{
+  "name": "ai-engineering-workspace",
+  "version": "4.0.0",
+  "description": "任务分流、Subagent、Git Worktree和合并治理",
+  "author": {
+    "name": "AI Engineering Toolkit"
+  },
+  "license": "UNLICENSED",
+  "keywords": [
+    "software-engineering",
+    "codex",
+    "quality",
+    "chinese"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "04 工作区与多会话协作",
+    "shortDescription": "任务分流、Subagent、Git Worktree和合并治理",
+    "longDescription": "在一个共享 Git 仓库上管理逻辑会话、Subagent 和独立 Worktree；控制代码所有权、并行写入、冲突预检和安全交接。",
+    "developerName": "AI Engineering Toolkit",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "把当前大型需求分流到合适的Agent和Worktree。",
+      "检查并安全合并指定任务分支。"
+    ],
+    "brandColor": "#6A43B5",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.png"
+  },
+  "hooks": "./hooks/hooks.json"
+}

@@ -1,0 +1,1 @@
+permission_id,role_id,role_name,resource_type,resource_id,priority,in_scope,visibility,operation,expected_policy,ui_enforced,service_enforced,status,evidence_ids,test_case_ids,test_result,waiver_id,notes

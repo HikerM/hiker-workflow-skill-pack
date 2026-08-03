@@ -1,0 +1,13 @@
+id,should_trigger,skill,prompt
+core-01,true,project-bootstrap,"首次接管这个仓库，识别真实技术栈和版本并初始化 .ai"
+core-02,true,project-bootstrap,"这是一个Web和Unity混合仓库，请建立项目上下文"
+core-03,false,project-bootstrap,"把用户列表按钮改成蓝色"
+core-04,true,official-standards-resolver,"根据已检测的版本查官方手册形成编码规范"
+core-05,false,official-standards-resolver,"解释什么是TypeScript"
+core-06,true,interruptible-task-control,"开始一个可中断的长期开发任务"
+core-07,true,interruptible-task-control,"暂停当前任务"
+core-08,true,interruptible-task-control,"调整方向但保留已经完成的接口层"
+core-09,true,context-recovery,"新会话恢复上一个任务"
+core-10,true,context-recovery,"压缩后核对锁定决策和下一步"
+core-11,false,context-recovery,"新建一个空项目"
+core-12,false,interruptible-task-control,"总结这段文章"

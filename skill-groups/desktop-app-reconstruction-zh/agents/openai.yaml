@@ -1,0 +1,8 @@
+interface:
+  display_name: "桌面软件等价重建"
+  short_description: "中文完成桌面软件反推、技术版本锁定、遗漏审计、实现与验收。"
+  icon_small: "./assets/icon-small.svg"
+  brand_color: "#1F4E79"
+  default_prompt: "使用本 Skill 开始或继续桌面软件等价重建。先读取项目状态；新项目先冻结授权和范围，再做技术指纹、完整库存、精确版本锁定和全链路门禁。"
+policy:
+  allow_implicit_invocation: true

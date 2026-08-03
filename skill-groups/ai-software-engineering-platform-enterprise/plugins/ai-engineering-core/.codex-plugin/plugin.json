@@ -1,0 +1,35 @@
+{
+  "name": "ai-engineering-core",
+  "version": "4.0.0",
+  "description": "项目识别、动态规范、可中断状态与上下文恢复",
+  "author": {
+    "name": "AI Engineering Toolkit"
+  },
+  "license": "UNLICENSED",
+  "keywords": [
+    "software-engineering",
+    "codex",
+    "quality",
+    "chinese"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "01 AI工程核心",
+    "shortDescription": "项目识别、动态规范、可中断状态与上下文恢复",
+    "longDescription": "识别真实语言、框架和版本，建立统一 .ai 状态协议，并通过生命周期 Hook 保存、恢复和校验长期任务上下文。",
+    "developerName": "AI Engineering Toolkit",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "初始化当前工程并生成项目专属规范。",
+      "恢复当前任务上下文并继续执行。"
+    ],
+    "brandColor": "#1F5EFF",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.png"
+  },
+  "hooks": "./hooks/hooks.json"
+}

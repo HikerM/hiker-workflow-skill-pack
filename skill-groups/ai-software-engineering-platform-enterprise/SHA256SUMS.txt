@@ -1,0 +1,5 @@
+462c776f911bfce24b4e5aa162c288e1e6d726c8dd65c6567d9d9fd2e7d374c5  dist/ai-engineering-core-4.0.0.zip
+f0651fe652332df33cd07ada9935588d82207e51f5b428e1876cd50d64f31b0b  dist/ai-engineering-quality-4.0.0.zip
+b4d29259501e074e2da5669d09d5690fb7f6f694e291b55a7d56dcde64a3f300  dist/ai-engineering-unity-4.0.0.zip
+ad71dd7ef3c622c078d972e08d426d683b17106e642e078e8449b162503cb013  dist/ai-engineering-web-4.0.0.zip
+a22051b19424724096c9c41877734a2ec2791d5df166705b4d02bcada036560a  dist/ai-engineering-workspace-4.0.0.zip

@@ -1,0 +1,17 @@
+schema_version: "1.1"
+workflow_id: "WF-0001"
+name: "业务流程"
+priority: "P1"
+status: "UNVERIFIED"
+roles: []
+preconditions: []
+steps:
+  - sequence: 1
+    interaction_id: "INT-0001"
+    expected_state: ""
+    evidence_ids: []
+alternate_paths: []
+failure_paths: []
+interruption_and_resume: []
+postconditions: []
+acceptance_tests: []

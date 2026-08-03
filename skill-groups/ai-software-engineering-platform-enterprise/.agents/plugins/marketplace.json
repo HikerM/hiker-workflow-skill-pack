@@ -1,0 +1,68 @@
+{
+  "name": "ai-software-engineering-enterprise",
+  "interface": {
+    "displayName": "AI软件工程平台 Enterprise 4.0"
+  },
+  "plugins": [
+    {
+      "name": "ai-engineering-core",
+      "source": {
+        "source": "local",
+        "path": "./plugins/ai-engineering-core"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "ai-engineering-web",
+      "source": {
+        "source": "local",
+        "path": "./plugins/ai-engineering-web"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "ai-engineering-unity",
+      "source": {
+        "source": "local",
+        "path": "./plugins/ai-engineering-unity"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "ai-engineering-workspace",
+      "source": {
+        "source": "local",
+        "path": "./plugins/ai-engineering-workspace"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "ai-engineering-quality",
+      "source": {
+        "source": "local",
+        "path": "./plugins/ai-engineering-quality"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

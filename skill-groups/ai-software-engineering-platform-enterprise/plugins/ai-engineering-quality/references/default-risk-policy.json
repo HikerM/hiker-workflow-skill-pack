@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "generated_patterns": [
+    "**/dist/**",
+    "**/build/**",
+    "**/Library/**",
+    "**/Temp/**",
+    "**/obj/**",
+    "**/bin/**",
+    "**/.cache/**",
+    "**/coverage/**",
+    "**/node_modules/**",
+    "**/.venv/**",
+    "**/__pycache__/**"
+  ],
+  "critical_patterns": {
+    "database": [
+      "**/migrations/**",
+      "**/migration/**",
+      "**/schema/**",
+      "**/*.sql",
+      "**/prisma/**"
+    ],
+    "security": [
+      "**/auth/**",
+      "**/auth*",
+      "**/permission/**",
+      "**/permissions/**",
+      "**/security/**",
+      "**/secrets/**"
+    ],
+    "release": [
+      "**/deploy/**",
+      "**/deployment/**",
+      "**/.github/workflows/**",
+      "**/Dockerfile*",
+      "**/docker-compose*.yml",
+      "**/ProjectSettings/**",
+      "**/Packages/manifest.json"
+    ],
+    "contracts": [
+      "**/api/**",
+      "**/contracts/**",
+      "**/proto/**",
+      "**/openapi*",
+      "**/swagger*"
+    ],
+    "unity-assets": [
+      "**/*.prefab",
+      "**/*.unity",
+      "**/*.asset",
+      "**/*.asmdef",
+      "**/*.shader",
+      "**/*.compute",
+      "**/AddressableAssetsData/**"
+    ]
+  },
+  "binary_extensions": [
+    ".dll",
+    ".so",
+    ".dylib",
+    ".exe",
+    ".bin",
+    ".assetbundle",
+    ".bundle",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".mp4",
+    ".fbx",
+    ".glb",
+    ".ttf",
+    ".otf"
+  ],
+  "thresholds": {
+    "medium": 20,
+    "high": 45,
+    "critical": 75,
+    "large_change_files": 40,
+    "large_change_lines": 1500
+  },
+  "graph": {
+    "max_depth": 2,
+    "max_nodes": 300,
+    "direction": "both"
+  },
+  "merge_gate": {
+    "enabled": false,
+    "block_at": "CRITICAL"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "risk",
+    "changes",
+    "findings",
+    "evidence_gaps"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer"
+    },
+    "risk": {
+      "type": "object",
+      "required": [
+        "score",
+        "level",
+        "confidence"
+      ]
+    },
+    "changes": {
+      "type": "array"
+    },
+    "findings": {
+      "type": "array"
+    },
+    "evidence_gaps": {
+      "type": "array"
+    }
+  }
+}

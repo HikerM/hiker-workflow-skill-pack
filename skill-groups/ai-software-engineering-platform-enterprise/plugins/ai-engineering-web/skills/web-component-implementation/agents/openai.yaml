@@ -1,0 +1,5 @@
+interface:
+  display_name: "B/S组件与页面实现"
+  short_description: "复用现有组件并按项目规范实现页面"
+policy:
+  allow_implicit_invocation: true

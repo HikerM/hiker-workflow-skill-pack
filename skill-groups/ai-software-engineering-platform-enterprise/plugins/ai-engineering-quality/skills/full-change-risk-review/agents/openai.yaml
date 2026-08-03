@@ -1,0 +1,5 @@
+interface:
+  display_name: "完整变更风险评估"
+  short_description: "评估暂存、未暂存、未跟踪和提交范围"
+policy:
+  allow_implicit_invocation: true

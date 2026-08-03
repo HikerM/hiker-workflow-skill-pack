@@ -1,0 +1,259 @@
+{
+  "schema_version": "1.0",
+  "entries": [
+    {
+      "match": [
+        "typescript"
+      ],
+      "name": "TypeScript",
+      "domains": [
+        "typescriptlang.org"
+      ],
+      "query": "TypeScript {version} official handbook compiler options"
+    },
+    {
+      "match": [
+        "javascript",
+        "node"
+      ],
+      "name": "Node.js",
+      "domains": [
+        "nodejs.org"
+      ],
+      "query": "Node.js {version} official documentation"
+    },
+    {
+      "match": [
+        "vue"
+      ],
+      "name": "Vue",
+      "domains": [
+        "vuejs.org"
+      ],
+      "query": "Vue {version} official guide"
+    },
+    {
+      "match": [
+        "react"
+      ],
+      "name": "React",
+      "domains": [
+        "react.dev"
+      ],
+      "query": "React {version} official documentation"
+    },
+    {
+      "match": [
+        "next.js",
+        "next"
+      ],
+      "name": "Next.js",
+      "domains": [
+        "nextjs.org"
+      ],
+      "query": "Next.js {version} official documentation"
+    },
+    {
+      "match": [
+        "unity"
+      ],
+      "name": "Unity",
+      "domains": [
+        "docs.unity3d.com"
+      ],
+      "query": "Unity {version} manual scripting API UI build official"
+    },
+    {
+      "match": [
+        "c#",
+        "dotnet",
+        ".net"
+      ],
+      "name": ".NET/C#",
+      "domains": [
+        "learn.microsoft.com"
+      ],
+      "query": ".NET {version} C# official coding documentation"
+    },
+    {
+      "match": [
+        "python"
+      ],
+      "name": "Python",
+      "domains": [
+        "docs.python.org",
+        "peps.python.org"
+      ],
+      "query": "Python {version} official documentation PEP"
+    },
+    {
+      "match": [
+        "fastapi"
+      ],
+      "name": "FastAPI",
+      "domains": [
+        "fastapi.tiangolo.com"
+      ],
+      "query": "FastAPI {version} official documentation"
+    },
+    {
+      "match": [
+        "java"
+      ],
+      "name": "Java",
+      "domains": [
+        "docs.oracle.com",
+        "openjdk.org"
+      ],
+      "query": "Java {version} official language documentation"
+    },
+    {
+      "match": [
+        "spring boot",
+        "spring"
+      ],
+      "name": "Spring",
+      "domains": [
+        "docs.spring.io"
+      ],
+      "query": "Spring Boot {version} official reference"
+    },
+    {
+      "match": [
+        "go"
+      ],
+      "name": "Go",
+      "domains": [
+        "go.dev"
+      ],
+      "query": "Go {version} official documentation"
+    },
+    {
+      "match": [
+        "rust"
+      ],
+      "name": "Rust",
+      "domains": [
+        "doc.rust-lang.org"
+      ],
+      "query": "Rust {version} official book reference"
+    },
+    {
+      "match": [
+        "php"
+      ],
+      "name": "PHP",
+      "domains": [
+        "php.net"
+      ],
+      "query": "PHP {version} official manual"
+    },
+    {
+      "match": [
+        "laravel"
+      ],
+      "name": "Laravel",
+      "domains": [
+        "laravel.com"
+      ],
+      "query": "Laravel {version} official documentation"
+    },
+    {
+      "match": [
+        "npm"
+      ],
+      "name": "npm",
+      "domains": [
+        "docs.npmjs.com"
+      ],
+      "query": "npm {version} official documentation"
+    },
+    {
+      "match": [
+        "pnpm"
+      ],
+      "name": "pnpm",
+      "domains": [
+        "pnpm.io"
+      ],
+      "query": "pnpm {version} official documentation"
+    },
+    {
+      "match": [
+        "yarn"
+      ],
+      "name": "Yarn",
+      "domains": [
+        "yarnpkg.com"
+      ],
+      "query": "Yarn {version} official documentation"
+    },
+    {
+      "match": [
+        "bun"
+      ],
+      "name": "Bun",
+      "domains": [
+        "bun.sh"
+      ],
+      "query": "Bun {version} official documentation"
+    },
+    {
+      "match": [
+        "ui toolkit",
+        "ugui"
+      ],
+      "name": "Unity UI",
+      "domains": [
+        "docs.unity3d.com"
+      ],
+      "query": "Unity {version} UI official manual"
+    },
+    {
+      "match": [
+        "c/c++",
+        "cmake"
+      ],
+      "name": "CMake/C++",
+      "domains": [
+        "cmake.org",
+        "isocpp.org"
+      ],
+      "query": "CMake C++ {version} official documentation"
+    },
+    {
+      "match": [
+        "swift"
+      ],
+      "name": "Swift",
+      "domains": [
+        "swift.org"
+      ],
+      "query": "Swift {version} official documentation"
+    },
+    {
+      "match": [
+        "dart",
+        "flutter"
+      ],
+      "name": "Dart/Flutter",
+      "domains": [
+        "dart.dev",
+        "docs.flutter.dev"
+      ],
+      "query": "Dart Flutter {version} official documentation"
+    },
+    {
+      "match": [
+        "ruby",
+        "rails"
+      ],
+      "name": "Ruby/Rails",
+      "domains": [
+        "ruby-lang.org",
+        "guides.rubyonrails.org"
+      ],
+      "query": "Ruby Rails {version} official documentation"
+    }
+  ]
+}

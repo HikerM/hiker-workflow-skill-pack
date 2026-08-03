@@ -1,0 +1,13 @@
+schema_version: "1.1"
+permission_id: "PERM-0001"
+resource_id: "FEAT-0001"
+status: "UNVERIFIED"
+roles:
+  - role_id: "ROLE-0001"
+    visibility: "visible|hidden"
+    operation: "allow|deny|read_only"
+    ui_enforced: null
+    service_enforced: null
+failure_feedback: []
+evidence_ids: []
+acceptance_tests: []

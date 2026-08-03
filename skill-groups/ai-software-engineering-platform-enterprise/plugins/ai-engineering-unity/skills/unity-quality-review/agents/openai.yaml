@@ -1,0 +1,5 @@
+interface:
+  display_name: "Unity质量审核"
+  short_description: "审核资源、性能、多分辨率和平台风险"
+policy:
+  allow_implicit_invocation: true

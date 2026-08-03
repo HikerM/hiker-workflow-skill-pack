@@ -1,0 +1,5 @@
+interface:
+  display_name: "回归测试范围规划"
+  short_description: "从真实项目配置生成最低必要回归范围"
+policy:
+  allow_implicit_invocation: true

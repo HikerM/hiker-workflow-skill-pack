@@ -1,0 +1,24 @@
+schema_version: "1.1"
+source_type: "black_box" # black_box / gray_box / white_box
+scan_root: "UNKNOWN"
+scan_time: "UNKNOWN"
+status: "UNVERIFIED"
+
+detected_facts: []
+
+candidates:
+  - candidate_id: "SRC-TECH-0001"
+    technology: "UNKNOWN"
+    likely_language: "UNKNOWN"
+    likely_framework: "UNKNOWN"
+    exact_language_version: "UNKNOWN"
+    exact_framework_version: "UNKNOWN"
+    confidence: 0.0
+    evidence_paths: []
+    evidence_ids: []
+    limitations: []
+
+runtime_and_binary_indicators: []
+project_files_and_lock_files: []
+unknowns: []
+notes: []

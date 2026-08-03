@@ -1,0 +1,74 @@
+schema_version: "1.1"
+project:
+  id: "{{PROJECT_ID}}"
+  name: "{{PROJECT_NAME}}"
+  created_at: "{{CREATED_AT}}"
+  default_language: "zh-CN"
+  reconstruction_mode: "{{RECONSTRUCTION_MODE}}" # black_box / gray_box / white_box_migration
+  execution_mode: "{{EXECUTION_MODE}}" # analysis / implementation / automation / mixed
+
+source_application:
+  name: "{{SOURCE_APP_NAME}}"
+  version: "UNKNOWN"
+  owner_or_vendor: "UNKNOWN"
+  profile_file: "01_environment/SOURCE_APPLICATION_PROFILE.yaml"
+  technology_fingerprint_file: "01_environment/SOURCE_TECH_FINGERPRINT.yaml"
+
+target_application:
+  product_name: "{{PROJECT_NAME}}"
+  platforms:
+    - "Windows 10"
+    - "Windows 11"
+  minimum_os_versions: []
+  cpu_architectures:
+    - "x64"
+  technology_lock_file: "05_technical_design/TECH_STACK_LOCK.yaml"
+  offline_required: false
+  installer_required: true
+  auto_update_required: false
+
+scope:
+  p0_blockers: []
+  p1_core: []
+  p2_general: []
+  p3_low_frequency: []
+  excluded: []
+  accepted_differences: []
+
+quality_gates:
+  p0_required_rate: 1.0
+  p1_required_rate: 1.0
+  p2_required_rate: 0.98
+  page_state_required_rate: 1.0
+  control_mapping_required_rate: 1.0
+  orphan_p0_p1_max: 0
+  trace_break_p0_p1_max: 0
+  open_p0_p1_bug_max: 0
+  minimum_independent_evidence_channels_p0_p1: 2
+  discovery_zero_new_core_rounds: 2
+  allow_core_waiver_at_release: false
+  discovery_saturation_rounds: 2
+  p0_p1_min_discovery_channels: 2
+
+parity_targets:
+  visual:
+    status: "UNFROZEN"
+    key_regions_required: true
+  functional:
+    status: "UNFROZEN"
+  data:
+    status: "UNFROZEN"
+  performance:
+    status: "UNFROZEN"
+  stability:
+    status: "UNFROZEN"
+  packaging:
+    status: "UNFROZEN"
+
+authorization:
+  status: "UNVERIFIED"
+  authorization_file: "00_control/AUTHORIZATION.md"
+
+constraints: []
+assumptions: []
+open_questions: []

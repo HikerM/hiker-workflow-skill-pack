@@ -1,0 +1,20 @@
+schema_version: "1.1"
+scenario_id: "PERF-0001"
+name: "性能场景"
+priority: "P1"
+status: "UNVERIFIED"
+related_feature_ids: []
+dataset_id: "DATASET-0001"
+environment_id: "ENV-0001"
+cache_state: "cold|warm"
+warmups: 1
+iterations: 5
+metrics:
+  - "duration_ms_p50"
+  - "duration_ms_p95"
+  - "memory_peak_mb"
+source_gate: null
+target_gate: null
+accepted_ratio: null
+evidence_ids: []
+acceptance_tests: []

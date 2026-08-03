@@ -1,0 +1,5 @@
+interface:
+  display_name: "任务分流与会话规划"
+  short_description: "把大型需求分配给主线程、Subagent和Worktree"
+policy:
+  allow_implicit_invocation: true

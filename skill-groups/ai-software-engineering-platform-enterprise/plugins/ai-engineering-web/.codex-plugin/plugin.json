@@ -1,0 +1,34 @@
+{
+  "name": "ai-engineering-web",
+  "version": "4.0.0",
+  "description": "通用B/S UI设计、组件实现和前端质量审核",
+  "author": {
+    "name": "AI Engineering Toolkit"
+  },
+  "license": "UNLICENSED",
+  "keywords": [
+    "software-engineering",
+    "codex",
+    "quality",
+    "chinese"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "02 B/S界面与前端工程",
+    "shortDescription": "通用B/S UI设计、组件实现和前端质量审核",
+    "longDescription": "读取核心插件生成的技术栈，不写死 Vue 或 React；按现有框架、组件库和版本完成 UI 设计、组件化实现和视觉质量检查。",
+    "developerName": "AI Engineering Toolkit",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "设计并实现当前B/S项目的组件化页面。",
+      "审核当前前端页面的组件复用和视觉还原。"
+    ],
+    "brandColor": "#0A7C86",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.png"
+  }
+}

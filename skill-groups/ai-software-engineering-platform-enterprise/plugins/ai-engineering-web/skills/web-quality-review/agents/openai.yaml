@@ -1,0 +1,5 @@
+interface:
+  display_name: "B/S前端质量审核"
+  short_description: "审核组件边界、视觉、响应式和代码质量"
+policy:
+  allow_implicit_invocation: true

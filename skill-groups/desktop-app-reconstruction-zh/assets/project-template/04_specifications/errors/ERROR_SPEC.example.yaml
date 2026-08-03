@@ -1,0 +1,16 @@
+schema_version: "1.1"
+error_id: "ERR-0001"
+name: "错误名称"
+priority: "P1"
+status: "UNVERIFIED"
+related_ids: []
+trigger_conditions: []
+error_code: "UNKNOWN"
+message: "UNKNOWN"
+user_actions: []
+rollback: []
+retry: []
+restart_recovery: []
+logging: []
+evidence_ids: []
+acceptance_tests: []

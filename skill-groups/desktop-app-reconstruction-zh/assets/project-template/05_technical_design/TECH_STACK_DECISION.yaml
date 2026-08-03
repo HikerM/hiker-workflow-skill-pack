@@ -1,0 +1,26 @@
+schema_version: "1.1"
+decision_id: "ADR-TECH-0001"
+status: "PROPOSED"
+selected_candidate_id: "UNDECIDED"
+decided_at: ""
+approved_by: ""
+constraints_ref: "01_environment/TARGET_CONSTRAINTS.yaml"
+platform_matrix_ref: "01_environment/PLATFORM_COMPATIBILITY_MATRIX.csv"
+candidates_ref: "05_technical_design/TECH_STACK_CANDIDATES.csv"
+
+rationale: []
+rejected_candidates: []
+risks: []
+rollback_conditions: []
+
+poc:
+  project_path: ""
+  complex_page_result: "NOT_RUN"
+  file_or_database_result: "NOT_RUN"
+  system_integration_result: "NOT_RUN"
+  dpi_result: "NOT_RUN"
+  installer_result: "NOT_RUN"
+  cold_start_result: "NOT_RUN"
+  memory_result: "NOT_RUN"
+  overall_result: "NOT_RUN"
+  evidence_ids: []

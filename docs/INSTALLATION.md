@@ -1,68 +1,186 @@
-# Installation
+# 三组 Skill 安装指南
 
-## Recommended Mode
+三组 Skill 的封装形式不同，必须分别安装。不要把第二组的插件 Skill 平铺复制到第一组目录，也不要拆散第三组的脚本、参考文件和模板。
 
-Install per project, not globally. Keep the package outside the target project and install into the project's `.agents/skills` folder.
+## 第一组：Hiker 工作流守护 Skill Pack
 
-## Parameters
+### 推荐范围
 
-- `-TargetRoot <path>`: required project root.
-- `-DryRun`: plan only. This is the default when `-Apply` is not provided.
-- `-Apply`: write changes.
-- `-Backup`: accepted for explicitness; apply mode creates a backup before writes.
-- `-Skills core|all|comma-list`: install core skills, all skills, or selected skills.
-- `-MergeAgents`: append/update only the marked Hiker block in `AGENTS.md`.
-- `-Force`: overwrite existing skill folders or `AGENTS.md` where applicable.
+安装到具体项目，而不是默认覆盖全局配置。目标位置为：
 
-## Dry Run
+```text
+<project>/.agents/skills/
+```
+
+### Dry Run
 
 ```powershell
 .\INSTALL.ps1 -TargetRoot C:\path\to\project -DryRun
 ```
 
-## Install Core
+### 安装核心 Skill
 
 ```powershell
 .\INSTALL.ps1 -TargetRoot C:\path\to\project -Apply -Backup -Skills core -MergeAgents
 ```
 
-## Install All
+### 安装全部 9 个 Skill
 
 ```powershell
 .\INSTALL.ps1 -TargetRoot C:\path\to\project -Apply -Backup -Skills all -MergeAgents
 ```
 
-## Install Selected Skills
+### 安装指定 Skill
 
 ```powershell
-.\INSTALL.ps1 -TargetRoot C:\path\to\project -Apply -Backup -Skills codex-thread-review,project-phase-review -MergeAgents
+.\INSTALL.ps1 `
+  -TargetRoot C:\path\to\project `
+  -Apply -Backup `
+  -Skills codex-thread-review,project-phase-review,evidence-first-testing `
+  -MergeAgents
 ```
 
-## Backup Location
+### 参数说明
 
-Apply mode writes backups to:
+- `-TargetRoot`：目标项目根目录，必填。
+- `-DryRun`：只显示计划；未传 `-Apply` 时默认也是 Dry Run。
+- `-Apply`：允许实际写入。
+- `-Skills core|all|comma-list`：选择核心、全部或指定 Skill。
+- `-MergeAgents`：只追加或替换带标记的 Hiker `AGENTS.md` 区块。
+- `-Force`：允许覆盖同名 Skill；非必要不使用。
+
+安装器会在以下位置创建备份：
 
 ```text
-<TargetRoot>\.backups\hiker-workflow-pack\<timestamp>\
+<project>/.backups/hiker-workflow-pack/<timestamp>/
 ```
 
-## Validation
-
-The installer automatically runs:
-
-```powershell
-.\VALIDATE.ps1 -Root <TargetRoot>
-```
-
-## Uninstall
+卸载或恢复：
 
 ```powershell
 .\UNINSTALL.ps1 -TargetRoot C:\path\to\project -DryRun
 .\UNINSTALL.ps1 -TargetRoot C:\path\to\project -Apply
-```
-
-## Restore Backup
-
-```powershell
 .\UNINSTALL.ps1 -TargetRoot C:\path\to\project -Apply -RestoreBackup 20260624-210000
 ```
+
+## 第二组：AI Software Engineering Platform Enterprise 4.0
+
+### 推荐范围
+
+这是 ChatGPT/Codex 桌面应用的个人插件套件，包含 5 个插件和 17 个 Skill。安装分为两步：
+
+1. 复制插件并注册个人 Marketplace；
+2. 从该 Marketplace 安装并启用 5 个插件。
+
+### 第一步：注册个人 Marketplace
+
+```powershell
+cd .\skill-groups\ai-software-engineering-platform-enterprise
+py -3 -B .\install_personal.py
+```
+
+该命令会：
+
+- 复制插件到 `~/.codex/plugins/`；
+- 合并 `~/.agents/plugins/marketplace.json`；
+- 保留其他 Marketplace 条目；
+- 更新同名插件时创建备份。
+
+### 第二步：安装并启用 5 个插件
+
+如果终端可调用 Codex CLI：
+
+```powershell
+codex plugin add ai-engineering-core@personal-ai-engineering-marketplace --json
+codex plugin add ai-engineering-web@personal-ai-engineering-marketplace --json
+codex plugin add ai-engineering-unity@personal-ai-engineering-marketplace --json
+codex plugin add ai-engineering-workspace@personal-ai-engineering-marketplace --json
+codex plugin add ai-engineering-quality@personal-ai-engineering-marketplace --json
+```
+
+也可以重启 ChatGPT 桌面应用，在 **Work 或 Codex → Plugins → Personal / 个人插件** 中逐个点击安装。
+
+验证状态：
+
+```powershell
+codex plugin marketplace list --json
+codex plugin list --available --json
+```
+
+五个插件的目标状态应为：
+
+```text
+installed: true
+enabled: true
+```
+
+`ai-engineering-core` 和 `ai-engineering-workspace` 包含 Hook。首次启用时应审查 Hook 内容，并在桌面端确认信任。
+
+### 项目级安装
+
+如果只想把插件 Marketplace 放入具体仓库：
+
+```powershell
+py -3 -B .\install_repo.py C:\path\to\repository
+```
+
+这会写入目标仓库的 `plugins/` 和 `.agents/plugins/marketplace.json`，不会修改用户级 Marketplace。
+
+## 第三组：Desktop App Reconstruction ZH 1.1
+
+### 用户级安装
+
+```powershell
+cd .\skill-groups\desktop-app-reconstruction-zh
+py -3 -B .\scripts\install_skill.py --scope user
+```
+
+目标位置：
+
+```text
+~/.agents/skills/desktop-app-reconstruction-zh/
+```
+
+使用 `-B` 是为了禁止 Python 生成 `__pycache__`，确保安装前的包结构校验保持干净。
+
+### 项目级安装
+
+```powershell
+py -3 -B .\scripts\install_skill.py `
+  --scope repo `
+  --repo-root C:\path\to\repository
+```
+
+目标位置：
+
+```text
+<repository>/.agents/skills/desktop-app-reconstruction-zh/
+```
+
+### 只校验不安装
+
+```powershell
+py -3 -B .\scripts\install_skill.py --scope user --dry-run
+```
+
+安装器会执行源目录校验、暂存副本校验和安装后校验；已有版本默认备份，不静默覆盖。
+
+## 仓库整体校验
+
+在仓库根目录运行：
+
+```powershell
+.\VALIDATE.ps1 -Root .
+```
+
+该命令会验证：
+
+- 第一组的包文件、9 个 Skill 和安全默认值；
+- 第二组的 5 个插件、17 个 Skill、清单和目录结构；
+- 第三组的 Skill 元数据、脚本、参考资料、模板和包完整性。
+
+## 生效时机
+
+- Skill 文件更新后通常在新任务中生效；如果没有出现，重启桌面应用。
+- 插件安装后必须新建任务，旧任务不会动态重新加载全部插件能力。
+- 插件只在 ChatGPT Work、ChatGPT 桌面端 Codex 或 Codex CLI 的支持界面中出现；普通 Chat、移动端和 IDE 扩展不显示插件。

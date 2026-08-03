@@ -1,0 +1,13 @@
+id,should_trigger,skill,prompt
+ws-01,true,workspace-task-router,"把Web、Unity和测试任务分流到合适会话"
+ws-02,true,workspace-task-router,"主线程只保留决策，探索交给subagent"
+ws-03,false,workspace-task-router,"修改一个按钮文字"
+ws-04,true,worktree-task-manager,"为两个并行写任务创建独立worktree"
+ws-05,true,worktree-task-manager,"暂停unity worktree但保留未提交内容"
+ws-06,false,worktree-task-manager,"新建五份项目副本"
+ws-07,true,change-ownership-merge,"检查feature/web合并main的冲突和所有权"
+ws-08,true,change-ownership-merge,"不要自动覆盖冲突，生成合并方案"
+ws-09,false,change-ownership-merge,"直接强制合并并删除分支"
+ws-10,true,workspace-task-router,"哪些任务适合subagent，哪些必须串行"
+ws-11,true,worktree-task-manager,"列出当前所有worktree和脏状态"
+ws-12,false,workspace-task-router,"解释Git是什么"

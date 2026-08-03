@@ -1,0 +1,32 @@
+schema_version: "1.1"
+application:
+  name: "{{SOURCE_APP_NAME}}"
+  version: "UNKNOWN"
+  vendor: "UNKNOWN"
+  installation_source: "UNKNOWN"
+  build_or_release_date: "UNKNOWN"
+
+runtime_environment:
+  operating_system: "UNKNOWN"
+  os_build: "UNKNOWN"
+  cpu_architecture: "UNKNOWN"
+  locale: "zh-CN"
+  timezone: "UNKNOWN"
+  resolution: "UNKNOWN"
+  dpi_scale: "UNKNOWN"
+  gpu: "UNKNOWN"
+  account_role: "UNKNOWN"
+  license_tier: "UNKNOWN"
+  network_profile: "UNKNOWN"
+  cache_state: "UNKNOWN"
+
+paths:
+  executable: "UNKNOWN"
+  install_directory: "UNKNOWN"
+  data_directories: []
+  config_directories: []
+  log_directories: []
+
+status: "UNVERIFIED"
+source_evidence: []
+open_questions: []

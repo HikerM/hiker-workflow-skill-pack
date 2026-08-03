@@ -1,0 +1,30 @@
+schema_version: "1.1"
+page_id: "PAGE-0001"
+window_id: "WIN-0001"
+name: "页面名称"
+priority: "P1"
+status: "UNVERIFIED"
+source_evidence: []
+entry_points: []
+permissions: []
+window:
+  type: "main|child|modal|tray"
+  default_size: null
+  min_size: null
+  max_size: null
+  resizable: null
+  remembers_position: null
+layout:
+  coordinate_space: "logical_px"
+  regions: []
+controls: []
+states:
+  applicable: ["default", "loading", "data", "empty", "error", "disabled", "modal"]
+  verified: []
+responsive_rules: []
+dpi_rules: []
+animations: []
+keyboard_and_accessibility: []
+accepted_differences: []
+acceptance_tests: []
+open_questions: []

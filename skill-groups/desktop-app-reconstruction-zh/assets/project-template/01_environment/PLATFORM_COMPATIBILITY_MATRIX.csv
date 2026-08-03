@@ -1,0 +1,3 @@
+platform_id,os_name,os_version,architecture,required,framework_support_status,runtime_support_status,installer_support_status,poc_status,test_environment_id,result,evidence_ids,official_doc_ids,notes
+PLAT-0001,Windows,10,x64,true,UNVERIFIED,UNVERIFIED,UNVERIFIED,NOT_RUN,ENV-0001,NOT_RUN,,,
+PLAT-0002,Windows,11,x64,true,UNVERIFIED,UNVERIFIED,UNVERIFIED,NOT_RUN,ENV-0001,NOT_RUN,,,

@@ -1,0 +1,13 @@
+id,should_trigger,skill,prompt
+web-01,true,web-ui-design,"为当前SaaS项目设计用户管理页"
+web-02,true,web-ui-design,"设计一个响应式企业官网首页并拆组件"
+web-03,false,web-ui-design,"设计Unity教材阅读页"
+web-04,true,web-component-implementation,"按已通过设计实现当前Vue页面"
+web-05,true,web-component-implementation,"在现有React工程复用组件实现详情页"
+web-06,false,web-component-implementation,"把项目从Vue迁移到React"
+web-07,true,web-quality-review,"只读审核前端组件复用和硬编码样式"
+web-08,true,web-quality-review,"检查四种分辨率视觉回归"
+web-09,false,web-quality-review,"直接修复所有后端SQL"
+web-10,true,web-ui-design,"为知识库设计加载空错误权限状态"
+web-11,true,web-component-implementation,"用户中途要求改布局，保留已完成API层继续"
+web-12,false,web-ui-design,"解释B/S架构概念"

@@ -1,0 +1,35 @@
+schema_version: "1.1"
+project_id: "{{PROJECT_ID}}"
+execution_mode: "{{EXECUTION_MODE}}"
+manifest_status: "UNVERIFIED"
+
+categories:
+  - id: "DLV-CONTROL"
+    name: "控制与授权"
+    required_modes: ["analysis", "implementation", "automation", "mixed"]
+  - id: "DLV-EVIDENCE"
+    name: "环境、证据与技术指纹"
+    required_modes: ["analysis", "implementation", "automation", "mixed"]
+  - id: "DLV-SPEC"
+    name: "库存、规格、覆盖和测试计划"
+    required_modes: ["analysis", "implementation", "automation", "mixed"]
+  - id: "DLV-IMPLEMENTATION"
+    name: "源码、迁移、锁文件和构建"
+    required_modes: ["implementation", "mixed"]
+  - id: "DLV-AUTOMATION"
+    name: "桌面操作、控件树和自动采样"
+    required_modes: ["automation", "mixed"]
+  - id: "DLV-RELEASE"
+    name: "安装包、手册和发布验收"
+    required_modes: ["implementation", "mixed"]
+
+release_rules:
+  require_g4_c_pass: true
+  require_g5_t_pass_for_implementation: true
+  require_g7_g8_g9_pass_for_release: true
+  require_p0_p1_trace_and_test_rate: 1.0
+  require_open_p0_p1_bugs: 0
+  require_checksums: true
+  require_residual_unknown_report: true
+
+machine_checklist: "00_control/DELIVERABLE_CHECKLIST.csv"

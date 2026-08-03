@@ -1,0 +1,108 @@
+{
+  "schema_version": "1.0.0",
+  "rule": "core detects once; domain skills consume .ai/context; reviewers do not modify source",
+  "skills": {
+    "context-recovery": {
+      "plugin": "ai-engineering-core",
+      "mode": "workflow",
+      "project_detection": "owner",
+      "may_modify_source": false
+    },
+    "interruptible-task-control": {
+      "plugin": "ai-engineering-core",
+      "mode": "workflow",
+      "project_detection": "owner",
+      "may_modify_source": false
+    },
+    "official-standards-resolver": {
+      "plugin": "ai-engineering-core",
+      "mode": "workflow",
+      "project_detection": "owner",
+      "may_modify_source": false
+    },
+    "project-bootstrap": {
+      "plugin": "ai-engineering-core",
+      "mode": "workflow",
+      "project_detection": "owner",
+      "may_modify_source": false
+    },
+    "full-change-risk-review": {
+      "plugin": "ai-engineering-quality",
+      "mode": "review",
+      "project_detection": "consume-core-context",
+      "may_modify_source": false
+    },
+    "knowledge-graph-maintenance": {
+      "plugin": "ai-engineering-quality",
+      "mode": "workflow",
+      "project_detection": "consume-core-context",
+      "may_modify_source": false
+    },
+    "regression-test-planner": {
+      "plugin": "ai-engineering-quality",
+      "mode": "workflow",
+      "project_detection": "consume-core-context",
+      "may_modify_source": false
+    },
+    "release-readiness-review": {
+      "plugin": "ai-engineering-quality",
+      "mode": "review",
+      "project_detection": "consume-core-context",
+      "may_modify_source": false
+    },
+    "unity-component-implementation": {
+      "plugin": "ai-engineering-unity",
+      "mode": "implementation",
+      "project_detection": "consume-core-context",
+      "may_modify_source": true
+    },
+    "unity-quality-review": {
+      "plugin": "ai-engineering-unity",
+      "mode": "review",
+      "project_detection": "consume-core-context",
+      "may_modify_source": false
+    },
+    "unity-ui-design": {
+      "plugin": "ai-engineering-unity",
+      "mode": "workflow",
+      "project_detection": "consume-core-context",
+      "may_modify_source": false
+    },
+    "web-component-implementation": {
+      "plugin": "ai-engineering-web",
+      "mode": "implementation",
+      "project_detection": "consume-core-context",
+      "may_modify_source": true
+    },
+    "web-quality-review": {
+      "plugin": "ai-engineering-web",
+      "mode": "review",
+      "project_detection": "consume-core-context",
+      "may_modify_source": false
+    },
+    "web-ui-design": {
+      "plugin": "ai-engineering-web",
+      "mode": "workflow",
+      "project_detection": "consume-core-context",
+      "may_modify_source": false
+    },
+    "change-ownership-merge": {
+      "plugin": "ai-engineering-workspace",
+      "mode": "workflow",
+      "project_detection": "consume-core-context",
+      "may_modify_source": false
+    },
+    "workspace-task-router": {
+      "plugin": "ai-engineering-workspace",
+      "mode": "workflow",
+      "project_detection": "consume-core-context",
+      "may_modify_source": false
+    },
+    "worktree-task-manager": {
+      "plugin": "ai-engineering-workspace",
+      "mode": "workflow",
+      "project_detection": "consume-core-context",
+      "may_modify_source": false
+    }
+  }
+}

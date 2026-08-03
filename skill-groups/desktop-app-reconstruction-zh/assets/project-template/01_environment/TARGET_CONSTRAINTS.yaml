@@ -1,0 +1,49 @@
+schema_version: "1.1"
+status: "UNVERIFIED"
+
+target_platforms:
+  - os: "Windows"
+    minimum_version: "10"
+    architectures: ["x64"]
+
+ui_characteristics:
+  form_and_table_heavy: false
+  custom_drawing: false
+  realtime_3d: false
+  video_audio_processing: false
+  high_frequency_animation: false
+  accessibility_required: false
+
+system_integrations:
+  system_tray: false
+  file_association: false
+  printer: false
+  serial_port: false
+  usb_device: false
+  camera_microphone: false
+  global_hotkeys: false
+  auto_update: false
+
+runtime_constraints:
+  offline_required: false
+  installer_required: true
+  admin_rights_allowed: false
+  maximum_package_mb: null
+  startup_sensitive: true
+  idle_memory_sensitive: true
+
+performance_targets:
+  cold_start_ms: null
+  page_open_p95_ms: null
+  idle_memory_mb: null
+  soak_hours: null
+
+organization_constraints:
+  expected_lifecycle_years: 5
+  team_languages: []
+  required_open_source_licenses: []
+  forbidden_licenses: []
+  domestic_platform_or_compliance: []
+
+accepted_tradeoffs: []
+open_questions: []

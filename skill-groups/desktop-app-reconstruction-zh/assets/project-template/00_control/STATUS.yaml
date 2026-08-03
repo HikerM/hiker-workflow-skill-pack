@@ -1,0 +1,46 @@
+schema_version: "1.1"
+project_id: "{{PROJECT_ID}}"
+updated_at: "{{CREATED_AT}}"
+current_stage: "G0"
+current_gate: "G0"
+current_mode: "{{EXECUTION_MODE}}"
+checkpoint_id: "CP-{{CREATED_COMPACT}}-0001"
+base_revision: "UNVERSIONED"
+active_work_unit: "WU-0001"
+allowed_paths: []
+
+gates:
+  G0: "NOT_RUN"
+  G1: "NOT_RUN"
+  "G1-T": "NOT_RUN"
+  G2: "NOT_RUN"
+  G3: "NOT_RUN"
+  G4: "NOT_RUN"
+  "G4-C": "NOT_RUN"
+  "G5-T": "NOT_RUN"
+  G5: "NOT_RUN"
+  G6: "NOT_RUN"
+  G7: "NOT_RUN"
+  G8: "NOT_RUN"
+  G9: "NOT_RUN"
+  "G9-D": "NOT_RUN"
+
+summary:
+  observed_count: 0
+  measured_count: 0
+  inferred_count: 0
+  unverified_count: 0
+  blocked_count: 0
+  trace_break_p0_p1: 0
+  orphan_p0_p1: 0
+  open_p0_bugs: 0
+  open_p1_bugs: 0
+
+current_primary_action: "完成授权与范围冻结"
+current_inputs: []
+completed_outputs: []
+blockers: []
+review_required: []
+next_actions: []
+last_completed: []
+resume_command: "读取 00_control/STATUS.yaml，从 current_gate 继续"

@@ -1,0 +1,23 @@
+schema_version: "1.1"
+interaction_id: "INT-0001"
+name: "交互名称"
+priority: "P1"
+status: "UNVERIFIED"
+source_evidence: []
+preconditions: []
+trigger:
+  type: "click|double_click|drag|scroll|keyboard|system"
+  target: "CTRL-0001"
+  input: null
+processing: []
+state_changes: []
+side_effects: []
+success_feedback: []
+failure_cases: []
+shortcuts: []
+focus_and_accessibility: []
+undo_redo: null
+timeout_cancel_recovery: null
+performance_scenario_ids: []
+acceptance_tests: []
+open_questions: []

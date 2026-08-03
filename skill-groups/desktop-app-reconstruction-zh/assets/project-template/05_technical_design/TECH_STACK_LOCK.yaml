@@ -1,0 +1,96 @@
+schema_version: "1.1"
+lock_id: "TECH-LOCK-0001"
+lock_status: "UNFROZEN"
+decision_id: "ADR-TECH-0001"
+locked_at: ""
+locked_by: ""
+license_review_status: "NOT_RUN"
+security_review_status: "NOT_RUN"
+
+components:
+  programming_language:
+    name: "UNDECIDED"
+    exact_version: "UNDECIDED"
+    required: true
+    verification_source: ""
+    verification_status: "NOT_RUN"
+  runtime:
+    name: "UNDECIDED"
+    exact_version: "UNDECIDED"
+    required: true
+    verification_source: ""
+    verification_status: "NOT_RUN"
+  sdk:
+    name: "UNDECIDED"
+    exact_version: "UNDECIDED"
+    required: true
+    verification_source: ""
+    verification_status: "NOT_RUN"
+  compiler:
+    name: "UNDECIDED"
+    exact_version: "UNDECIDED"
+    required: true
+    verification_source: ""
+    verification_status: "NOT_RUN"
+  ui_framework:
+    name: "UNDECIDED"
+    exact_version: "UNDECIDED"
+    required: true
+    verification_source: ""
+    verification_status: "NOT_RUN"
+  build_tool:
+    name: "UNDECIDED"
+    exact_version: "UNDECIDED"
+    required: true
+    verification_source: ""
+    verification_status: "NOT_RUN"
+  package_manager:
+    name: "UNDECIDED"
+    exact_version: "UNDECIDED"
+    required: true
+    verification_source: ""
+    verification_status: "NOT_RUN"
+  database_or_storage:
+    name: "UNDECIDED"
+    exact_version: "UNDECIDED"
+    required: false
+    verification_source: ""
+    verification_status: "NOT_APPLICABLE"
+  installer:
+    name: "UNDECIDED"
+    exact_version: "UNDECIDED"
+    required: true
+    verification_source: ""
+    verification_status: "NOT_RUN"
+
+targets:
+  operating_systems:
+    - "Windows 10 x64"
+    - "Windows 11 x64"
+  build_configuration: "Release"
+
+version_policy:
+  floating_versions_forbidden: true
+  exact_versions_required: true
+  pre_release_allowed: false
+
+dependency_policy:
+  lock_files_required: true
+  expected_lock_files: []
+  hashes_required_for_offline_packages: true
+  sbom_required: true
+
+official_documentation:
+  index_file: "05_technical_design/OFFICIAL_DOC_INDEX.csv"
+  exact_version_match_required: true
+
+build_reproducibility:
+  clean_machine_required: true
+  repeat_build_count: 2
+  build_commands: []
+  test_commands: []
+  output_paths: []
+  clean_build_verified: false
+  clean_test_verified: false
+  artifact_checksum_verified: false
+  verification_status: "NOT_RUN"

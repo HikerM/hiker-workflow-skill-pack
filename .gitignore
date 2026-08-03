@@ -1,5 +1,9 @@
 SELF_DISTILLATION_OUTPUT.md
+__pycache__/
+*.py[cod]
 *.zip
+!skill-groups/ai-software-engineering-platform-enterprise/dist/
+!skill-groups/ai-software-engineering-platform-enterprise/dist/*.zip
 .backups/
 .codex-output/
 outputs/tmp/

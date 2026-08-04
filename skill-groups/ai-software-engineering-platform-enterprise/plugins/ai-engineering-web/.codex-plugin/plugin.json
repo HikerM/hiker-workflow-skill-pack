@@ -1,7 +1,7 @@
 {
   "name": "ai-engineering-web",
-  "version": "4.0.0",
-  "description": "通用B/S UI设计、组件实现和前端质量审核",
+  "version": "4.1.0",
+  "description": "动态B/S设计收敛、复杂交互契约、组件实现和前端质量审核",
   "author": {
     "name": "AI Engineering Toolkit"
   },
@@ -15,8 +15,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "02 B/S界面与前端工程",
-    "shortDescription": "通用B/S UI设计、组件实现和前端质量审核",
-    "longDescription": "读取核心插件生成的技术栈，不写死 Vue 或 React；按现有框架、组件库和版本完成 UI 设计、组件化实现和视觉质量检查。",
+    "shortDescription": "动态Web设计收敛、组件实现和前端质量审核",
+    "longDescription": "读取项目真实需求、工作流、导航路由和技术栈，动态发现页面与复杂交互表面；补齐编码前数据、命令、状态、并发、降级和发布契约，再按现有框架与组件库实现和审核。",
     "developerName": "AI Engineering Toolkit",
     "category": "Productivity",
     "capabilities": [
@@ -24,8 +24,9 @@
       "Write"
     ],
     "defaultPrompt": [
-      "设计并实现当前B/S项目的组件化页面。",
-      "审核当前前端页面的组件复用和视觉还原。"
+      "从当前需求和工作流动态识别页面，完成编码前UI设计收敛。",
+      "按已通过设计实现当前Web页面并验证。",
+      "审核当前前端页面的组件复用、状态和响应式。"
     ],
     "brandColor": "#0A7C86",
     "composerIcon": "./assets/icon.png",

@@ -1,6 +1,6 @@
 {
   "name": "ai-engineering-core",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "项目识别、动态规范、可中断状态与上下文恢复",
   "author": {
     "name": "AI Engineering Toolkit"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -23,7 +24,7 @@ class CoreTests(unittest.TestCase):
             data=detect(root);self.assertTrue(data["unknown"]);self.assertEqual([],data["projects"])
     def test_checkpoint_label_cannot_escape_directory(self):
         with tempfile.TemporaryDirectory() as td:
-            root=Path(td);(root/".ai/runtime").mkdir(parents=True);(root/".ai/schema.json").write_text(json.dumps({"version":"1.0.0"}));p=checkpoint(root,"../../outside",event="manual");self.assertEqual(p.parent,(root/".ai/runtime/checkpoints").resolve());self.assertNotIn("..",p.name)
+            root=Path(td);(root/".ai/runtime").mkdir(parents=True);(root/".ai/schema.json").write_text(json.dumps({"version":"1.0.0"}));p=checkpoint(root,"../../outside",event="manual");self.assertTrue(os.path.samefile(p.parent,root/".ai/runtime/checkpoints"));self.assertNotIn("..",p.name)
     def test_detect_monorepo(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

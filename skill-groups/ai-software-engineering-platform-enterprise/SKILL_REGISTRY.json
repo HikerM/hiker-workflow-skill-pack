@@ -26,6 +26,12 @@
       "project_detection": "owner",
       "may_modify_source": false
     },
+    "design-readiness-review": {
+      "plugin": "ai-engineering-quality",
+      "mode": "review",
+      "project_detection": "consume-core-context",
+      "may_modify_source": false
+    },
     "full-change-risk-review": {
       "plugin": "ai-engineering-quality",
       "mode": "review",

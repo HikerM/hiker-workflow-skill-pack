@@ -67,7 +67,7 @@
 ### Web 页面设计与实现
 
 ```text
-先使用 web-ui-design 沿用当前项目的组件库和 Design Token 形成页面规格，再使用 web-component-implementation 实现并验证。
+先使用 web-ui-design 从当前需求、工作流、路由和技术栈动态识别页面，按复杂度形成可实现、可验收的增量设计；再由 design-readiness-review 独立复审。只有 P0/P1 清零后，才使用 web-component-implementation 实现并验证。
 ```
 
 ### Unity 页面设计与实现
@@ -79,7 +79,7 @@
 ### 完整变更风险与回归
 
 ```text
-使用 full-change-risk-review 审核暂存、未暂存、未跟踪和提交范围的完整变更集，再用 regression-test-planner 生成最低必要回归范围。
+使用 full-change-risk-review 审核暂存、未暂存、未跟踪和提交范围的完整变更集；若需求、架构、数据、API、UI 或测试设计发生变化，先做增量影响分析并判断是否重新执行 design-readiness-review，再用 regression-test-planner 生成最低必要回归范围。
 ```
 
 ### Worktree 并行任务

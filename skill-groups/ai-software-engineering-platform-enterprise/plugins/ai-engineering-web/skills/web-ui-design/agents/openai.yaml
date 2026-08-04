@@ -1,5 +1,4 @@
 interface:
-  display_name: "B/S界面设计"
-  short_description: "按当前Web技术栈完成UI、交互和组件规划"
-policy:
-  allow_implicit_invocation: true
+  display_name: "B/S界面与交互设计"
+  short_description: "动态发现并收敛复杂Web页面、契约、状态与可执行验收"
+  default_prompt: "Use $web-ui-design to derive and converge the current Web UI design before implementation."

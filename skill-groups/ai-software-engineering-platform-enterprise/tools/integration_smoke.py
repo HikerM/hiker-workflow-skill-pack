@@ -22,7 +22,7 @@ def main()->int:
         # Personal marketplace installation is verified in an isolated HOME.
         fake_home=Path(td)/"home";fake_home.mkdir();env=dict(os.environ);env["HOME"]=str(fake_home);env["USERPROFILE"]=str(fake_home)
         inst=subprocess.run([sys.executable,str(ROOT/"install_personal.py")],cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-        market=json.loads((fake_home/".agents/plugins/marketplace.json").read_text()) if inst.returncode==0 else {}
+        market=json.loads((fake_home/".agents/plugins/marketplace.json").read_text(encoding="utf-8")) if inst.returncode==0 else {}
         checks.append(("personal-install",inst.returncode==0 and all(str(x.get("source",{}).get("path","")).startswith("./.codex/plugins/") for x in market.get("plugins",[]))))
         repo_dest=Path(td)/"target";repo_dest.mkdir();ri=subprocess.run([sys.executable,str(ROOT/"install_repo.py"),str(repo_dest)],cwd=ROOT,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         checks.append(("repo-install",ri.returncode==0 and (repo_dest/".agents/plugins/marketplace.json").exists()))

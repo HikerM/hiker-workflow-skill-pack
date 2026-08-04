@@ -1,6 +1,6 @@
 # Skill 索引
 
-仓库包含三组，共 27 个 Skill。
+仓库包含三组，共 28 个 Skill。
 
 ## 第一组：Hiker 工作流守护组（9 个）
 
@@ -18,7 +18,7 @@
 
 源码：`../.agents/skills/`
 
-## 第二组：AI 软件工程平台 Enterprise（17 个）
+## 第二组：AI 软件工程平台 Enterprise（18 个）
 
 ### `ai-engineering-core`
 
@@ -33,7 +33,7 @@
 
 | Skill | 作用 |
 |---|---|
-| `web-ui-design` | 沿用现有 Web 技术栈设计信息架构、组件和状态 |
+| `web-ui-design` | 动态识别页面和复杂度，增量设计信息架构、真实数据/API 契约、状态、并发、降级、发布和验收 |
 | `web-component-implementation` | 复用现有组件和 Token 实现页面 |
 | `web-quality-review` | 只读审核复用、依赖、TypeScript、样式和响应式 |
 
@@ -57,7 +57,8 @@
 
 | Skill | 作用 |
 |---|---|
-| `full-change-risk-review` | 审核暂存、未暂存、未跟踪和提交范围的完整变更集 |
+| `design-readiness-review` | 独立只读审核需求到证据的语义追踪链，仅在 P0/P1 清零时允许进入编码 |
+| `full-change-risk-review` | 审核完整变更集，并判断设计变化的增量影响、跨层同步和重新复审范围 |
 | `knowledge-graph-maintenance` | 增量维护文件级关系图谱和限深影响分析 |
 | `regression-test-planner` | 根据风险和真实脚本生成最低必要回归范围 |
 | `release-readiness-review` | 综合风险、构建、测试、迁移和回滚审核发布状态 |

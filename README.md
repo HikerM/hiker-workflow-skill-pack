@@ -2,14 +2,14 @@
 
 这是一个面向 ChatGPT/Codex 桌面应用的中文 Skill 集合仓库。仓库当前包含 **三组彼此独立的 Skill**，每组有不同的目标、安装方式和使用边界。
 
-> 重要：这里的“三组”不是三个 Skill。第一组包含 9 个 Skill，第二组包含 5 个插件和 17 个 Skill，第三组包含 1 个大型 Skill，共计 27 个 Skill。
+> 重要：这里的“三组”不是三个 Skill。第一组包含 9 个 Skill，第二组包含 5 个插件和 18 个 Skill，第三组包含 1 个大型 Skill，共计 28 个 Skill。
 
 ## 三组总览
 
 | 组别 | 名称 | 版本 | 内容规模 | 主要用途 | 源码位置 |
 |---|---|---:|---:|---|---|
 | 第一组 | Hiker 工作流守护 Skill Pack | 0.3.0 | 9 个 Skill | 工程复核、阶段验收、证据测试、契约审计、NodeTs、Unity、设计交付和架构咨询 | [`.agents/skills`](.agents/skills) |
-| 第二组 | AI Software Engineering Platform Enterprise | 4.0.0 | 5 个插件、17 个 Skill | 项目初始化、上下文恢复、Web/Unity 实现、质量门禁、Worktree 与多会话协作 | [`skill-groups/ai-software-engineering-platform-enterprise`](skill-groups/ai-software-engineering-platform-enterprise) |
+| 第二组 | AI Software Engineering Platform Enterprise | 4.1.0 | 5 个插件、18 个 Skill | 项目初始化、上下文恢复、增量设计收敛、Web/Unity 实现、质量门禁、Worktree 与多会话协作 | [`skill-groups/ai-software-engineering-platform-enterprise`](skill-groups/ai-software-engineering-platform-enterprise) |
 | 第三组 | Desktop App Reconstruction ZH | 1.1.0 | 1 个大型 Skill | 已授权桌面软件的黑盒/灰盒/白盒等价重建、技术选型、实现、测试和交付 | [`skill-groups/desktop-app-reconstruction-zh`](skill-groups/desktop-app-reconstruction-zh) |
 
 三组的详细说明和全部 Skill 清单见：[三组 Skill 中文详解](docs/THREE_SKILL_GROUPS_ZH.md)。
@@ -39,19 +39,19 @@
 .\INSTALL.ps1 -TargetRoot C:\path\to\project -Apply -Backup -Skills all -MergeAgents
 ```
 
-## 第二组：AI Software Engineering Platform Enterprise 4.0
+## 第二组：AI Software Engineering Platform Enterprise 4.1
 
 这一组是完整的软件工程插件平台，按职责拆成 5 个插件：
 
 1. `ai-engineering-core`：识别真实技术栈，建立 `.ai/` 项目状态，生成版本对应规范，并支持长任务中断与上下文恢复。
-2. `ai-engineering-web`：基于项目现有框架和组件库完成 Web UI 设计、组件实现和只读质量审核。
+2. `ai-engineering-web`：从当前需求、工作流、路由和技术栈动态识别页面，按复杂度完成增量 Web UI 设计、组件实现和只读质量审核。
 3. `ai-engineering-unity`：基于真实 Unity 版本和 UI 技术栈完成 UI 设计、组件实现和兼容性审核。
 4. `ai-engineering-workspace`：负责大型任务路由、Subagent、Git Worktree、代码所有权和安全合并计划。
-5. `ai-engineering-quality`：覆盖完整本地变更集、关系图谱、回归测试计划、风险审核和发布门禁。
+5. `ai-engineering-quality`：覆盖独立设计就绪复审、完整本地变更集、增量影响分析、关系图谱、回归测试计划和发布门禁。
 
 它适合长期、跨模块或多人/多会话的软件工程项目。推荐先运行 `project-bootstrap`，让核心插件建立真实项目上下文，再由 Web、Unity、质量和工作区插件消费同一份 `.ai/` 状态。
 
-该组使用“个人 Marketplace → 安装插件”的两阶段安装方式。仅复制目录并不会自动启用插件，必须再安装 5 个插件。完整命令见：[安装指南](docs/INSTALLATION.md#第二组ai-software-engineering-platform-enterprise-40)。
+该组使用“个人 Marketplace → 安装插件”的两阶段安装方式。仅复制目录并不会自动启用插件，必须再安装 5 个插件。完整命令见：[安装指南](docs/INSTALLATION.md#第二组ai-software-engineering-platform-enterprise-41)。
 
 ## 第三组：桌面软件等价重建 Skill
 
@@ -95,7 +95,7 @@ py -3 -B .\scripts\install_skill.py --scope user
 .
 ├─ .agents/skills/                              # 第一组：9 个 Hiker 工作流 Skill
 ├─ skill-groups/
-│  ├─ ai-software-engineering-platform-enterprise/ # 第二组：5 插件 / 17 Skill
+│  ├─ ai-software-engineering-platform-enterprise/ # 第二组：5 插件 / 18 Skill
 │  └─ desktop-app-reconstruction-zh/                # 第三组：1 个大型 Skill
 ├─ docs/
 │  ├─ THREE_SKILL_GROUPS_ZH.md                  # 三组详细中文说明
@@ -115,7 +115,7 @@ py -3 -B .\scripts\install_skill.py --scope user
 .\VALIDATE.ps1 -Root .
 ```
 
-验证器会检查第一组的 9 个 Skill、第二组的插件清单和 17 个 Skill，以及第三组的完整包结构。
+验证器会检查第一组的 9 个 Skill、第二组的插件清单和 18 个 Skill，以及第三组的完整包结构。
 
 ## 安全默认值
 

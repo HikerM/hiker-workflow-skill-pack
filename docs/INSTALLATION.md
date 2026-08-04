@@ -63,11 +63,11 @@
 .\UNINSTALL.ps1 -TargetRoot C:\path\to\project -Apply -RestoreBackup 20260624-210000
 ```
 
-## 第二组：AI Software Engineering Platform Enterprise 4.0
+## 第二组：AI Software Engineering Platform Enterprise 4.1
 
 ### 推荐范围
 
-这是 ChatGPT/Codex 桌面应用的个人插件套件，包含 5 个插件和 17 个 Skill。安装分为两步：
+这是 ChatGPT/Codex 桌面应用的个人插件套件，包含 5 个插件和 18 个 Skill。安装分为两步：
 
 1. 复制插件并注册个人 Marketplace；
 2. 从该 Marketplace 安装并启用 5 个插件。
@@ -176,7 +176,7 @@ py -3 -B .\scripts\install_skill.py --scope user --dry-run
 该命令会验证：
 
 - 第一组的包文件、9 个 Skill 和安全默认值；
-- 第二组的 5 个插件、17 个 Skill、清单和目录结构；
+- 第二组的 5 个插件、18 个 Skill、清单和目录结构；
 - 第三组的 Skill 元数据、脚本、参考资料、模板和包完整性。
 
 ## 生效时机

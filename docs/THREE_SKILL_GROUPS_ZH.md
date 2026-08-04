@@ -107,21 +107,22 @@ quote → create → worker/provider → resource_transfer → result normalizat
 
 ---
 
-## 三、第二组：AI Software Engineering Platform Enterprise 4.0
+## 三、第二组：AI Software Engineering Platform Enterprise 4.1
 
 ### 3.1 设计目标
 
-这一组是一套插件化软件工程平台。它解决长期任务中最常见的五类问题：
+这一组是一套插件化软件工程平台。它解决长期任务中最常见的六类问题：
 
 1. 项目技术栈和规范不明确；
 2. 会话中断或上下文压缩后事实丢失；
 3. Web 与 Unity 实现没有沿用真实项目架构；
-4. 只看已提交文件，漏掉暂存、未暂存或未跟踪变更；
-5. 多任务、多会话和 Worktree 缺乏所有权与合并治理。
+4. 编码前的设计只有引用和计数，没有足以实现、验收的语义深度；
+5. 只看已提交文件，漏掉暂存、未暂存或未跟踪变更；
+6. 多任务、多会话和 Worktree 缺乏所有权与合并治理。
 
 核心原则是“核心插件只探测一次，其他插件消费统一 `.ai/` 上下文”。这样 Web、Unity、质量和工作区模块不会重复猜测技术栈。
 
-### 3.2 五个插件和 17 个 Skill
+### 3.2 五个插件和 18 个 Skill
 
 #### 插件一：`ai-engineering-core`（4 个 Skill）
 
@@ -134,7 +135,7 @@ quote → create → worker/provider → resource_transfer → result normalizat
 
 #### 插件二：`ai-engineering-web`（3 个 Skill）
 
-- `web-ui-design`：沿用已探测到的框架和组件库，设计 B/S、SaaS、后台、门户、知识库或响应式页面的信息架构、组件树和状态。
+- `web-ui-design`：从当前需求、工作流、路由和技术栈动态识别页面并评估复杂度；复杂页面补齐真实数据结构、命令、引用、状态、降级、并发、发布和可执行验收，同时检查内部标识隔离及编辑/阅读/审核/发布一致性。
 - `web-component-implementation`：先复用现有组件和 Design Token，再在真实框架中实现页面并验证。
 - `web-quality-review`：只读审核组件复用、依赖边界、TypeScript、样式 Token、响应式和视觉状态，不通过“边改边审”制造假通过。
 
@@ -152,9 +153,10 @@ quote → create → worker/provider → resource_transfer → result normalizat
 
 该插件也含生命周期 Hook，用于多会话和工作区状态管理。
 
-#### 插件五：`ai-engineering-quality`（4 个 Skill）
+#### 插件五：`ai-engineering-quality`（5 个 Skill）
 
-- `full-change-risk-review`：覆盖暂存、未暂存、未跟踪和提交范围中的完整变更集。
+- `design-readiness-review`：独立、只读构建“需求→工作流→页面→组件→数据→API/事件→权限→测试→证据”追踪链，审核实现与验收深度；只有 P0/P1 清零才允许进入编码。
+- `full-change-risk-review`：覆盖完整变更集；当需求、架构、数据、API、UI 或测试设计变化时执行增量影响分析，检查跨层同步并判断是否必须重新进行设计就绪复审。
 - `knowledge-graph-maintenance`：增量维护文件级关系图谱，用限深影响分析控制大型仓库扫描成本。
 - `regression-test-planner`：根据变更风险和项目真实脚本生成最低必要回归范围。
 - `release-readiness-review`：结合风险、构建、测试、迁移、回滚和发布证据审核版本是否可发布。
@@ -164,7 +166,10 @@ quote → create → worker/provider → resource_transfer → result normalizat
 ```text
 project-bootstrap
   → official-standards-resolver
-  → Web 或 Unity 设计/实现
+  → Web 或 Unity 设计
+  → design-readiness-review
+  → 定向整改与相关回归（若有 P0/P1）
+  → Web 或 Unity 实现
   → full-change-risk-review
   → regression-test-planner
   → release-readiness-review
@@ -263,7 +268,7 @@ context-recovery → interruptible-task-control
 第二组负责初始化、规范、设计、实现和发布门禁；第一组在阶段结束时独立复核证据：
 
 ```text
-第二组：project-bootstrap → web-ui-design → web-component-implementation
+第二组：project-bootstrap → web-ui-design → design-readiness-review → web-component-implementation
 第二组：full-change-risk-review → regression-test-planner
 第一组：codex-thread-review → project-phase-review
 ```
@@ -293,4 +298,4 @@ context-recovery → interruptible-task-control
 - 任务重点是“长期工程怎么持续执行”——选第二组。
 - 任务重点是“完整重建一个已授权桌面软件”——选第三组。
 - 同时需要执行和独立验收——第二组执行，第一组复核。
-- 不要把第二组 17 个 Skill 拆散安装成普通平铺 Skill；不要把第三组的参考文件和脚本从主 Skill 中剥离。
+- 不要把第二组 18 个 Skill 拆散安装成普通平铺 Skill；不要把第三组的参考文件和脚本从主 Skill 中剥离。

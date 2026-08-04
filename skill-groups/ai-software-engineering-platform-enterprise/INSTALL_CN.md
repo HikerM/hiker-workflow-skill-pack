@@ -62,7 +62,7 @@ python install_repo.py /path/to/your/repository
 解压后也可以在终端运行：
 
 ```bash
-codex plugin marketplace add /absolute/path/to/AI-Software-Engineering-Platform-Enterprise-4.0-Converged
+codex plugin marketplace add /absolute/path/to/ai-software-engineering-platform-enterprise
 ```
 
-然后重启桌面端，从“AI软件工程平台 Enterprise 4.0”来源安装所需插件。
+然后重启桌面端，从“AI软件工程平台 Enterprise 4.1”来源安装所需插件。

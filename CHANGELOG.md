@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.1
+
+- Upgraded AI Software Engineering Platform Enterprise to 4.1.0 with 5 plugins and 18 Skills.
+- Enhanced `web-ui-design` for requirement-driven page discovery, dynamic complexity assessment, deep contracts for complex surfaces, identifier isolation, and lifecycle consistency.
+- Added the independent, read-only `design-readiness-review` gate with semantic traceability, P0/P1 blocking, confidence, unknowns, and next-stage decisions.
+- Enhanced `full-change-risk-review` with incremental design impact analysis, re-review triggers, and cross-layer remediation checks.
+- Added simple CRUD and complex editor/publishing forward-validation scenarios and refreshed repository indexes, documentation, validation evidence, and plugin archives.
+
 ## 0.3.0
 
 - Expanded the repository from one pack into three clearly separated Skill groups.

@@ -1,6 +1,6 @@
 {
   "name": "ai-engineering-workspace",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "任务分流、Subagent、Git Worktree和合并治理",
   "author": {
     "name": "AI Engineering Toolkit"

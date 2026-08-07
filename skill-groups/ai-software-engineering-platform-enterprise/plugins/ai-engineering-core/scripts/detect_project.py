@@ -1,9 +1,17 @@
 from __future__ import annotations
-import argparse,json,os,re,tomllib
+import argparse,json,os,re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 from corelib import git_info
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    try:
+        import tomli as tomllib
+    except ModuleNotFoundError:
+        tomllib = None
 
 IGNORED={".git",".hg",".svn","node_modules","Library","Temp","obj","bin","dist","build",".venv","venv","__pycache__",".idea",".vs","DerivedData","Pods"}
 MANIFESTS={"package.json","pyproject.toml","requirements.txt","pom.xml","build.gradle","build.gradle.kts","go.mod","Cargo.toml","composer.json","ProjectVersion.txt","CMakeLists.txt","Package.swift","Gemfile","pubspec.yaml"}
@@ -11,6 +19,11 @@ MANIFESTS={"package.json","pyproject.toml","requirements.txt","pom.xml","build.g
 def safe_json(path:Path)->dict[str,Any]:
     try:
         data=json.loads(path.read_text(encoding="utf-8"));return data if isinstance(data,dict) else {}
+    except Exception:return {}
+def safe_toml(text:str)->dict[str,Any]:
+    if tomllib is None:return {}
+    try:
+        data=tomllib.loads(text);return data if isinstance(data,dict) else {}
     except Exception:return {}
 def first_text(*paths:Path)->str|None:
     for p in paths:
@@ -59,8 +72,7 @@ def detect_unity(path:Path)->dict[str,Any]|None:
 def detect_python(path:Path)->dict[str,Any]:
     root=path.parent;deps=[];version=first_text(root/".python-version")
     if path.name=="pyproject.toml":
-        try:data=tomllib.loads(path.read_text(encoding="utf-8"))
-        except Exception:data={}
+        data=safe_toml(path.read_text(encoding="utf-8"))
         project=data.get("project",{}) if isinstance(data,dict) else {}
         if isinstance(project,dict):version=version or project.get("requires-python");raw=project.get("dependencies",[]);deps.extend(map(str,raw if isinstance(raw,list) else []))
         poetry=(data.get("tool",{}) or {}).get("poetry",{}) if isinstance(data,dict) else {}
@@ -100,8 +112,7 @@ def detect_simple(path:Path)->dict[str,Any]|None:
     if path.name=="go.mod":
         m=re.search(r"^go\s+([^\s]+)",text,re.M);return {"kind":"go","root":str(root),"name":root.name,"languages":[{"name":"Go","version":m.group(1) if m else None}],"manifest":str(path)}
     if path.name=="Cargo.toml":
-        try:data=tomllib.loads(text)
-        except Exception:data={}
+        data=safe_toml(text)
         pkg=data.get("package",{}) if isinstance(data,dict) else {};return {"kind":"rust","root":str(root),"name":pkg.get("name") or root.name,"languages":[{"name":"Rust","version":pkg.get("rust-version")}],"manifest":str(path)}
     if path.name=="composer.json":
         data=safe_json(path);deps=data.get("require",{}) if isinstance(data,dict) else {};frameworks=[{"name":"Laravel","version":deps.get("laravel/framework")}] if isinstance(deps,dict) and "laravel/framework" in deps else []

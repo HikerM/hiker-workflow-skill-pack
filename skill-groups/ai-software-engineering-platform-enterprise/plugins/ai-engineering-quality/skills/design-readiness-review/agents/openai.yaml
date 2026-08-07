@@ -1,4 +1,4 @@
 interface:
   display_name: "设计就绪独立复审"
-  short_description: "独立审核复杂项目设计追踪深度并决定是否允许进入编码阶段"
-  default_prompt: "Use $design-readiness-review to independently decide whether the current design is ready for implementation."
+  short_description: "独立审核设计系统、视觉质量与实现就绪度"
+  default_prompt: "使用 $design-readiness-review 独立判断当前设计系统、视觉质量与完整契约是否达到编码条件。"

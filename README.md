@@ -9,7 +9,7 @@
 | 组别 | 名称 | 版本 | 内容规模 | 主要用途 | 源码位置 |
 |---|---|---:|---:|---|---|
 | 第一组 | Hiker 工作流守护 Skill Pack | 0.3.0 | 9 个 Skill | 工程复核、阶段验收、证据测试、契约审计、NodeTs、Unity、设计交付和架构咨询 | [`.agents/skills`](.agents/skills) |
-| 第二组 | AI Software Engineering Platform Enterprise | 4.1.0 | 5 个插件、18 个 Skill | 项目初始化、上下文恢复、增量设计收敛、Web/Unity 实现、质量门禁、Worktree 与多会话协作 | [`skill-groups/ai-software-engineering-platform-enterprise`](skill-groups/ai-software-engineering-platform-enterprise) |
+| 第二组 | AI Software Engineering Platform Enterprise | 4.2.0 | 5 个插件、18 个 Skill | 项目初始化、上下文恢复、非模板化高质量 UI、Web/Unity 实现、质量门禁、Worktree 与多会话协作 | [`skill-groups/ai-software-engineering-platform-enterprise`](skill-groups/ai-software-engineering-platform-enterprise) |
 | 第三组 | Desktop App Reconstruction ZH | 1.1.0 | 1 个大型 Skill | 已授权桌面软件的黑盒/灰盒/白盒等价重建、技术选型、实现、测试和交付 | [`skill-groups/desktop-app-reconstruction-zh`](skill-groups/desktop-app-reconstruction-zh) |
 
 三组的详细说明和全部 Skill 清单见：[三组 Skill 中文详解](docs/THREE_SKILL_GROUPS_ZH.md)。
@@ -39,7 +39,7 @@
 .\INSTALL.ps1 -TargetRoot C:\path\to\project -Apply -Backup -Skills all -MergeAgents
 ```
 
-## 第二组：AI Software Engineering Platform Enterprise 4.1
+## 第二组：AI Software Engineering Platform Enterprise 4.2
 
 这一组是完整的软件工程插件平台，按职责拆成 5 个插件：
 
@@ -122,7 +122,7 @@ py -3 -B .\scripts\install_skill.py --scope user
 - 第一组安装器默认 Dry Run，必须显式传入 `-Apply` 才会写文件。
 - 不自动覆盖项目已有 `AGENTS.md`；`-MergeAgents` 只合并带标记的 Hiker 区块。
 - 不默认执行生产数据库写入、真实 Provider 调用、计费、部署、服务重启、push 或 merge。
-- 第二组中 `ai-engineering-core` 和 `ai-engineering-workspace` 包含生命周期 Hook，启用前应先审查并信任。
+- 第二组保留状态快照、恢复和工作区事件脚本，但当前 Codex 插件 manifest 不注册已不受支持的 `hooks` 字段；这些脚本由 Skill 或外部编排显式调用。
 - 第三组必须先确认授权、资产许可和禁止操作边界。
 
 ## 更多文档

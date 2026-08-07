@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Root = "."
+    [string]$Root = ""
 )
 
 Set-StrictMode -Version Latest
@@ -8,6 +8,10 @@ $ErrorActionPreference = "Stop"
 
 $PackRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Validator = Join-Path $PackRoot "scripts\validate_skills.py"
+
+if ([string]::IsNullOrWhiteSpace($Root)) {
+    $Root = $PackRoot
+}
 
 if (-not (Test-Path -LiteralPath $Validator)) {
     throw "Validator not found: $Validator"

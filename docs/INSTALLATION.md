@@ -63,7 +63,7 @@
 .\UNINSTALL.ps1 -TargetRoot C:\path\to\project -Apply -RestoreBackup 20260624-210000
 ```
 
-## 第二组：AI Software Engineering Platform Enterprise 4.1
+## 第二组：AI Software Engineering Platform Enterprise 4.2
 
 ### 推荐范围
 
@@ -114,7 +114,7 @@ installed: true
 enabled: true
 ```
 
-`ai-engineering-core` 和 `ai-engineering-workspace` 包含 Hook。首次启用时应审查 Hook 内容，并在桌面端确认信任。
+`ai-engineering-core` 和 `ai-engineering-workspace` 保留状态与工作区事件脚本，但当前插件 manifest 不注册已不受支持的 `hooks` 字段，因此不会出现 Hook 信任步骤。相关脚本由 Skill 或外部编排显式调用。
 
 ### 项目级安装
 

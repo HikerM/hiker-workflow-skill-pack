@@ -25,13 +25,9 @@ def main()->int:
         for key in ["composerIcon","logo"]:
             rel=m.get("interface",{}).get(key);target=p/str(rel).removeprefix("./")
             if not target.is_file():errors.append(f"{p.name}: 缺少资源 {rel}")
-        for field in ["skills","hooks"]:
+        for field in ["skills"]:
             if m.get(field) and (not str(m[field]).startswith("./") or ".." in Path(str(m[field])).parts):errors.append(f"{p.name}: {field} 路径必须以 ./ 开头且位于插件内")
-        if m.get("hooks"):
-            hp=p/str(m["hooks"]).removeprefix("./")
-            try:h=json.loads(hp.read_text(encoding="utf-8"))
-            except Exception as e:errors.append(f"{p.name}: Hook无效 {e}");h={}
-            if not h.get("hooks"):errors.append(f"{p.name}: Hook为空")
+        if "hooks" in m:errors.append(f"{p.name}: plugin.json 不接受 hooks 字段；状态脚本必须由 Skill 或外部编排显式调用")
         skills=sorted((p/"skills").glob("*/SKILL.md"))
         if not skills:errors.append(f"{p.name}: 没有Skill")
         for s in skills:

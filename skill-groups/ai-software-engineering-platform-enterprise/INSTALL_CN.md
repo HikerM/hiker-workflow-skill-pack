@@ -42,9 +42,9 @@ python install_repo.py /path/to/your/repository
 <repo>/.agents/plugins/marketplace.json
 ```
 
-## Hook 信任
+## 状态脚本
 
-核心插件和工作区插件包含生命周期 Hook。安装/更新后，Codex 会要求审查并信任 Hook；未信任前 Hook 会被跳过。Hook 只在当前项目目录写入 `.ai/` 或 Git 公共目录中的 AI 工作区状态，不执行网络请求。
+核心插件和工作区插件包含状态快照、恢复和工作区事件脚本。当前 Codex 插件规范不接受 manifest 中的 `hooks` 字段，因此安装后不会出现 Hook 信任步骤，也不会自动注册生命周期事件。脚本由对应 Skill 或外部编排显式调用，只在当前项目目录写入 `.ai/` 或 Git 公共目录中的 AI 工作区状态，不执行网络请求。
 
 ## 第一次使用
 
@@ -65,4 +65,4 @@ python install_repo.py /path/to/your/repository
 codex plugin marketplace add /absolute/path/to/ai-software-engineering-platform-enterprise
 ```
 
-然后重启桌面端，从“AI软件工程平台 Enterprise 4.1”来源安装所需插件。
+然后重启桌面端，从“AI软件工程平台 Enterprise 4.2”来源安装所需插件。

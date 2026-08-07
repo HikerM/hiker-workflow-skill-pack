@@ -1,25 +1,35 @@
-# Enterprise 4.1 本地验证报告
+# Enterprise 4.2 本地验证报告
 
-生成版本：4.1.0
+生成版本：4.2.0
 
 ## 确定性验证
 
 - 插件清单：5 个
 - Skill 数量：由验证器从插件目录动态统计为 18 个
-- `web-ui-design`、`design-readiness-review`、`full-change-risk-review`：`quick_validate.py` 全部通过
-- 无 Hook 的 Web、Quality、Unity 插件：`validate_plugin.py` 全部通过
+- `web-ui-design`、`web-component-implementation`、`web-quality-review`、`design-readiness-review`：`quick_validate.py` 全部通过
+- 5 个插件：官方 `validate_plugin.py` 全部通过
 - 插件结构与图标：通过
-- Hook JSON：通过
+- Manifest：已移除当前规范不接受的 `hooks` 字段；状态与事件脚本保留为显式调用工具
 - Python 编译：通过
 - Eval 基础样例：每个插件至少 10 条并包含负向样例
 - 单元测试：通过
-- 单元测试明细：Core 6、Quality 11、Unity 4、Web 4、Workspace 4，共 29/29 通过
+- 单元测试明细：Core 7、Quality 11、Unity 4、Web 6、Workspace 4，共 32/32 通过
+- Python 3.10 兼容：`tomllib` 缺失时回退 `tomli`，无依赖时安全降级；`pyproject.toml` 探测测试通过
+- UI 反模板静态信号：Bootstrap、重复卡片、硬编码间距、装饰效果与 Token 证据测试通过
 - 集成 Smoke：通过
 - 完整本地变更集：已验证暂存、未暂存、未跟踪同时存在
 - Git Worktree：已验证创建、状态和安全移除
-- 上下文保护：已验证任务初始化、PreCompact 检查点和恢复注入
+- 上下文保护脚本：已验证任务初始化、PreCompact 协议检查点和恢复输出；当前 manifest 不自动注册生命周期事件
 - 图谱限流：已验证节点上限
 - 测试命令发现：已验证读取项目真实 package scripts
+- 本机重新安装：5 个插件均通过个人 Marketplace 安装并显示为 `installed, enabled`，版本为 `4.2.0+codex.<cachebuster>`
+
+## UI 视觉与反模板验证
+
+- `web-ui-design` 在编码前强制要求项目专属设计系统、语义色彩、间距尺度、组件复用契约、视觉焦点、疏密节奏、签名元素与适度微交互。
+- `web-component-implementation` 在缺少上述设计契约或独立复审仍有 P0/P1 时阻断编码。
+- `web-quality-review` 和 `design-readiness-review` 对普通后台骨架、Bootstrap 式默认视觉、重复卡片汤和无焦点的单调等权布局至少给出 HIGH/P1 并阻断新增或重做 UI。
+- 视觉丰富度不能靠无语义渐变、阴影、发光、玻璃效果或动效伪造；必须服务识别、比较、定位、反馈或空间连续性。
 
 ## 验证器输出
 
@@ -96,4 +106,4 @@
 
 ## 未替代的真实环境验证
 
-本地测试不能替代：ChatGPT/Codex 客户端中的实际安装、Hook 信任界面、账号可用性、真实 Unity Editor 构建和具体项目 CI。详见 `LIMITATIONS_CN.md`。
+本地测试和本机插件列表不能替代：其他账号或客户端版本中的实际安装、真实 Unity Editor 构建和具体项目 CI。详见 `LIMITATIONS_CN.md`。

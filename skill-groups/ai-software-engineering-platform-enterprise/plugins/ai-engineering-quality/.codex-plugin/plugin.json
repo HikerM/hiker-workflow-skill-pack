@@ -1,7 +1,7 @@
 {
   "name": "ai-engineering-quality",
-  "version": "4.1.0",
-  "description": "独立设计就绪、完整变更、图谱影响、回归计划和发布门禁",
+  "version": "4.2.0",
+  "description": "独立设计与视觉就绪、完整变更、图谱影响、回归计划和发布门禁",
   "author": {
     "name": "AI Engineering Toolkit"
   },
@@ -15,8 +15,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "05 质量、风险与发布",
-    "shortDescription": "独立设计就绪、完整变更风险、回归与发布门禁",
-    "longDescription": "编码前独立重建设计追踪链并审核语义深度；变更阶段覆盖暂存、未暂存和未跟踪文件，识别需求与设计影响、契约不同步、回归范围和发布证据。",
+    "shortDescription": "独立设计与视觉就绪、完整变更风险及发布门禁",
+    "longDescription": "编码前独立重建设计追踪链，审核设计系统、视觉丰富度与语义深度；变更阶段覆盖暂存、未暂存和未跟踪文件，识别需求与设计影响、契约不同步、回归范围和发布证据。",
     "developerName": "AI Engineering Toolkit",
     "category": "Productivity",
     "capabilities": [

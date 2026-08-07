@@ -38,6 +38,8 @@
 
 ## 压缩恢复
 
-- `PreCompact`：复制关键状态、记录 Git HEAD/状态和校验和。
-- 压缩后的 `SessionStart(source=compact)`：注入精简活动上下文和锁定决策。
+- 状态脚本以 `PreCompact` 事件调用时：复制关键状态、记录 Git HEAD/状态和校验和。
+- 恢复脚本以 `SessionStart(source=compact)` 调用时：输出精简活动上下文和锁定决策。
+
+当前插件 manifest 不自动注册这些事件；上述名称是脚本输入/输出协议，需由 Skill 或外部编排显式调用。
 - `context-validator`：状态无效或协议不兼容时阻止自动继续。

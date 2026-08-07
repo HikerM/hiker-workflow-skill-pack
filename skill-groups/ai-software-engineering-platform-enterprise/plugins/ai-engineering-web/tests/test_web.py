@@ -23,4 +23,15 @@ class WebTests(unittest.TestCase):
             data=audit(root); rules={x["rule"] for x in data["findings"]}; self.assertIn("direct-http-in-page",rules); self.assertIn("excessive-any",rules)
     def test_glob_root_and_nested(self):
         self.assertTrue(glob_match("src/a.ts","src/**/*.ts")); self.assertTrue(glob_match("src/x/a.ts","src/**/*.ts"))
+    def test_audit_flags_bootstrap_card_soup_and_raw_spacing(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td); (root/"src/pages").mkdir(parents=True)
+            (root/"src/pages/Dashboard.tsx").write_text("import 'bootstrap/dist/css/bootstrap.css';\n"+"<MetricCard className='card' />\n"*6+"const css=`padding:8px; margin:8px; gap:8px; padding-top:8px; margin-top:8px; row-gap:8px;`;\n")
+            data=audit(root); rules={x["rule"] for x in data["findings"]}
+            self.assertIn("bootstrap-style-review",rules); self.assertIn("repetitive-card-signal",rules); self.assertIn("hardcoded-spacing",rules)
+            self.assertEqual("1.1.0",data["schema_version"])
+    def test_audit_records_design_token_evidence(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td); (root/"src/theme").mkdir(parents=True); (root/"src/theme/tokens.css").write_text(":root{--space-2:8px;--color-action:#0369a1}")
+            data=audit(root); self.assertEqual(["src/theme/tokens.css"],data["design_system_evidence"]["token_files"])
 if __name__=="__main__": unittest.main()

@@ -4,32 +4,32 @@
     {
       "plugin": "ai-engineering-core",
       "ok": true,
-      "seconds": 1.185,
-      "output": "test_bootstrap_idempotent (test_core.CoreTests.test_bootstrap_idempotent) ... ok\ntest_checkpoint_label_cannot_escape_directory (test_core.CoreTests.test_checkpoint_label_cannot_escape_directory) ... ok\ntest_checkpoint_records_git_or_non_git (test_core.CoreTests.test_checkpoint_records_git_or_non_git) ... ok\ntest_control_classification (test_core.CoreTests.test_control_classification) ... ok\ntest_detect_monorepo (test_core.CoreTests.test_detect_monorepo) ... ok\ntest_ignored_dependency_manifest_not_detected (test_core.CoreTests.test_ignored_dependency_manifest_not_detected) ... ok\n\n----------------------------------------------------------------------\nRan 6 tests in 0.990s\n\nOK\n"
+      "seconds": 1.284,
+      "output": "test_bootstrap_idempotent (test_core.CoreTests) ... ok\ntest_checkpoint_label_cannot_escape_directory (test_core.CoreTests) ... ok\ntest_checkpoint_records_git_or_non_git (test_core.CoreTests) ... ok\ntest_control_classification (test_core.CoreTests) ... ok\ntest_detect_monorepo (test_core.CoreTests) ... ok\ntest_detect_pyproject_on_python_310_compatible_path (test_core.CoreTests) ... ok\ntest_ignored_dependency_manifest_not_detected (test_core.CoreTests) ... ok\n\n----------------------------------------------------------------------\nRan 7 tests in 1.169s\n\nOK\n"
     },
     {
       "plugin": "ai-engineering-quality",
       "ok": true,
-      "seconds": 5.145,
-      "output": "test_all_local_includes_staged_unstaged_untracked (test_quality.QualityTests.test_all_local_includes_staged_unstaged_untracked) ... ok\ntest_generated_patterns_are_ignored_and_root_glob_matches (test_quality.QualityTests.test_generated_patterns_are_ignored_and_root_glob_matches) ... ok\ntest_graph_and_test_plan_ignore_dependency_caches (test_quality.QualityTests.test_graph_and_test_plan_ignore_dependency_caches) ... ok\ntest_graph_clean_after_own_metadata_write (test_quality.QualityTests.test_graph_clean_after_own_metadata_write) ... ok\ntest_graph_detects_dirty_change_same_head (test_quality.QualityTests.test_graph_detects_dirty_change_same_head) ... ok\ntest_graph_incremental_health (test_quality.QualityTests.test_graph_incremental_health) ... ok\ntest_graph_limit_applies_to_seeds_and_stale (test_quality.QualityTests.test_graph_limit_applies_to_seeds_and_stale) ... ok\ntest_rename_and_delete (test_quality.QualityTests.test_rename_and_delete) ... ok\ntest_test_plan_monorepo_cwd (test_quality.QualityTests.test_test_plan_monorepo_cwd) ... ok\ntest_test_plan_uses_real_package_scripts (test_quality.QualityTests.test_test_plan_uses_real_package_scripts) ... ok\ntest_untracked_lines_and_staged_plus_unstaged_sum (test_quality.QualityTests.test_untracked_lines_and_staged_plus_unstaged_sum) ... ok\n\n----------------------------------------------------------------------\nRan 11 tests in 5.030s\n\nOK\n"
+      "seconds": 4.919,
+      "output": "test_all_local_includes_staged_unstaged_untracked (test_quality.QualityTests) ... ok\ntest_generated_patterns_are_ignored_and_root_glob_matches (test_quality.QualityTests) ... ok\ntest_graph_and_test_plan_ignore_dependency_caches (test_quality.QualityTests) ... ok\ntest_graph_clean_after_own_metadata_write (test_quality.QualityTests) ... ok\ntest_graph_detects_dirty_change_same_head (test_quality.QualityTests) ... ok\ntest_graph_incremental_health (test_quality.QualityTests) ... ok\ntest_graph_limit_applies_to_seeds_and_stale (test_quality.QualityTests) ... ok\ntest_rename_and_delete (test_quality.QualityTests) ... ok\ntest_test_plan_monorepo_cwd (test_quality.QualityTests) ... ok\ntest_test_plan_uses_real_package_scripts (test_quality.QualityTests) ... ok\ntest_untracked_lines_and_staged_plus_unstaged_sum (test_quality.QualityTests) ... ok\n\n----------------------------------------------------------------------\nRan 11 tests in 4.801s\n\nOK\n"
     },
     {
       "plugin": "ai-engineering-unity",
       "ok": true,
-      "seconds": 0.102,
-      "output": "test_audit_patterns_and_meta (test_unity.UnityTests.test_audit_patterns_and_meta) ... ok\ntest_library_is_not_scanned (test_unity.UnityTests.test_library_is_not_scanned) ... ok\ntest_missing_script (test_unity.UnityTests.test_missing_script) ... ok\ntest_registry (test_unity.UnityTests.test_registry) ... ok\n\n----------------------------------------------------------------------\nRan 4 tests in 0.026s\n\nOK\n"
+      "seconds": 0.144,
+      "output": "test_audit_patterns_and_meta (test_unity.UnityTests) ... ok\ntest_library_is_not_scanned (test_unity.UnityTests) ... ok\ntest_missing_script (test_unity.UnityTests) ... ok\ntest_registry (test_unity.UnityTests) ... ok\n\n----------------------------------------------------------------------\nRan 4 tests in 0.050s\n\nOK\n"
     },
     {
       "plugin": "ai-engineering-web",
       "ok": true,
-      "seconds": 0.102,
-      "output": "test_audit_direct_http_and_root_file (test_web.WebTests.test_audit_direct_http_and_root_file) ... ok\ntest_glob_root_and_nested (test_web.WebTests.test_glob_root_and_nested) ... ok\ntest_node_modules_is_not_scanned (test_web.WebTests.test_node_modules_is_not_scanned) ... ok\ntest_registry_and_duplicate (test_web.WebTests.test_registry_and_duplicate) ... ok\n\n----------------------------------------------------------------------\nRan 4 tests in 0.014s\n\nOK\n"
+      "seconds": 0.147,
+      "output": "test_audit_direct_http_and_root_file (test_web.WebTests) ... ok\ntest_audit_flags_bootstrap_card_soup_and_raw_spacing (test_web.WebTests) ... ok\ntest_audit_records_design_token_evidence (test_web.WebTests) ... ok\ntest_glob_root_and_nested (test_web.WebTests) ... ok\ntest_node_modules_is_not_scanned (test_web.WebTests) ... ok\ntest_registry_and_duplicate (test_web.WebTests) ... ok\n\n----------------------------------------------------------------------\nRan 6 tests in 0.053s\n\nOK\n"
     },
     {
       "plugin": "ai-engineering-workspace",
       "ok": true,
-      "seconds": 2.145,
-      "output": "test_branch_sanitization_and_stale_lock_recovery (test_workspace.WorkspaceTests.test_branch_sanitization_and_stale_lock_recovery) ... ok\ntest_merge_probe_conflict (test_workspace.WorkspaceTests.test_merge_probe_conflict) ... ok\ntest_router (test_workspace.WorkspaceTests.test_router) ... ok\ntest_worktree_lifecycle (test_workspace.WorkspaceTests.test_worktree_lifecycle) ... ok\n\n----------------------------------------------------------------------\nRan 4 tests in 2.050s\n\nOK\n"
+      "seconds": 3.439,
+      "output": "test_branch_sanitization_and_stale_lock_recovery (test_workspace.WorkspaceTests) ... ok\ntest_merge_probe_conflict (test_workspace.WorkspaceTests) ... ok\ntest_router (test_workspace.WorkspaceTests) ... ok\ntest_worktree_lifecycle (test_workspace.WorkspaceTests) ... ok\n\n----------------------------------------------------------------------\nRan 4 tests in 3.320s\n\nOK\n"
     }
   ]
 }

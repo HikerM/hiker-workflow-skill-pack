@@ -67,7 +67,7 @@
 ### Web 页面设计与实现
 
 ```text
-先使用 web-ui-design 从当前需求、工作流、路由和技术栈动态识别页面，按复杂度形成可实现、可验收的增量设计；再由 design-readiness-review 独立复审。只有 P0/P1 清零后，才使用 web-component-implementation 实现并验证。
+先使用 web-ui-design 从当前需求、工作流、品牌语境、路由和技术栈动态识别页面，建立项目专属设计系统、语义色彩、间距尺度、组件复用契约、视觉焦点与疏密节奏，再形成可实现、可验收的增量设计；随后由 design-readiness-review 独立复审。普通后台骨架、Bootstrap 式默认视觉、重复卡片汤或单调等权布局均会阻断。只有 P0/P1 清零后，才使用 web-component-implementation 实现并验证。
 ```
 
 ### Unity 页面设计与实现

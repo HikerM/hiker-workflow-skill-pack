@@ -13,16 +13,25 @@ HEX = re.compile(r"#[0-9a-fA-F]{3,8}\b")
 DIRECT_HTTP = re.compile(r"\b(?:axios\.(?:get|post|put|patch|delete)|fetch\s*\()")
 ANY_TS = re.compile(r"(?<![A-Za-z0-9_])any(?![A-Za-z0-9_])")
 IMPORTANT = re.compile(r"!important\b")
+BOOTSTRAP_IMPORT = re.compile(r"(?:import\s+|from\s*|require\s*\(|@import\s+|url\s*\()[^\n]{0,120}['\"]?bootstrap", re.I)
+BOOTSTRAP_CLASS = re.compile(r"(?:class|className)\s*=\s*['\"][^'\"]*\b(?:container-fluid|row|col-(?:sm|md|lg|xl|xxl)-\d+|btn-primary|card-body|navbar-expand)\b", re.I)
+CARD_SIGNAL = re.compile(r"(?:<[A-Z][A-Za-z0-9]*Card\b|\bclass(?:Name)?\s*=\s*['\"][^'\"]*\bcard(?:[-_\s]|['\"]))", re.I)
+RAW_SPACING = re.compile(r"\b(?:margin|padding|gap|row-gap|column-gap)(?:-(?:top|right|bottom|left|inline|block))?\s*:\s*-?(?:\d+(?:\.\d+)?)(?:px|rem)\b", re.I)
+DECORATIVE_EFFECT = re.compile(r"(?:linear-gradient|radial-gradient|box-shadow\s*:|backdrop-filter\s*:)", re.I)
 
 
 def audit(root: Path) -> dict:
     findings = []
     counts = Counter()
-    for path in source_files(root):
+    token_files = []
+    scanned = list(source_files(root))
+    for path in scanned:
         rel = path.relative_to(root).as_posix(); text = path.read_text(encoding="utf-8", errors="ignore"); lines = text.count("\n") + 1
+        lower = rel.lower()
+        if any(x in lower for x in ("token", "theme", "variable", "design-system", "design_system")):
+            token_files.append(rel)
         if lines > 500: findings.append({"severity":"HIGH","rule":"large-file","path":rel,"detail":f"{lines} lines"}); counts["large_file"] += 1
         elif lines > 300: findings.append({"severity":"MEDIUM","rule":"large-file","path":rel,"detail":f"{lines} lines"}); counts["large_file"] += 1
-        lower = rel.lower()
         if any(x in lower for x in ("/pages/", "/views/", "page.", "view.")) and DIRECT_HTTP.search(text):
             findings.append({"severity":"HIGH","rule":"direct-http-in-page","path":rel,"detail":"页面/视图中发现直接HTTP调用"}); counts["direct_http"] += 1
         if path.suffix.lower() in {".ts", ".tsx", ".vue"}:
@@ -33,10 +42,21 @@ def audit(root: Path) -> dict:
             if n > 3: findings.append({"severity":"MEDIUM","rule":"hardcoded-color","path":rel,"detail":f"hex colors: {n}"}); counts["hardcoded_color"] += n
         n = len(IMPORTANT.findall(text));
         if n > 2: findings.append({"severity":"LOW","rule":"important-overuse","path":rel,"detail":f"!important: {n}"}); counts["important"] += n
+        if BOOTSTRAP_IMPORT.search(text) or BOOTSTRAP_CLASS.search(text):
+            findings.append({"severity":"MEDIUM","rule":"bootstrap-style-review","path":rel,"detail":"发现 Bootstrap 依赖或典型默认类；需人工核验是否通过项目 Token/组件层形成独立视觉语言"}); counts["bootstrap_style"] += 1
+        n = len(CARD_SIGNAL.findall(text))
+        if n >= 6:
+            findings.append({"severity":"MEDIUM","rule":"repetitive-card-signal","path":rel,"detail":f"card-like occurrences: {n}; 需逐处核验语义边界，避免卡片汤"}); counts["card_signal"] += n
+        if not any(x in lower for x in ("token", "theme", "variable", "config")):
+            n = len(RAW_SPACING.findall(text))
+            if n > 5: findings.append({"severity":"MEDIUM","rule":"hardcoded-spacing","path":rel,"detail":f"raw spacing values: {n}"}); counts["hardcoded_spacing"] += n
+        n = len(DECORATIVE_EFFECT.findall(text))
+        if n > 6:
+            findings.append({"severity":"LOW","rule":"decorative-effect-review","path":rel,"detail":f"gradient/shadow/backdrop occurrences: {n}; 需核验是否服务层级与交互"}); counts["decorative_effect"] += n
     registry = build_registry(root)
     for name, paths in registry["duplicate_names"].items(): findings.append({"severity":"MEDIUM","rule":"duplicate-component-name","path":", ".join(paths),"detail":name})
     blocking = any(f["severity"] == "HIGH" for f in findings)
-    return {"schema_version":"1.0.0","result":"FAIL" if blocking else ("PASS_WITH_WARNINGS" if findings else "PASS"),"summary":dict(counts),"findings":findings,"component_count":len(registry["components"]),"duplicate_component_names":registry["duplicate_names"]}
+    return {"schema_version":"1.1.0","result":"FAIL" if blocking else ("PASS_WITH_WARNINGS" if findings else "PASS"),"summary":dict(counts),"findings":findings,"design_system_evidence":{"token_files":sorted(token_files),"requires_visual_review":True},"component_count":len(registry["components"]),"duplicate_component_names":registry["duplicate_names"]}
 
 
 def main() -> int:

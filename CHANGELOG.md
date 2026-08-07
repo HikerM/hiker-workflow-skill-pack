@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0
+
+- Upgraded AI Software Engineering Platform Enterprise to 4.2.0 while preserving the repository's three independent Skill groups.
+- Added enforceable anti-template UI rules: no generic admin-dashboard skeletons, Bootstrap-style default visuals, or repetitive card soup.
+- Required project-specific design systems, semantic color tokens, spacing scales, component reuse contracts, visual focus, rhythm, signature elements, and purposeful micro-interactions before implementation.
+- Extended independent design readiness and read-only Web quality review to block monotonous or template-driven UI, and enhanced `web_audit.py` with Bootstrap, repeated-card, hardcoded-spacing, decorative-effect, and Token-evidence signals.
+- Fixed Python 3.10 TOML detection compatibility and made root `VALIDATE.ps1` resolve the repository root correctly when invoked from another directory.
+
 ## 0.3.1
 
 - Upgraded AI Software Engineering Platform Enterprise to 4.1.0 with 5 plugins and 18 Skills.

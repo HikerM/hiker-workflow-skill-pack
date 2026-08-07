@@ -34,6 +34,11 @@ class CoreTests(unittest.TestCase):
             kinds = {p["kind"] for p in data["projects"]}
             self.assertIn("web-node", kinds); self.assertIn("unity", kinds); self.assertTrue(data["monorepo"]); web_project=next(x for x in data["projects"] if x["kind"]=="web-node"); self.assertEqual("5.7.0",web_project["languages"][0]["version"])
 
+    def test_detect_pyproject_on_python_310_compatible_path(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);(root/"pyproject.toml").write_text('[project]\nname="demo"\nrequires-python=">=3.10"\ndependencies=["FastAPI>=0.100"]\n',encoding="utf-8")
+            data=detect(root);project=data["projects"][0];self.assertEqual("python",project["kind"]);self.assertEqual(">=3.10",project["languages"][0]["version"]);self.assertIn("FastAPI",project["frameworks"])
+
     def test_bootstrap_idempotent(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); (root / "package.json").write_text('{"name":"x"}')

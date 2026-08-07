@@ -1,4 +1,4 @@
 interface:
   display_name: "B/S界面与交互设计"
-  short_description: "动态发现并收敛复杂Web页面、契约、状态与可执行验收"
-  default_prompt: "Use $web-ui-design to derive and converge the current Web UI design before implementation."
+  short_description: "设计非模板化Web界面、视觉系统、Token与组件契约"
+  default_prompt: "使用 $web-ui-design 为当前项目设计有辨识度、非模板化且可进入编码的 Web UI。"

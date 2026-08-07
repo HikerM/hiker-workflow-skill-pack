@@ -107,7 +107,7 @@ quote → create → worker/provider → resource_transfer → result normalizat
 
 ---
 
-## 三、第二组：AI Software Engineering Platform Enterprise 4.1
+## 三、第二组：AI Software Engineering Platform Enterprise 4.2
 
 ### 3.1 设计目标
 
@@ -131,13 +131,13 @@ quote → create → worker/provider → resource_transfer → result normalizat
 - `interruptible-task-control`：管理长期任务的启动、暂停、继续、调整和检查点；用户插入指令时保留已经完成的工作。
 - `context-recovery`：从 `.ai/` 状态和最新检查点恢复目标、决策、分支和下一步，不把旧聊天摘要当作唯一事实来源。
 
-`ai-engineering-core` 含生命周期 Hook，用于保存和恢复工程状态。启用前应审查 Hook 配置。
+`ai-engineering-core` 提供保存和恢复工程状态的脚本。当前 Codex 插件 manifest 不注册已不受支持的 `hooks` 字段，相关脚本由 Skill 或外部编排显式调用。
 
 #### 插件二：`ai-engineering-web`（3 个 Skill）
 
-- `web-ui-design`：从当前需求、工作流、路由和技术栈动态识别页面并评估复杂度；复杂页面补齐真实数据结构、命令、引用、状态、降级、并发、发布和可执行验收，同时检查内部标识隔离及编辑/阅读/审核/发布一致性。
-- `web-component-implementation`：先复用现有组件和 Design Token，再在真实框架中实现页面并验证。
-- `web-quality-review`：只读审核组件复用、依赖边界、TypeScript、样式 Token、响应式和视觉状态，不通过“边改边审”制造假通过。
+- `web-ui-design`：从需求、工作流、品牌语境、路由和技术栈动态识别页面；先定义项目专属设计系统、语义色彩、间距尺度、组件复用、视觉焦点、疏密节奏和签名元素，再补齐复杂页面的数据、命令、状态、降级、并发、发布和验收。明确禁止普通后台模板、Bootstrap 式默认视觉、重复卡片汤和单调等权布局。
+- `web-component-implementation`：只实现独立复审通过的设计；复用语义 Token 与现有组件，保留视觉层级、节奏和服务任务的微交互，缺少设计系统契约时阻断编码。
+- `web-quality-review`：只读审核设计系统、组件复用、依赖边界、TypeScript、响应式、视觉状态、反模板质量和视觉丰富度，不通过“边改边审”制造假通过。
 
 #### 插件三：`ai-engineering-unity`（3 个 Skill）
 
@@ -151,11 +151,11 @@ quote → create → worker/provider → resource_transfer → result normalizat
 - `worktree-task-manager`：创建、查看、暂停和安全清理 Git Worktree 与独立分支；禁止在非 Git 项目或脏状态下强制删除。
 - `change-ownership-merge`：检查代码所有权、跨模块修改、冲突和合并证据，生成安全合并计划，不自动覆盖冲突或擅自合并主分支。
 
-该插件也含生命周期 Hook，用于多会话和工作区状态管理。
+该插件提供多会话和工作区状态管理脚本，但不通过 manifest 自动注册 Hook。
 
 #### 插件五：`ai-engineering-quality`（5 个 Skill）
 
-- `design-readiness-review`：独立、只读构建“需求→工作流→页面→组件→数据→API/事件→权限→测试→证据”追踪链，审核实现与验收深度；只有 P0/P1 清零才允许进入编码。
+- `design-readiness-review`：独立、只读构建“需求→工作流→页面→设计系统/Token→组件→数据→API/事件→权限→测试→证据”追踪链；缺少间距、色彩、组件复用或视觉丰富度契约，以及明显模板化、卡片化、单调化的新增 UI 均按 P1 阻断，只有 P0/P1 清零才允许进入编码。
 - `full-change-risk-review`：覆盖完整变更集；当需求、架构、数据、API、UI 或测试设计变化时执行增量影响分析，检查跨层同步并判断是否必须重新进行设计就绪复审。
 - `knowledge-graph-maintenance`：增量维护文件级关系图谱，用限深影响分析控制大型仓库扫描成本。
 - `regression-test-planner`：根据变更风险和项目真实脚本生成最低必要回归范围。

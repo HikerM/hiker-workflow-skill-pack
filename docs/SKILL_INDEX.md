@@ -33,9 +33,9 @@
 
 | Skill | 作用 |
 |---|---|
-| `web-ui-design` | 动态识别页面和复杂度，增量设计信息架构、真实数据/API 契约、状态、并发、降级、发布和验收 |
-| `web-component-implementation` | 复用现有组件和 Token 实现页面 |
-| `web-quality-review` | 只读审核复用、依赖、TypeScript、样式和响应式 |
+| `web-ui-design` | 动态设计非模板化 Web UI，建立设计系统、间距、色彩、组件复用、视觉焦点与节奏，并补齐真实数据/API 和验收契约 |
+| `web-component-implementation` | 复用语义 Token 与组件实现有辨识度的页面，保留视觉层级和微交互 |
+| `web-quality-review` | 只读审核设计系统、视觉丰富度、反模板、组件复用、样式和响应式 |
 
 ### `ai-engineering-unity`
 
@@ -57,7 +57,7 @@
 
 | Skill | 作用 |
 |---|---|
-| `design-readiness-review` | 独立只读审核需求到证据的语义追踪链，仅在 P0/P1 清零时允许进入编码 |
+| `design-readiness-review` | 独立只读审核需求、设计系统、视觉质量到证据的语义追踪链，仅在 P0/P1 清零时允许进入编码 |
 | `full-change-risk-review` | 审核完整变更集，并判断设计变化的增量影响、跨层同步和重新复审范围 |
 | `knowledge-graph-maintenance` | 增量维护文件级关系图谱和限深影响分析 |
 | `regression-test-planner` | 根据风险和真实脚本生成最低必要回归范围 |

@@ -65,4 +65,10 @@ python install_repo.py /path/to/your/repository
 codex plugin marketplace add /absolute/path/to/ai-software-engineering-platform-enterprise
 ```
 
-然后重启桌面端，从“AI软件工程平台 Enterprise 4.2”来源安装所需插件。
+然后重启桌面端，从“AI软件工程平台 Enterprise 5.0”来源安装所需插件。
+
+## 全局自动应用与应用回执
+
+把 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 中带标记的区块合并到 `C:\Users\<用户名>\.codex\AGENTS.md`。之后软件工程任务会自动选择最小必要插件/Skill，并在开始和结束时展示实际应用项、触发原因、项目和执行模式。只替换 `ai-engineering-global-governance` 标记区块，禁止覆盖用户已有全局规则。
+
+自动选择不意味着自动获得外部写权限；push、merge、部署、发布和生产数据写入仍按用户授权与门禁执行。

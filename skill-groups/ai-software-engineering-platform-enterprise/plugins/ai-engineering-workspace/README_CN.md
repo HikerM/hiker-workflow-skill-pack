@@ -1,10 +1,23 @@
-# 04 工作区与多会话协作
+# 04 工作区与多会话协作 5.0
 
-本插件将“一个项目多个会话”实现为：
+本插件已经从“任务分流与 Worktree 工具”升级为大型软件工程多 Agent 控制平面，共 10 个 Skill。
 
-- 主会话：需求、决策、汇总；
-- Subagent：只读探索、测试、日志分析等有边界工作；
-- Git Worktree 会话：需要并行写代码的独立任务；
-- 一个共享 Git 对象库，不创建互不关联的多个 Git 仓库。
+## 控制平面
 
-插件不会假装能在普通 Chat 中自动创建持久会话；它在 Codex 支持的 Subagent/Worktree 能力上进行任务分流和状态治理。
+- `multi-agent-project-governance`：Master Agent 总入口，协调七角色、状态、Git、锁、验收和发布。
+- `project-state-manager`：维护 PROJECT_STATE、CURRENT_CONTEXT、CHANGELOG、ARCHITECTURE 与机器状态。
+- `task-lifecycle-manager`：管理 Task ID 和 Created → Released 状态机。
+- `multi-project-portfolio-manager`：隔离多个 Git 仓库的项目身份和上下文。
+- `plugin-application-receipt`：展示本次实际启用的插件、Skill、原因和项目。
+
+## 执行与门禁
+
+- `workspace-task-router`：B/S 强制拆分浏览器前端/服务端，C/S 强制拆分客户端/服务端，并增加契约数据通道。
+- `worktree-task-manager`：执行受保护分支和 Worktree 规则。
+- `file-lock-manager`：保护 Unity Scene/Prefab/ProjectSettings/meta 及 NodeTS Service、migration、API Contract。
+- `feature-acceptance-closure`：需求、实现、测试、截图/日志、文档和状态闭环。
+- `change-ownership-merge`：检查分支流向、Conventional Commit、冲突、锁和合并证据。
+
+七个角色是职责契约：Master、Planning、Developer、Review、Test、Merge、Document。它们可映射到 Codex 主任务、用户明确授权的 Subagent 或不同 Worktree；不要求每次都创建七个并行 Agent。
+
+全局自动应用模板位于 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md`。它要求任务开始和结束都显示插件应用回执，但不会扩大 push、merge、部署或生产写入权限。

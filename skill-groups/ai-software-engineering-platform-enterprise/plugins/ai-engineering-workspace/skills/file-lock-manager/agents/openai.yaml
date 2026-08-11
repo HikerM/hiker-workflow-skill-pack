@@ -1,0 +1,6 @@
+interface:
+  display_name: "多Agent文件锁"
+  short_description: "保护Unity资产、迁移、API与核心Service"
+  default_prompt: "使用 $file-lock-manager 检查并锁定当前任务即将修改的高风险文件。"
+policy:
+  allow_implicit_invocation: true

@@ -1,4 +1,4 @@
-# `.ai` 统一状态协议 1.0
+# `.ai` 统一状态协议 2.0
 
 ```text
 .ai/
@@ -14,8 +14,11 @@
 │   ├── active-context.md
 │   └── checkpoints/
 ├── governance/
+│   ├── project-state.json
 │   ├── locked-decisions.json
 │   └── ownership.json
+├── tasks/
+│   └── KG-001.json
 ├── workspace/
 │   └── task-map.json
 ├── quality/
@@ -28,9 +31,11 @@
     └── execution.jsonl
 ```
 
+仓库根同时维护 `PROJECT_STATE.md`、`CURRENT_CONTEXT.md`、`CHANGELOG.md` 和 `ARCHITECTURE.md`。Git common dir维护跨Worktree共享的 `ai-engineering/workspace.json` 与 `file-locks.json`。
+
 ## 事实优先级
 
-锁定决策 > ADR/正式架构文档 > 测试证据 > 当前任务状态 > 历史经验 > 聊天摘要。
+项目ID/仓库根 > 锁定决策 > Git事实 > Task状态与checkpoint > ADR/正式架构文档 > 测试证据 > 历史经验 > 聊天摘要。
 
 ## 原子写入
 
@@ -43,3 +48,5 @@
 
 当前插件 manifest 不自动注册这些事件；上述名称是脚本输入/输出协议，需由 Skill 或外部编排显式调用。
 - `context-validator`：状态无效或协议不兼容时阻止自动继续。
+
+新版项目使用 `Created → Planning → Development → Review → Testing → Merged → Released`。暂停、调整和恢复属于控制状态，不得跳过生命周期门禁；插入需求必须创建新的Task ID并记录依赖。

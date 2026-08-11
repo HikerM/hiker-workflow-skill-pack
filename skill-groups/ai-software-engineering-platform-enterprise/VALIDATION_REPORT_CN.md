@@ -1,28 +1,30 @@
-# Enterprise 4.2 本地验证报告
+# Enterprise 5.0 本地验证报告
 
-生成版本：4.2.0
+生成版本：5.0.0
 
 ## 确定性验证
 
 - 插件清单：5 个
-- Skill 数量：由验证器从插件目录动态统计为 18 个
-- `web-ui-design`、`web-component-implementation`、`web-quality-review`、`design-readiness-review`：`quick_validate.py` 全部通过
+- Skill 数量：由验证器从插件目录动态统计为 25 个
+- 本次修改的13个Skill（Workspace 10个、Core 2个、Quality 1个）：`quick_validate.py` 全部通过
 - 5 个插件：官方 `validate_plugin.py` 全部通过
 - 插件结构与图标：通过
 - Manifest：已移除当前规范不接受的 `hooks` 字段；状态与事件脚本保留为显式调用工具
 - Python 编译：通过
 - Eval 基础样例：每个插件至少 10 条并包含负向样例
 - 单元测试：通过
-- 单元测试明细：Core 7、Quality 11、Unity 4、Web 6、Workspace 4，共 32/32 通过
+- 单元测试明细：Core 7、Quality 11、Unity 4、Web 6、Workspace 7，共 35/35 通过
 - Python 3.10 兼容：`tomllib` 缺失时回退 `tomli`，无依赖时安全降级；`pyproject.toml` 探测测试通过
 - UI 反模板静态信号：Bootstrap、重复卡片、硬编码间距、装饰效果与 Token 证据测试通过
 - 集成 Smoke：通过
 - 完整本地变更集：已验证暂存、未暂存、未跟踪同时存在
-- Git Worktree：已验证创建、状态和安全移除
-- 上下文保护脚本：已验证任务初始化、PreCompact 协议检查点和恢复输出；当前 manifest 不自动注册生命周期事件
+- Git Worktree：已验证受保护分支、正确基线、任务绑定、创建、暂停和安全移除
+- 多Agent治理：已验证B/S与C/S前后端路由、PROJECT_STATE/CURRENT_CONTEXT、Task状态机、暂停/恢复/插入、Unity与migration锁冲突、功能闭环和合并门禁
+- 上下文保护脚本：已验证任务初始化、PreCompact协议检查点和恢复输出；新版项目状态与任务checkpoint优先于聊天摘要
 - 图谱限流：已验证节点上限
 - 测试命令发现：已验证读取项目真实 package scripts
-- 本机重新安装：5 个插件均通过个人 Marketplace 安装并显示为 `installed, enabled`，版本为 `4.2.0+codex.<cachebuster>`
+- 本机重新安装：5 个插件均通过个人 Marketplace 安装并显示为 `installed: true, enabled: true`，版本为 `5.0.0+codex.<cachebuster>`
+- 全局自动应用：已把带标记治理区块合并到 `C:\Users\Administrator\.codex\AGENTS.md`，要求任务开始/结束展示实际插件与Skill回执
 
 ## UI 视觉与反模板验证
 
@@ -37,7 +39,7 @@
 {
   "ok": true,
   "plugin_count": 5,
-  "skill_count": 18,
+  "skill_count": 25,
   "errors": [],
   "warnings": []
 }
@@ -72,7 +74,7 @@
       "ok": true
     },
     {
-      "name": "worktree",
+      "name": "governed-worktree",
       "ok": true
     },
     {

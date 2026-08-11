@@ -1,14 +1,14 @@
-# AI Software Engineering Platform Enterprise 4.2（视觉系统与设计就绪增强版）
+# AI Software Engineering Platform Enterprise 5.0（大型工程多Agent治理版）
 
 这是面向 ChatGPT Work / Codex 桌面端的大型软件工程插件套件。它不再把所有能力堆进一个超长 Skill，而是拆成 5 个可独立启用的中文插件：
 
 1. **AI工程核心**：项目识别、真实版本检测、项目专属规范、任务状态、压缩保护和恢复。
 2. **B/S界面与前端工程**：非模板化设计系统、语义色彩与间距、视觉焦点与节奏、复杂度分级、组件化实现和只读质量审核。
 3. **Unity C/S工程**：Unity UI、Prefab、Renderer、资源、多分辨率和平台兼容。
-4. **工作区与多会话协作**：Subagent 任务分流、Git Worktree、代码所有权和合并预检。
+4. **工作区与多会话协作**：七角色控制平面、项目/任务状态、Context Snapshot、多项目隔离、文件锁、Worktree、验收闭环和Git合并治理。
 5. **质量、风险与发布**：独立设计就绪复审、完整本地变更集、设计变化影响、SQLite 增量图谱、回归测试计划和发布证据。
 
-当前套件包含 5 个插件、18 个 Skill。设计收敛采用问题驱动循环，不预设审核轮数：初始设计、自检、独立复审、定向整改、相关回归和再次独立复审，直到 P0/P1 清零或明确阻塞。
+当前套件包含 5 个插件、25 个 Skill。设计收敛采用问题驱动循环；大型工程由 Master、Planning、Developer、Review、Test、Merge、Document 七类职责契约贯穿需求到发布。
 
 ## 关键约束
 
@@ -20,6 +20,7 @@
 - **证据优先**：未执行的测试只能标记为“计划”，不能写成“通过”。
 - **独立复审**：设计自检不能替代 `design-readiness-review`；只有不存在 P0/P1 才允许进入编码。
 - **视觉不能单调或模板化**：新增/重做 Web UI 必须有设计系统、语义色彩、间距尺度、组件复用、视觉焦点、疏密节奏和服务任务的签名元素。
+- **全局透明应用**：可通过 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 自动选择最小必要 Skill，并在任务开始/结束显示实际应用回执。
 
 ## 推荐启用组合
 

@@ -29,10 +29,12 @@ python3 <plugin-root>/scripts/statectl.py --root . task-start \
 5. 更新计划版本和 `active-context.md`；
 6. 在无破坏性风险时继续，不重复询问已知信息。
 
+若已安装 `ai-engineering-workspace` 且项目存在 `.ai/governance/project-state.json`，优先使用其 `governance_state.py control`：暂停只改变 `control_status`，保留生命周期状态、Worktree、锁归属和未提交修改；调整写入新决定与 checkpoint；插入需求创建新的 Task ID 和依赖；恢复前重新校验项目身份、Git 与锁。不得把暂停实现成删除 Worktree 或回退提交。
+
 ## 回滚
 
 默认只生成回滚计划并标记目标检查点。代码恢复必须基于 Git/Worktree 且由用户明确要求，禁止静默 `git reset --hard`。
 
 ## 完成门禁
 
-任务完成前更新：状态、实际修改、验证证据、遗留风险和下一步。
+任务完成前更新：状态、实际修改、Review/Test证据、截图或日志、文档、遗留风险和下一步。存在功能闭环门禁时必须通过后才能宣告完成。

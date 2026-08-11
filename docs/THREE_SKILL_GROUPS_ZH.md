@@ -107,7 +107,7 @@ quote → create → worker/provider → resource_transfer → result normalizat
 
 ---
 
-## 三、第二组：AI Software Engineering Platform Enterprise 4.2
+## 三、第二组：AI Software Engineering Platform Enterprise 5.0
 
 ### 3.1 设计目标
 
@@ -122,7 +122,7 @@ quote → create → worker/provider → resource_transfer → result normalizat
 
 核心原则是“核心插件只探测一次，其他插件消费统一 `.ai/` 上下文”。这样 Web、Unity、质量和工作区模块不会重复猜测技术栈。
 
-### 3.2 五个插件和 18 个 Skill
+### 3.2 五个插件和 25 个 Skill
 
 #### 插件一：`ai-engineering-core`（4 个 Skill）
 
@@ -145,13 +145,20 @@ quote → create → worker/provider → resource_transfer → result normalizat
 - `unity-component-implementation`：实现 Prefab、VisualElement、Renderer 或页面组件，遵守资源生命周期和现有数据层。
 - `unity-quality-review`：只读审核代码、Prefab、Scene、`.meta`/GUID、多分辨率、GC、资源和平台兼容性。
 
-#### 插件四：`ai-engineering-workspace`（3 个 Skill）
+#### 插件四：`ai-engineering-workspace`（10 个 Skill）
 
-- `workspace-task-router`：把大型需求拆成架构、Web、Unity、后端、测试、审核和发布通道，并决定使用主会话、Subagent 还是 Worktree。
-- `worktree-task-manager`：创建、查看、暂停和安全清理 Git Worktree 与独立分支；禁止在非 Git 项目或脏状态下强制删除。
-- `change-ownership-merge`：检查代码所有权、跨模块修改、冲突和合并证据，生成安全合并计划，不自动覆盖冲突或擅自合并主分支。
+- `multi-agent-project-governance`：Master总控入口，协调Planning、Developer、Review、Test、Merge和Document角色。
+- `project-state-manager`：维护PROJECT_STATE、CURRENT_CONTEXT、CHANGELOG、ARCHITECTURE及机器状态。
+- `task-lifecycle-manager`：管理Task ID、Created到Released状态机和暂停/调整/恢复。
+- `workspace-task-router`：B/S拆分浏览器前端与服务端，C/S拆分客户端与服务端，并建立契约数据通道。
+- `worktree-task-manager`：按main/release/develop和feature/bugfix/hotfix规则管理Worktree。
+- `file-lock-manager`：保护Unity Scene/Prefab/ProjectSettings/meta与NodeTS Service/migration/API Contract。
+- `feature-acceptance-closure`：检查需求、代码、审核、测试、截图/日志、文档和状态闭环。
+- `change-ownership-merge`：检查分支流向、Conventional Commit、所有权、冲突、文件锁和合并门禁。
+- `multi-project-portfolio-manager`：隔离多个Git仓库的项目身份、状态、任务与分支。
+- `plugin-application-receipt`：显示本次实际应用的插件、Skill、触发原因和当前项目。
 
-该插件提供多会话和工作区状态管理脚本，但不通过 manifest 自动注册 Hook。
+该插件提供多会话和工作区状态管理脚本，但不通过 manifest 自动注册 Hook。完整架构、角色契约、状态模型与端到端示例见 [`MULTI_AGENT_ENGINEERING_SYSTEM_ZH.md`](MULTI_AGENT_ENGINEERING_SYSTEM_ZH.md)。
 
 #### 插件五：`ai-engineering-quality`（5 个 Skill）
 
@@ -178,7 +185,9 @@ project-bootstrap
 大型并行任务可在实现前加入：
 
 ```text
-workspace-task-router → worktree-task-manager → change-ownership-merge
+multi-agent-project-governance → project-state-manager → task-lifecycle-manager
+  → workspace-task-router → worktree-task-manager/file-lock-manager
+  → Review → Test → feature-acceptance-closure → change-ownership-merge
 ```
 
 会话中断或上下文压缩后使用：
@@ -298,4 +307,4 @@ context-recovery → interruptible-task-control
 - 任务重点是“长期工程怎么持续执行”——选第二组。
 - 任务重点是“完整重建一个已授权桌面软件”——选第三组。
 - 同时需要执行和独立验收——第二组执行，第一组复核。
-- 不要把第二组 18 个 Skill 拆散安装成普通平铺 Skill；不要把第三组的参考文件和脚本从主 Skill 中剥离。
+- 不要把第二组 25 个 Skill 拆散安装成普通平铺 Skill；不要把第三组的参考文件和脚本从主 Skill 中剥离。

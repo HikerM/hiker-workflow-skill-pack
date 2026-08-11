@@ -19,6 +19,8 @@
 .ai/quality/policy.json
 ```
 
+大型或多Agent项目继续运行 `@项目状态与上下文管理`，生成 `PROJECT_STATE.md`、`CURRENT_CONTEXT.md`、`CHANGELOG.md`、`ARCHITECTURE.md` 和 `.ai/governance/project-state.json`。
+
 ## 二、开始一个长期任务
 
 ```text
@@ -35,11 +37,16 @@
 - `创建检查点：组件完成`
 - `请求回滚到 checkpoint-003`（默认只生成回滚计划，不自动破坏代码）
 
-## 三、任务分流
+## 三、建立Task ID与任务分流
+
+```text
+@工程任务生命周期
+创建 KG-001，记录目标、影响文件、负责人、feature分支和验收条件。
+```
 
 ```text
 @任务分流与会话规划
-把需求拆为架构、Web、Unity、测试和审核通道。只读探索用 Subagent；并行写入用独立 Worktree。
+把需求按B/S浏览器前端+服务端、C/S客户端+服务端、契约数据、审核、测试、文档、合并和发布控制拆分。只读探索用 Subagent；并行写入用独立 Worktree。
 ```
 
 插件不能在普通 Chat 中凭空创建持久会话；在 Codex 中可使用 Subagent 线程和桌面端 Worktree 会话。主线程只保留需求、决策和汇总，原始日志留在子线程或 `.ai/logs/`。
@@ -48,10 +55,12 @@
 
 ```text
 @Worktree任务管理
-为 web-resource 和 unity-viewer 创建独立 Worktree，基于 main，分配所有权并输出路径。
+为 KG-001 的不同写入任务创建独立 Worktree；feature/bugfix基于develop，hotfix基于main，分配所有权并输出路径。
 ```
 
 不要让两个写入 Agent 在同一个物理工作树同时编辑。
+
+修改Unity Scene/Prefab/ProjectSettings/meta、NodeTS核心Service、migration或API Contract前使用 `@多Agent文件锁`；合并前释放。
 
 ## 五、设计就绪与质量审核
 
@@ -84,3 +93,9 @@
 @发布就绪审核
 检查构建、测试、迁移、回滚、版本和已知风险证据，输出 PASS / WARNING / FAIL。
 ```
+
+发布前先用 `@功能验收闭环` 确认实现Commit、Review/Test PASS、截图或日志、CHANGELOG、ARCHITECTURE和项目状态均已闭合，再由Merge Agent执行合并预检。
+
+## 七、全局自动应用与可见回执
+
+合并 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 到 `~/.codex/AGENTS.md` 后，软件工程任务会自动选择最小必要Skill。每次任务开头和结尾会显示实际使用的插件、Skill、触发原因、项目和执行模式；未使用的插件不会被冒充为“已应用”。

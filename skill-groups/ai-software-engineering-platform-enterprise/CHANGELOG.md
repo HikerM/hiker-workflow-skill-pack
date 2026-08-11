@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 5.0.0
+
+- 将 Workspace 插件从三个工具型 Skill 升级为十个 Skill 的大型工程多Agent控制平面。
+- 新增 Master、Planning、Developer、Review、Test、Merge、Document 七角色输入、输出、权限和禁止操作契约。
+- 新增 PROJECT_STATE、CURRENT_CONTEXT、Task ID状态机、checkpoint、多项目隔离与Git common-dir文件锁。
+- 建立B/S浏览器前端+服务端、C/S客户端+服务端及共享契约/数据通道，覆盖Unity与NodeTS并行冲突保护。
+- 实施main/release/develop及feature/bugfix/hotfix/release分支治理、Conventional Commit和合并门禁。
+- 新增需求→实现→审核→测试→截图/日志→文档→状态的Feature Closed Loop。
+- 新增全局自动应用规则模板和插件应用回执，明确展示实际启用的插件、Skill、原因和项目。
+
 ## 4.2.0
 
 - 为 `web-ui-design` 增加项目专属设计系统、语义色彩、间距尺度、组件复用、视觉焦点、疏密节奏、签名元素和适度微交互契约。

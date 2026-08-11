@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0
+
+- Upgraded AI Software Engineering Platform Enterprise to 5.0.0 with 5 plugins and 25 Skills while preserving all three independent groups.
+- Rebuilt workspace collaboration as a seven-role multi-Agent engineering control plane with project/task state, context snapshots, file locks, Git governance, multi-project isolation, acceptance closure, and visible plugin receipts.
+- Added global Codex/ChatGPT Desktop auto-application instructions without expanding push, merge, deploy, or production-write authority.
+
 ## 0.4.0
 
 - Upgraded AI Software Engineering Platform Enterprise to 4.2.0 while preserving the repository's three independent Skill groups.

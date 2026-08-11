@@ -1,28 +1,14 @@
 ---
 name: change-ownership-merge
-description: 检查代码所有权、跨模块修改、分支冲突和合并前质量证据，生成安全合并计划。不得自动覆盖冲突或未经明确要求直接合并main。
+description: 由Merge Agent检查分支流向、Conventional Commit、代码所有权、冲突、文件锁和Review/Test/闭环证据，并生成可审计合并决策。禁止绕过门禁、直接修改main或强制选择一方覆盖冲突。
 ---
 
-# 代码所有权与合并治理
+# Git 合并治理
 
-## 所有权
-
-读取 `.ai/governance/ownership.json`。规则使用 glob、owner 和 allowed_roles。未映射文件不自动判定安全，而是标记 `UNOWNED`。
-
-## 合并预检
+允许流向：`feature/*|bugfix/* → develop`、`develop → release`、`release/* → main`、`hotfix/* → main`。提交消息使用 `feat:`、`fix:`、`refactor:`、`docs:`、`test:`，也允许 `chore/perf/build/ci` 及 scope。
 
 ```bash
-python3 <plugin-root>/scripts/merge_guard.py --root . \
-  --source feature/web-resource --target main
+python <plugin-root>/scripts/merge_guard.py --root . --task-id KG-001 --source feature/KG-001-login --target develop
 ```
 
-检查：
-
-- 变更文件和所有权；
-- source/target 是否存在；
-- Merge base；
-- 潜在文本冲突；
-- 数据库、接口、共享契约和锁定文件；
-- 风险/测试报告是否存在。
-
-发现冲突时生成双方修改目的和候选解决方案，禁止直接选择一方覆盖。
+只有结果为 `PASS` 或经人工接受的 `PASS_WITH_WARNINGS` 才能由 Merge Agent 执行非强制合并。执行后记录 merge commit，再把任务推进至 `Merged`。冲突时输出双方目的和候选方案，禁止 `ours/theirs` 无审查覆盖。

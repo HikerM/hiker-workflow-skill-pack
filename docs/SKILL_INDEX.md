@@ -1,6 +1,6 @@
 # Skill 索引
 
-仓库包含三组，共 28 个 Skill。
+仓库包含三组，共 35 个 Skill。
 
 ## 第一组：Hiker 工作流守护组（9 个）
 
@@ -18,7 +18,7 @@
 
 源码：`../.agents/skills/`
 
-## 第二组：AI 软件工程平台 Enterprise（18 个）
+## 第二组：AI 软件工程平台 Enterprise（25 个）
 
 ### `ai-engineering-core`
 
@@ -49,9 +49,16 @@
 
 | Skill | 作用 |
 |---|---|
-| `workspace-task-router` | 把大型需求拆到主会话、Subagent 或 Worktree |
-| `worktree-task-manager` | 安全创建、管理和清理 Worktree 与独立分支 |
-| `change-ownership-merge` | 检查所有权、冲突和证据，生成安全合并计划 |
+| `multi-agent-project-governance` | 七角色大型工程控制平面与总控入口 |
+| `project-state-manager` | 维护项目状态、上下文快照和四个根文档 |
+| `task-lifecycle-manager` | 管理 Task ID、Created→Released 和人工控制 |
+| `workspace-task-router` | 按B/S与C/S前后端、契约、审核、测试和发布拆分任务 |
+| `worktree-task-manager` | 按分支治理安全创建、管理和清理 Worktree |
+| `file-lock-manager` | 保护Unity资产和NodeTS共享核心文件 |
+| `feature-acceptance-closure` | 验证需求、代码、测试、证据、文档和状态闭环 |
+| `change-ownership-merge` | 检查流向、提交、所有权、冲突、锁和门禁 |
+| `multi-project-portfolio-manager` | 隔离多个Git仓库的项目身份与上下文 |
+| `plugin-application-receipt` | 展示本次实际应用的插件、Skill、原因和项目 |
 
 ### `ai-engineering-quality`
 

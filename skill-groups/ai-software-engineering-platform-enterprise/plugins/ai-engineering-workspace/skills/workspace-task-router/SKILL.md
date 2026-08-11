@@ -1,28 +1,22 @@
 ---
 name: workspace-task-router
-description: 将大型需求拆成架构、Web、Unity、后端、测试、审核和发布通道，并选择主会话、Subagent或Git Worktree；用于防止所有问题堆在一个会话中。
+description: 将大型需求按B/S浏览器前端与服务端、C/S客户端与服务端、契约数据、审核、测试、文档、合并和发布控制拆成可追踪通道，并选择主任务、Subagent或Git Worktree。用于大型需求分流和多Agent执行规划。
 ---
 
-# 任务分流与会话规划
+# 工作区任务路由
 
-## 原则
-
-- 主线程只保留目标、约束、决策和最终汇总；
-- 只读探索、测试、日志、资料分析优先交给 Subagent；
-- 两个以上并行写任务必须使用不同 Git Worktree；
-- 高耦合、同文件或同模块写任务保持串行；
-- 子任务结果写入 `.ai/workspace/task-map.json` 和 Handoff，而不是把原始日志全部塞回主会话。
-
-运行：
+先读取 `PROJECT_STATE.md`、`CURRENT_CONTEXT.md`、`CHANGELOG.md`、`ARCHITECTURE.md` 和 Git 状态，再运行：
 
 ```bash
-python3 <plugin-root>/scripts/task_router.py --root . --request "需求文本"
+python <plugin-root>/scripts/task_router.py --root . --request "需求文本"
 ```
 
-## 分流结果
+## 路由规则
 
-每个 lane 包含：职责、输入、输出、读写范围、依赖、推荐执行方式和阻塞关系。
+- B/S 必须同时存在 `bs-frontend`、`bs-backend` 与 `contract-data`，不能把后台页面误当成完整系统。
+- C/S 必须同时存在 `cs-client`、`cs-backend` 与 `contract-data`，Unity/桌面客户端不能吞掉服务端工作。
+- 混合项目同时保留两类前端/客户端，共享契约必须串行定版。
+- 写入通道一任务一分支；修改同一文件或高风险资产时串行并获取文件锁。
+- `review`、`testing` 必须由独立角色执行；`merge` 必须等待验收闭环通过。
 
-## 用户控制
-
-用户可以暂停或调整某个 lane，不影响其他无依赖 lane。方向变化时重新计算受影响 lane，不重建全部任务。
+输出 `.ai/workspace/task-map.json`。只有用户明确要求多 Agent 并行时才实际调度；否则生成可执行路由，由当前任务按依赖顺序推进。

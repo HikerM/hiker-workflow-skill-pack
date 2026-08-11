@@ -1,0 +1,6 @@
+interface:
+  display_name: "功能验收闭环"
+  short_description: "用测试、证据、文档与状态关闭功能任务"
+  default_prompt: "使用 $feature-acceptance-closure 检查当前功能是否真正满足合并或发布闭环。"
+policy:
+  allow_implicit_invocation: true

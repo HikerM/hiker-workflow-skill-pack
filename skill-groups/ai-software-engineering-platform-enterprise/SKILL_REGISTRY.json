@@ -98,6 +98,48 @@
       "project_detection": "consume-core-context",
       "may_modify_source": false
     },
+    "feature-acceptance-closure": {
+      "plugin": "ai-engineering-workspace",
+      "mode": "review",
+      "project_detection": "consume-governance-context",
+      "may_modify_source": false
+    },
+    "file-lock-manager": {
+      "plugin": "ai-engineering-workspace",
+      "mode": "workflow",
+      "project_detection": "consume-governance-context",
+      "may_modify_source": false
+    },
+    "multi-agent-project-governance": {
+      "plugin": "ai-engineering-workspace",
+      "mode": "control-plane",
+      "project_detection": "owner",
+      "may_modify_source": false
+    },
+    "multi-project-portfolio-manager": {
+      "plugin": "ai-engineering-workspace",
+      "mode": "workflow",
+      "project_detection": "owner",
+      "may_modify_source": false
+    },
+    "plugin-application-receipt": {
+      "plugin": "ai-engineering-workspace",
+      "mode": "report",
+      "project_detection": "consume-governance-context",
+      "may_modify_source": false
+    },
+    "project-state-manager": {
+      "plugin": "ai-engineering-workspace",
+      "mode": "control-plane",
+      "project_detection": "owner",
+      "may_modify_source": false
+    },
+    "task-lifecycle-manager": {
+      "plugin": "ai-engineering-workspace",
+      "mode": "control-plane",
+      "project_detection": "consume-governance-context",
+      "may_modify_source": false
+    },
     "workspace-task-router": {
       "plugin": "ai-engineering-workspace",
       "mode": "workflow",

@@ -1,0 +1,6 @@
+interface:
+  display_name: "工程任务生命周期"
+  short_description: "管理Task ID、阶段门禁、证据和人工控制"
+  default_prompt: "使用 $task-lifecycle-manager 创建或推进当前任务，并记录角色、分支、提交和测试证据。"
+policy:
+  allow_implicit_invocation: true

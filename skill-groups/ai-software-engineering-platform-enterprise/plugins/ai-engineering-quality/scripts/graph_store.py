@@ -9,6 +9,7 @@ PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;
 CREATE TABLE IF NOT EXISTS nodes(path TEXT PRIMARY KEY,kind TEXT,language TEXT,module TEXT,sha256 TEXT,mtime_ns INTEGER,size INTEGER,commit_sha TEXT,indexed_at TEXT);
 CREATE TABLE IF NOT EXISTS edges(src TEXT,dst TEXT,relation TEXT,source TEXT,commit_sha TEXT,PRIMARY KEY(src,dst,relation));
 CREATE INDEX IF NOT EXISTS idx_edges_src ON edges(src); CREATE INDEX IF NOT EXISTS idx_edges_dst ON edges(dst);
+CREATE TABLE IF NOT EXISTS unity_guids(guid TEXT PRIMARY KEY,path TEXT,meta_path TEXT UNIQUE);
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY,value TEXT);
 """
 EXT={".ts":"typescript",".tsx":"typescript",".js":"javascript",".jsx":"javascript",".vue":"vue",".py":"python",".cs":"csharp",".java":"java",".kt":"kotlin",".go":"go",".rs":"rust",".php":"php",".cpp":"cpp",".cc":"cpp",".c":"c",".h":"header",".hpp":"header",".shader":"shader",".compute":"shader",".asmdef":"unity",".prefab":"unity",".unity":"unity",".asset":"unity",".mat":"unity",".controller":"unity",".anim":"unity",".meta":"unity-meta",".proto":"protobuf",".graphql":"graphql",".gql":"graphql",".sql":"sql"}
@@ -63,27 +64,37 @@ def resolve_token(src:str,token:str,paths:set[str])->str|None:
     normalized=token.replace(".","/");matches=[p for p in paths if p.endswith("/"+normalized+Path(p).suffix) or p.endswith("/"+normalized+".py") or Path(p).stem==token.split(".")[-1]]
     return matches[0] if len(matches)==1 else None
 
-def rebuild_semantic_edges(c:sqlite3.Connection,current:dict[str,Path],commit:str)->None:
-    c.execute("DELETE FROM edges WHERE source IN ('unity-guid','project-reference')")
-    guid_targets={}
-    for rel,p in current.items():
-        if p.suffix.lower()!=".meta" or p.stat().st_size>2_000_000:continue
-        match=re.search(r"^guid:\s*([0-9a-fA-F]{32})\s*$",p.read_text(encoding="utf-8",errors="ignore"),re.MULTILINE)
-        asset=rel[:-5]
-        if match and asset in current:guid_targets[match.group(1).lower()]=asset
+def rebuild_semantic_edges(c:sqlite3.Connection,current:dict[str,Path],commit:str,changed:list[str],removed:list[str])->tuple[bool,int]:
     unity_sources={".prefab",".unity",".asset",".mat",".controller",".anim"}
-    for rel,p in current.items():
-        suffix=p.suffix.lower()
+    initialized=c.execute("SELECT value FROM meta WHERE key='semantic_initialized'").fetchone()
+    meta_changed=any(Path(rel).suffix.lower()==".meta" for rel in changed+removed)
+    full=not initialized or meta_changed
+    if full:
+        c.execute("DELETE FROM edges WHERE source IN ('unity-guid','project-reference')");c.execute("DELETE FROM unity_guids")
+        for rel,p in current.items():
+            if p.suffix.lower()!=".meta" or p.stat().st_size>2_000_000:continue
+            match=re.search(r"^guid:\s*([0-9a-fA-F]{32})\s*$",p.read_text(encoding="utf-8",errors="ignore"),re.MULTILINE);asset=rel[:-5]
+            if match and asset in current:c.execute("INSERT OR REPLACE INTO unity_guids(guid,path,meta_path) VALUES(?,?,?)",(match.group(1).lower(),asset,rel))
+        sources=[rel for rel in current if Path(rel).suffix.lower() in unity_sources or Path(rel).suffix.lower()==".csproj"]
+    else:
+        sources=[rel for rel in changed if rel in current and (Path(rel).suffix.lower() in unity_sources or Path(rel).suffix.lower()==".csproj")]
+        for rel in sources:c.execute("DELETE FROM edges WHERE src=? AND source IN ('unity-guid','project-reference')",(rel,))
+    guid_targets={guid:path for guid,path in c.execute("SELECT guid,path FROM unity_guids")}
+    paths=set(current)
+    for rel in sources:
+        p=current[rel];suffix=p.suffix.lower()
         if suffix in unity_sources and p.stat().st_size<=8_000_000:
             text=p.read_text(encoding="utf-8",errors="ignore")
             for guid in set(re.findall(r"guid:\s*([0-9a-fA-F]{32})",text)):
                 dst=guid_targets.get(guid.lower())
                 if dst and dst!=rel:c.execute("INSERT OR REPLACE INTO edges(src,dst,relation,source,commit_sha) VALUES(?,?,?,?,?)",(rel,dst,"references_asset","unity-guid",commit))
-        if suffix==".csproj" and p.stat().st_size<=2_000_000:
+        elif suffix==".csproj" and p.stat().st_size<=2_000_000:
             text=p.read_text(encoding="utf-8",errors="ignore")
             for token in re.findall(r"<ProjectReference\s+[^>]*Include\s*=\s*['\"]([^'\"]+)['\"]",text,re.IGNORECASE):
                 dst=posixpath.normpath(posixpath.join(posixpath.dirname(rel),posix(token)))
-                if dst in current and dst!=rel:c.execute("INSERT OR REPLACE INTO edges(src,dst,relation,source,commit_sha) VALUES(?,?,?,?,?)",(rel,dst,"depends_on_project","project-reference",commit))
+                if dst in paths and dst!=rel:c.execute("INSERT OR REPLACE INTO edges(src,dst,relation,source,commit_sha) VALUES(?,?,?,?,?)",(rel,dst,"depends_on_project","project-reference",commit))
+    c.execute("INSERT OR REPLACE INTO meta(key,value) VALUES('semantic_initialized','1')")
+    return full,len(sources)
 def index(root:Path,db:Path,excluded:list[str])->dict:
     commit=head(root);fingerprint=worktree_fingerprint(root);files=candidates(root,excluded);current={posix(str(p.relative_to(root))):p for p in files};changed=[];removed=[]
     with dbconn(db) as c:
@@ -99,10 +110,10 @@ def index(root:Path,db:Path,excluded:list[str])->dict:
             for token in import_tokens(p,lang):
                 dst=resolve_token(rel,token,paths)
                 if dst and dst!=rel:c.execute("INSERT OR REPLACE INTO edges(src,dst,relation,source,commit_sha) VALUES(?,?,?,?,?)",(rel,dst,"depends_on","import",commit))
-        rebuild_semantic_edges(c,current,commit)
+        semantic_full,semantic_updated=rebuild_semantic_edges(c,current,commit,changed,removed)
         for k,v in {"commit_sha":commit,"worktree_fingerprint":fingerprint,"updated_at":now()}.items():c.execute("INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)",(k,v))
         node_count=c.execute("SELECT COUNT(*) FROM nodes").fetchone()[0];edge_count=c.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
-    meta={"schema_version":1,"last_indexed_commit":commit,"worktree_fingerprint":fingerprint,"updated_at":now(),"node_count":node_count,"edge_count":edge_count,"changed_count":len(changed),"removed_count":len(removed)};write_json(repo_ai(root)/"knowledge/metadata.json",meta);return meta
+    meta={"schema_version":1,"last_indexed_commit":commit,"worktree_fingerprint":fingerprint,"updated_at":now(),"node_count":node_count,"edge_count":edge_count,"changed_count":len(changed),"removed_count":len(removed),"semantic_full_rebuild":semantic_full,"semantic_sources_updated":semantic_updated};write_json(repo_ai(root)/"knowledge/metadata.json",meta);return meta
 def impact(db:Path,seeds:list[str],depth:int,limit:int,direction:str,current_commit:str="",current_fingerprint:str="")->dict:
     limit=max(1,limit);depth=max(0,depth);seed_unique=list(dict.fromkeys(posix(s) for s in seeds));truncated=len(seed_unique)>limit;seed_unique=seed_unique[:limit];visited=set(seed_unique);q=deque((s,0) for s in seed_unique);edges=[];edge_limit=max(10,limit*6)
     with dbconn(db) as c:

@@ -184,6 +184,15 @@ class WorkspaceTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "parallel write budget exceeded"):
                 transition(root, ns(task_id="KG-003", to="Development", agent_role="Developer Agent", commit_id=None))
 
+    def test_total_open_task_budget_blocks_unbounded_backlog(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);self.repo(root);init_project(root,ns(project_id="PROJECT-A",architecture="hybrid",version="1.0.0",database_version="001",api_version="v1"))
+            for i in range(1,6):
+                create_task(root,ns(task_id=f"KG-{i:03d}",goal=f"任务{i}",owner_agent="Planning Agent",branch=f"feature/KG-{i:03d}",base_branch="develop",affected_files=[]))
+            with self.assertRaisesRegex(RuntimeError,"total open task budget exceeded"):
+                create_task(root,ns(task_id="KG-006",goal="超出预算",owner_agent="Planning Agent",branch="feature/KG-006",base_branch="develop",affected_files=[]))
+            self.assertTrue(validate(root)["ok"])
+
     def test_task_reconciler_detects_missing_branch_and_orphan_worktree(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td) / "repo"; root.mkdir(); self.repo(root)

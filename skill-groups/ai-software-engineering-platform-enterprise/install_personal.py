@@ -75,6 +75,27 @@ def seed_plugin_cache(dest: Path, marketplace_name: str, installed: list[dict], 
     return seeded
 
 
+def prune_plugin_cache(dest: Path, marketplace_name: str, installed: list[dict], backup: Path, retention: int) -> list[dict]:
+    """Retain current plus the newest previous cache versions; move older entries into the install backup."""
+    cache_root = (dest / "cache" / marketplace_name).resolve(); moved = []
+    current_versions = {item["id"]: str(load(Path(item["path"]) / ".codex-plugin" / "plugin.json").get("version") or "") for item in installed}
+    for name in PLUGIN_NAMES:
+        parent = (cache_root / name).resolve()
+        if parent.parent != cache_root or not parent.is_dir(): continue
+        versions = [p for p in parent.iterdir() if p.is_dir() and not p.name.endswith(".installing")]
+        current = current_versions.get(name)
+        def version_key(path: Path) -> tuple:
+            numbers = tuple(int(value) for value in re.findall(r"\d+", path.name)[:8])
+            return (path.name == current, numbers + (0,) * (8 - len(numbers)), path.name)
+        versions.sort(key=version_key, reverse=True)
+        for stale in versions[max(1, retention):]:
+            resolved = stale.resolve()
+            if resolved.parent != parent: raise RuntimeError(f"unsafe cache prune target: {resolved}")
+            target = backup / "cache-pruned" / name / stale.name; target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(resolved), str(target)); moved.append({"plugin": plugin_display(name), "version": stale.name, "backup": str(target)})
+    return moved
+
+
 def managed_block() -> str:
     text = GLOBAL_TEMPLATE.read_text(encoding="utf-8").strip()
     if text.count(BLOCK_START) != 1 or text.count(BLOCK_END) != 1 or text.index(BLOCK_START) > text.index(BLOCK_END):
@@ -200,7 +221,9 @@ def main() -> int:
     parser.add_argument("--no-merge-global-agents", action="store_true", help="只安装插件，不修改 ~/.codex/AGENTS.md")
     parser.add_argument("--no-activate-plugins", action="store_true", help="只注册Marketplace，不调用Codex CLI安装启用插件")
     parser.add_argument("--codex-cli", help="仅为旧版兼容显式指定codex或codex.exe；桌面端安装默认不需要")
+    parser.add_argument("--cache-retention", type=int, default=2, help="每个插件保留的缓存版本数（默认当前版加一个上一版）")
     args = parser.parse_args()
+    if args.cache_retention < 1: parser.error("--cache-retention must be at least 1")
     home = Path.home(); dest = home / ".codex" / "plugins"; market = home / ".agents" / "plugins" / "marketplace.json"; stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"); backup = home / ".codex" / "plugins-backup" / stamp
     dest.mkdir(parents=True, exist_ok=True); installed = []
     for name in PLUGIN_NAMES:
@@ -214,14 +237,15 @@ def main() -> int:
     if market.exists(): marketplace_backup = market.with_suffix(f".json.{stamp}.bak"); marketplace_backup.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(market, marketplace_backup)
     atomic_json(market, merged)
     cache = seed_plugin_cache(dest, str(merged["name"]), installed, backup)
+    cache_pruned = prune_plugin_cache(dest, str(merged["name"]), installed, backup, args.cache_retention)
     global_agents = {"status": "skipped", "path": str(home / ".codex" / "AGENTS.md"), "backup": None} if args.no_merge_global_agents else merge_global_agents(home, stamp)
     activation = activate_plugins(home, str(merged["name"]), args.codex_cli, args.no_activate_plugins, stamp)
     verification = verify_installation(home, str(merged["name"])) if not args.no_activate_plugins and not args.no_merge_global_agents else {"ok": True, "skipped": True}
-    install_state = {"schema_version": "1.0.0", "installed_at": stamp, "marketplace": str(merged["name"]), "plugins": [{"plugin": item["plugin"], "version": item["version"]} for item in cache], "verification": verification, "new_task_required": True}
+    install_state = {"schema_version": "1.0.0", "installed_at": stamp, "marketplace": str(merged["name"]), "plugins": [{"plugin": item["plugin"], "version": item["version"]} for item in cache], "cache_retention": args.cache_retention, "cache_pruned": cache_pruned, "verification": verification, "new_task_required": True}
     atomic_json(home / ".codex" / "plugin-install-state.json", install_state)
     ok = activation["status"] != "partial-failure" and verification.get("ok", False)
     next_step = "新建任务即可使用；若插件列表仍显示缓存版本，再重启桌面端。" if activation["status"] == "activated" else "按manual_commands安装启用插件并新建任务；若列表未刷新，再重启桌面端。"
-    print(json.dumps({"ok": ok, "installed": installed, "cache": cache, "marketplace": str(market), "marketplace_backup": str(marketplace_backup) if marketplace_backup else None, "plugin_backup": str(backup) if backup.exists() else None, "global_agents": global_agents, "plugin_activation": activation, "verification": verification, "install_state": str(home / ".codex" / "plugin-install-state.json"), "next_step": next_step}, ensure_ascii=False, indent=2)); return 0 if ok else 2
+    print(json.dumps({"ok": ok, "installed": installed, "cache": cache, "cache_pruned": cache_pruned, "marketplace": str(market), "marketplace_backup": str(marketplace_backup) if marketplace_backup else None, "plugin_backup": str(backup) if backup.exists() else None, "global_agents": global_agents, "plugin_activation": activation, "verification": verification, "install_state": str(home / ".codex" / "plugin-install-state.json"), "next_step": next_step}, ensure_ascii=False, indent=2)); return 0 if ok else 2
 
 
 if __name__ == "__main__": raise SystemExit(main())

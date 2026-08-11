@@ -33,7 +33,9 @@ def main() -> int:
         target = DIST / f"{plugin.name}-{public_version}.zip"
         with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
             for file in sorted(item for item in plugin.rglob("*") if item.is_file() and include(item)):
-                archive.write(file, "./" + file.relative_to(plugin).as_posix())
+                info = zipfile.ZipInfo("./" + file.relative_to(plugin).as_posix(), date_time=(1980, 1, 1, 0, 0, 0))
+                info.compress_type = zipfile.ZIP_DEFLATED; info.external_attr = 0o100644 << 16; info.create_system = 3
+                archive.writestr(info, file.read_bytes(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
         outputs.append({"plugin": manifest["interface"]["displayName"], "version": manifest["version"], "path": target.relative_to(ROOT).as_posix(), "sha256": sha256(target)})
     lines = [f"{item['sha256']}  {item['path']}" for item in outputs]
     (ROOT / "SHA256SUMS.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")

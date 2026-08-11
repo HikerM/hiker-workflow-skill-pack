@@ -49,11 +49,11 @@ PLUGIN_FOR = {
     "worktree-task-manager": "ai-engineering-workspace",
 }
 
-PROJECT_MARKERS = ("package.json", "pyproject.toml", "Cargo.toml", "go.mod", "pom.xml", "build.gradle", "CMakeLists.txt", "Packages/manifest.json")
+PROJECT_MARKERS = ("package.json", "pyproject.toml", "requirements.txt", "Cargo.toml", "go.mod", "pom.xml", "build.gradle", "build.gradle.kts", "composer.json", "Gemfile", "CMakeLists.txt", "Packages/manifest.json")
 IGNORED_DIRS = {".git", ".ai", "node_modules", "Library", "Temp", "obj", "bin", "dist", "build", ".venv", "venv", "Pods", "DerivedData"}
 FRONTEND_TOKENS = ("vue", "react", "next.js", "next", "nuxt", "angular", "svelte", "vite", "web-node")
-BACKEND_TOKENS = ("nestjs", "express", "fastapi", "django", "flask", "spring boot", "asp.net", "laravel", "rails", "backend", "server")
-CLIENT_TOKENS = ("unity", "wpf", "winui", "winforms", "avalonia", "maui", "qt", "qml", "electron", "tauri", "flutter", "android", "swiftui", "uikit", "appkit", "react native", "javafx", "swing", "lvgl")
+BACKEND_TOKENS = ("nestjs", "express", "fastify", "koa", "@hapi/hapi", "fastapi", "django", "flask", "litestar", "sanic", "spring boot", "spring-boot", "quarkus", "micronaut", "asp.net", "microsoft.net.sdk.web", "laravel", "rails", "backend", "server")
+CLIENT_TOKENS = ("unity", "wpf", "winui", "winforms", "avalonia", "maui", "qt", "qml", "electron", "tauri", "flutter", "android", "swiftui", "uikit", "appkit", "react native", "react-native", "javafx", "swing", "lvgl")
 PLUGIN_DISPLAY = {
     "ai-engineering-core": "01 智能工程核心",
     "ai-engineering-web": "02 浏览器端与服务端工程",
@@ -80,23 +80,40 @@ def bounded_marker_paths(root: Path, max_depth: int = 3, max_dirs: int = 160) ->
 
 
 def project_signals(root: Path) -> dict:
-    context = root / ".ai" / "context" / "tech-stack.json"; sources: list[str] = []; evidence = ""
+    context = root / ".ai" / "context" / "tech-stack.json"; sources: list[str] = []; evidence_parts: list[str] = []
     if context.is_file():
-        try: evidence = json.dumps(json.loads(context.read_text(encoding="utf-8")), ensure_ascii=False).lower(); sources.append(str(context))
+        try: evidence_parts.append(json.dumps(json.loads(context.read_text(encoding="utf-8")), ensure_ascii=False).lower()); sources.append(str(context))
         except (OSError, json.JSONDecodeError): pass
     markers = bounded_marker_paths(root)
+    package_dependencies: set[str] = set()
+    backend = False; cs = False; unity = False
     for marker in markers:
         sources.append(str(marker))
+        try: content = marker.read_text(encoding="utf-8", errors="ignore")[:120_000].lower()
+        except OSError: content = ""
+        evidence_parts.extend((marker.as_posix().lower(), content))
         if marker.name == "package.json":
-            try: evidence += " " + marker.read_text(encoding="utf-8", errors="ignore")[:120_000].lower()
-            except OSError: pass
-        evidence += " " + marker.as_posix().lower()
+            try:
+                package = json.loads(content)
+                package_dependencies.update(str(x).lower() for section in ("dependencies", "devDependencies", "peerDependencies") for x in (package.get(section) or {}))
+            except (TypeError, json.JSONDecodeError): pass
+        if marker.suffix.lower() == ".csproj":
+            backend = backend or any(token in content for token in ("microsoft.net.sdk.web", "microsoft.aspnetcore", "include=\"aspnetcore\""))
+            cs = cs or any(token in content for token in ("<usewpf>true", "<usewindowsforms>true", "microsoft.windowsappsdk", "avalonia", "maui", "xamarin"))
+        if marker.name.lower() in {"pyproject.toml", "requirements.txt", "go.mod", "cargo.toml", "pom.xml", "build.gradle", "build.gradle.kts", "composer.json", "gemfile"}:
+            backend = backend or marker.name.lower() in {"go.mod", "cargo.toml", "composer.json", "gemfile"} or any(token in content for token in BACKEND_TOKENS)
+        unity = unity or marker.as_posix().lower().endswith("packages/manifest.json") or "com.unity" in content
+    evidence = " ".join(evidence_parts)
+    react_native = "react-native" in package_dependencies or "react-native" in evidence or "react native" in evidence
+    web_packages = {"vue", "next", "nuxt", "@angular/core", "svelte", "vite"}
+    web_from_packages = bool(package_dependencies & web_packages) or ("react" in package_dependencies and not react_native)
+    backend = backend or any(dep == token or dep.startswith(token) for dep in package_dependencies for token in ("@nestjs/", "express", "fastify", "koa", "@hapi/", "hapi", "fastapi", "django", "flask", "spring-boot", "laravel", "rails"))
     return {
         "existing": bool(markers or context.is_file()),
-        "bs": any(token in evidence for token in FRONTEND_TOKENS),
-        "backend": any(token in evidence for token in BACKEND_TOKENS),
-        "cs": any(token in evidence for token in CLIENT_TOKENS) or any(path.lower().endswith((".sln", ".csproj")) for path in sources),
-        "unity": "unity" in evidence or "packages/manifest.json" in evidence,
+        "bs": web_from_packages or any(token in evidence for token in FRONTEND_TOKENS if token != "react") and not react_native,
+        "backend": backend or any(token in evidence for token in BACKEND_TOKENS),
+        "cs": cs or react_native or any(token in evidence for token in CLIENT_TOKENS),
+        "unity": unity or "unity" in evidence,
         "context_ready": context.is_file(),
         "sources": sources[:12],
     }
@@ -134,8 +151,8 @@ def skill_display(skill: str) -> str:
 
 def route(root: Path, request: str) -> dict:
     root = root.resolve(); text = request.lower(); signals = project_signals(root); existing = signals["existing"]
-    plugin_engineering = any(x in text for x in ("插件", "skill", "marketplace", "codex扩展", "chatgpt桌面")) and any(
-        x in text for x in ("增强", "升级", "更新", "开发", "修改", "修复", "审核", "验证", "安装", "重新安装", "推送", "发布")
+    plugin_engineering = any(x in text for x in ("插件", "skill", "marketplace", "codex扩展", "chatgpt桌面", "桌面端插件")) and any(
+        x in text for x in ("增强", "升级", "更新", "开发", "修改", "修复", "审核", "验证", "安装", "重新安装", "推送", "发布", "检查", "诊断", "性能", "变慢", "慢", "走偏", "遗漏", "卡")
     )
     explicit_greenfield = any(x in text for x in ("从0", "从零", "空项目", "空目录", "新项目", "greenfield", "从头开发", "初始化一个项目"))
     create_intent = any(x in text for x in ("开发一个", "创建一个", "新建一个", "搭建一个", "做一个系统", "做一套"))
@@ -148,8 +165,8 @@ def route(root: Path, request: str) -> dict:
     brownfield_intent = brownfield_words
     explicit_bs = any(x in text for x in ("b/s", "bs架构", "web", "网页", "前端", "浏览器", "后台页面", "saas", "网站", "官网", "响应式", "运营工作台", "vue", "react", "angular", "svelte"))
     explicit_unity = any(x in text for x in ("unity", "ugui", "prefab", "missing script", "guid"))
-    explicit_cs = not plugin_engineering and (explicit_unity or any(x in text for x in ("c/s", "cs架构", "桌面", "客户端", "wpf", "winui", "winforms", "avalonia", "maui", "qt", "qml", "electron", "tauri", "flutter", "android", "ios", "macos", "swiftui", "react native", "javafx", "swing", "lvgl", "嵌入式hmi")))
-    explicit_backend = any(x in text for x in ("后端", "服务端", "服务器", "nodets", "node.ts", "nestjs", "express", "fastapi", "django", "spring", "asp.net", "laravel", "数据库", "migration", "service.ts", "api接口", "接口契约"))
+    explicit_cs = not plugin_engineering and (explicit_unity or any(x in text for x in ("c/s", "cs架构", "桌面", "客户端", "wpf", "winui", "winforms", "avalonia", "maui", "qt", "qml", "electron", "tauri", "flutter", "android", "ios", "macos", "swiftui", "react native", "react-native", "javafx", "swing", "lvgl", "嵌入式hmi")))
+    explicit_backend = any(x in text for x in ("后端", "服务端", "服务器", "nodets", "node.ts", "nestjs", "express", "fastify", "koa", "hapi", "fastapi", "django", "flask", "spring", "asp.net", "laravel", "rails", "数据库", "migration", "service.ts", "api接口", "接口契约"))
     explicit_architecture = explicit_bs or explicit_cs or explicit_backend
     bs = explicit_bs or (not explicit_architecture and signals["bs"])
     cs = explicit_cs or (not explicit_architecture and signals["cs"])
@@ -252,12 +269,16 @@ def route(root: Path, request: str) -> dict:
             add("change-ownership-merge", "合并前需要所有权、冲突与证据检查")
         elif test and not review and not unsafe_shortcut:
             add("regression-test-planner", "按变更风险生成最低必要回归范围")
+        elif review and sum(bool(x) for x in (bs, cs, backend)) > 1:
+            add("workspace-task-router", "跨前后端审核必须先拆分边界、证据和独立质量通道")
         elif review:
             if unity_review or unity: add("unity-quality-review", "当前请求是游戏引擎专项只读质量审核")
             elif cs_review or cs: add("cs-quality-review", "当前请求是客户端专项只读质量审核")
             elif bs and not backend: add("web-quality-review", "当前请求是浏览器端只读质量审核")
             elif backend: add("backend-quality-review", "当前请求是服务端、契约与数据变更的独立审核")
             elif not unsafe_shortcut: add("full-change-risk-review", "当前请求是只读质量审核")
+        elif sum(bool(x) for x in (bs, cs, backend)) > 1 and not unsafe_shortcut:
+            add("workspace-task-router", "跨前后端变更必须先拆分所有权、依赖和可合并执行通道")
         elif cs and not unsafe_shortcut:
             add("cs-client-router", "先识别C/S客户端语言、框架、SDK和版本证据")
             add("unity-ui-design" if unity and design else "unity-component-implementation" if unity else "cs-ui-design" if design else "cs-component-implementation", "按已识别客户端技术处理当前阶段")
@@ -283,6 +304,11 @@ def route(root: Path, request: str) -> dict:
 
     kinds = sum(bool(x) for x in (bs, cs, backend))
     architecture = "tooling" if plugin_engineering else "hybrid" if kinds > 1 else "cs" if cs else "bs" if bs else "backend" if backend else "unknown"
+    ambiguous_hybrid = kinds > 1 and not explicit_architecture
+    confidence = "low" if not selected else "medium" if ambiguous_hybrid or (kinds > 1 and not plugin_engineering) else "high"
+    questions = []
+    if not selected: questions.append("当前请求未命中软件工程执行阶段；不自动加载原子Skill")
+    elif ambiguous_hybrid: questions.append("工程包含多个技术通道；执行前需在任务契约中确认本次前端、客户端和服务端范围")
     return {
         "schema_version": "1.0.0",
         "project_mode": mode,
@@ -291,10 +317,10 @@ def route(root: Path, request: str) -> dict:
         "selected": [{"skill": skill_display(s), "plugin": PLUGIN_DISPLAY[PLUGIN_FOR[s]], "reason": reason} for s, reason in selected],
         "load": [locate(s) for s, _ in selected],
         "max_loaded_skills": 2,
-        "confidence": "high" if selected else "low",
+        "confidence": confidence,
         "project_evidence": signals["sources"],
         "receipt_required": bool(selected),
-        "questions": [] if selected else ["当前请求未命中软件工程执行阶段；不自动加载原子Skill"],
+        "questions": questions,
     }
 
 

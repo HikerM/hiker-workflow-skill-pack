@@ -5,7 +5,9 @@ ROOT=Path(__file__).resolve().parents[1]
 CORE=ROOT/"plugins/ai-engineering-core/scripts";WORK=ROOT/"plugins/ai-engineering-workspace/scripts";QUALITY=ROOT/"plugins/ai-engineering-quality/scripts"
 sys.path.insert(0,str(ROOT))
 from install_personal import enable_plugins_in_config
-def run(args,cwd,input_text=None,check=True):return subprocess.run(args,cwd=cwd,input=input_text,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=check)
+def child_env(extra=None):
+    env=dict(os.environ);env.update(extra or {});env["PYTHONIOENCODING"]="utf-8";env["PYTHONUTF8"]="1";return env
+def run(args,cwd,input_text=None,check=True):return subprocess.run(args,cwd=cwd,input=input_text,text=True,encoding="utf-8",errors="replace",env=child_env(),stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=check)
 def git(root,*args):return run(["git",*args],root)
 def main()->int:
     checks=[]
@@ -26,11 +28,11 @@ def main()->int:
         run([sys.executable,str(QUALITY/"graph_store.py"),"--root",str(root),"index"],root);imp=run([sys.executable,str(QUALITY/"graph_store.py"),"--root",str(root),"impact","--seed","src/a.ts","--depth","2","--limit","1"],root);idata=json.loads(imp.stdout);checks.append(("graph-limit",len(idata["nodes"])<=1))
         plan=run([sys.executable,str(QUALITY/"test_plan.py"),"--root",str(root)],root);pd=json.loads(plan.stdout);cmds={x["command"] for x in pd["mandatory"]+pd["recommended"]};checks.append(("real-commands",{"pnpm lint","pnpm test","pnpm build"}.issubset(cmds)))
         # Personal marketplace installation is verified in an isolated HOME.
-        fake_home=Path(td)/"home";fake_home.mkdir();(fake_home/".codex").mkdir();(fake_home/".codex/AGENTS.md").write_text("# Existing rules\n\n- keep me\n",encoding="utf-8");env=dict(os.environ);env["HOME"]=str(fake_home);env["USERPROFILE"]=str(fake_home)
-        inst=subprocess.run([sys.executable,str(ROOT/"install_personal.py")],cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        fake_home=Path(td)/"home";fake_home.mkdir();(fake_home/".codex").mkdir();(fake_home/".codex/AGENTS.md").write_text("# Existing rules\n\n- keep me\n",encoding="utf-8");env=child_env({"HOME":str(fake_home),"USERPROFILE":str(fake_home)})
+        inst=subprocess.run([sys.executable,str(ROOT/"install_personal.py")],cwd=ROOT,env=env,text=True,encoding="utf-8",errors="replace",stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         install_result=json.loads(inst.stdout) if inst.returncode==0 else {}
         market=json.loads((fake_home/".agents/plugins/marketplace.json").read_text(encoding="utf-8")) if inst.returncode==0 else {}
-        cache_manifests=list((fake_home/".codex/plugins/cache/personal-ai-engineering-marketplace").glob("*/5.5.0+codex.*/.codex-plugin/plugin.json"))
+        cache_manifests=list((fake_home/".codex/plugins/cache/personal-ai-engineering-marketplace").glob("*/*+codex.*/.codex-plugin/plugin.json"))
         checks.append(("personal-install",inst.returncode==0 and install_result.get("verification",{}).get("ok") is True and all(str(x.get("source",{}).get("path","")).startswith("./.codex/plugins/") for x in market.get("plugins",[])) and len(cache_manifests)==5))
         enabled=enable_plugins_in_config(fake_home,"personal-ai-engineering-marketplace","smoke");config_path=fake_home/".codex/config.toml";config=config_path.read_text(encoding="utf-8")
         enabled_again=enable_plugins_in_config(fake_home,"personal-ai-engineering-marketplace","smoke-2")
@@ -39,14 +41,17 @@ def main()->int:
         checks.append(("config-activation-fallback",enabled["status"]=="unchanged" and enabled_again["status"]=="unchanged" and valid_sections))
         agents=(fake_home/".codex/AGENTS.md").read_text(encoding="utf-8") if inst.returncode==0 else "";forbidden_group_terms=("第一组","第二组","第三组","组别")
         checks.append(("global-auto-application","keep me" in agents and agents.count("<!-- ai-engineering-global-governance start -->")==1 and "已应用：插件中文名称｜实际加载的 Skill 中文名称" in agents and "智能工程轻量路由" in agents and not any(term in agents for term in forbidden_group_terms) and "ai-engineering-router" not in agents and "bounded-context-memory" not in agents))
-        inst2=subprocess.run([sys.executable,str(ROOT/"install_personal.py")],cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        core_cache=fake_home/".codex/plugins/cache/personal-ai-engineering-marketplace/ai-engineering-core"
+        for stale in ("5.3.0+codex.stale-a","5.4.0+codex.stale-b"):(core_cache/stale).mkdir(parents=True)
+        inst2=subprocess.run([sys.executable,str(ROOT/"install_personal.py")],cwd=ROOT,env=env,text=True,encoding="utf-8",errors="replace",stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         agents2=(fake_home/".codex/AGENTS.md").read_text(encoding="utf-8") if inst2.returncode==0 else "";checks.append(("global-rules-idempotent",inst2.returncode==0 and agents2.count("<!-- ai-engineering-global-governance start -->")==1))
-        uninstall=subprocess.run([sys.executable,str(ROOT/"uninstall_personal.py"),"--yes"],cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        checks.append(("cache-retention",inst2.returncode==0 and len([p for p in core_cache.iterdir() if p.is_dir()])<=2 and bool(json.loads(inst2.stdout).get("cache_pruned"))))
+        uninstall=subprocess.run([sys.executable,str(ROOT/"uninstall_personal.py"),"--yes"],cwd=ROOT,env=env,text=True,encoding="utf-8",errors="replace",stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         after=(fake_home/".codex/AGENTS.md").read_text(encoding="utf-8") if uninstall.returncode==0 else "";checks.append(("global-rules-safe-uninstall",uninstall.returncode==0 and "keep me" in after and "ai-engineering-global-governance" not in after))
-        opt_home=Path(td)/"opt-out-home";opt_home.mkdir();opt_env=dict(os.environ);opt_env["HOME"]=str(opt_home);opt_env["USERPROFILE"]=str(opt_home)
-        opt=subprocess.run([sys.executable,str(ROOT/"install_personal.py"),"--no-merge-global-agents","--no-activate-plugins"],cwd=ROOT,env=opt_env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        opt_home=Path(td)/"opt-out-home";opt_home.mkdir();opt_env=child_env({"HOME":str(opt_home),"USERPROFILE":str(opt_home)})
+        opt=subprocess.run([sys.executable,str(ROOT/"install_personal.py"),"--no-merge-global-agents","--no-activate-plugins"],cwd=ROOT,env=opt_env,text=True,encoding="utf-8",errors="replace",stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         checks.append(("global-rules-opt-out",opt.returncode==0 and not (opt_home/".codex/AGENTS.md").exists()))
-        repo_dest=Path(td)/"target";repo_dest.mkdir();ri=subprocess.run([sys.executable,str(ROOT/"install_repo.py"),str(repo_dest)],cwd=ROOT,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        repo_dest=Path(td)/"target";repo_dest.mkdir();ri=subprocess.run([sys.executable,str(ROOT/"install_repo.py"),str(repo_dest)],cwd=ROOT,text=True,encoding="utf-8",errors="replace",env=child_env(),stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         checks.append(("repo-install",ri.returncode==0 and (repo_dest/".agents/plugins/marketplace.json").exists()))
     failed=[name for name,value in checks if not value];print(json.dumps({"ok":not failed,"checks":[{"name":n,"ok":bool(v)} for n,v in checks],"failed":failed},ensure_ascii=False,indent=2));return 0 if not failed else 2
 if __name__=="__main__":raise SystemExit(main())

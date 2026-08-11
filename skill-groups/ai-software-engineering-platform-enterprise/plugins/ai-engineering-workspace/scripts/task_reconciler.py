@@ -42,7 +42,7 @@ def reconcile(path: Path, write_report: bool = False) -> dict[str, Any]:
     records = tasks(root)
     branches = git_branches(root)
     worktrees = git_worktrees(root)
-    task_by_branch = {item.get("branch"): item for item in records if item.get("branch")}
+    task_by_branch = {item.get("branch"): item for item in records if item.get("branch") and item.get("state") not in CLOSED}
     branch_worktrees = {item.get("branch", "").removeprefix("refs/heads/"): item.get("worktree") for item in worktrees if item.get("branch")}
     findings: list[dict[str, str]] = []
 
@@ -52,6 +52,8 @@ def reconcile(path: Path, write_report: bool = False) -> dict[str, Any]:
             findings.append({"severity": "BLOCK", "type": "TASK_BRANCH_MISSING", "task_id": task_id, "detail": branch})
         elif state == "Development" and branch and branch not in branch_worktrees:
             findings.append({"severity": "WARN", "type": "DEVELOPMENT_WORKTREE_MISSING", "task_id": task_id, "detail": branch})
+        if state in CLOSED and branch and branch in branch_worktrees:
+            findings.append({"severity": "WARN", "type": "CLOSED_TASK_WORKTREE", "task_id": task_id, "detail": f"{branch} -> {branch_worktrees[branch]}"})
 
     primary = str(root.resolve()).casefold()
     for item in worktrees:
@@ -72,10 +74,14 @@ def reconcile(path: Path, write_report: bool = False) -> dict[str, Any]:
     budget = project.get("parallel_budget", {})
     max_writes = int(budget.get("max_active_write_tasks", 2))
     max_debt = int(budget.get("max_merge_debt", 2))
+    open_tasks = [item for item in records if item.get("state") not in CLOSED]
+    max_open = int(budget.get("max_total_active_tasks", 5))
     if len(active_writes) > max_writes:
         findings.append({"severity": "BLOCK", "type": "PARALLEL_WRITE_BUDGET", "task_id": "", "detail": f"{len(active_writes)}/{max_writes}"})
     if len(merge_debt) > max_debt:
         findings.append({"severity": "BLOCK", "type": "MERGE_DEBT_BUDGET", "task_id": "", "detail": f"{len(merge_debt)}/{max_debt}"})
+    if len(open_tasks) > max_open:
+        findings.append({"severity": "BLOCK", "type": "OPEN_TASK_BUDGET", "task_id": "", "detail": f"{len(open_tasks)}/{max_open}"})
 
     report = {
         "schema_version": "1.0.0",
@@ -84,6 +90,7 @@ def reconcile(path: Path, write_report: bool = False) -> dict[str, Any]:
             "tasks": len(records),
             "active_write_tasks": len(active_writes),
             "merge_debt": len(merge_debt),
+            "open_tasks": len(open_tasks),
             "worktrees": len(worktrees),
             "blockers": sum(1 for item in findings if item["severity"] == "BLOCK"),
             "warnings": sum(1 for item in findings if item["severity"] == "WARN"),

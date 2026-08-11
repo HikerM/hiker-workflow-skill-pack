@@ -5,7 +5,7 @@ description: 为B/S、C/S或纯服务端任务从真实清单轻量识别Node.js
 
 # 服务端技术路由
 
-运行 `python <plugin-root>/scripts/backend_guard.py --root . detect`。证据不足时输出 `unknown`，不得默认框架或版本。
+运行 `python <plugin-root>/scripts/backend_guard.py --root . detect`。只把包含服务端框架证据的 `package.json`、Python/JVM清单或 Web SDK `.csproj` 认定为服务端；纯 React、WPF 和普通类库不得误报。输出框架版本、运行时与包管理器证据；证据不足时输出 `unknown`，不得默认框架或版本。
 
 - API或事件定义进入「接口与事件契约设计」。
 - 普通功能进入「服务端功能实现」。

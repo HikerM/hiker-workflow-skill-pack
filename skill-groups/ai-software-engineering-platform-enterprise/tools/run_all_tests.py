@@ -5,7 +5,7 @@ ROOT=Path(__file__).resolve().parents[1]
 def main()->int:
     results=[];ok=True
     for plugin in sorted((ROOT/"plugins").iterdir()):
-        start=time.time();p=subprocess.run([sys.executable,"-m","unittest","discover","-s",str(plugin/"tests"),"-p","test*.py","-v"],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+        start=time.time();p=subprocess.run([sys.executable,"-X","utf8","-m","unittest","discover","-s",str(plugin/"tests"),"-p","test*.py","-v"],text=True,encoding="utf-8",errors="replace",stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
         item={"plugin":plugin.name,"ok":p.returncode==0,"seconds":round(time.time()-start,3),"output":p.stdout};results.append(item);ok &= item["ok"]
         print(f"===== {plugin.name} =====\n{p.stdout}")
     (ROOT/"test-results.json").write_text(json.dumps({"ok":ok,"results":results},ensure_ascii=False,indent=2)+"\n",encoding="utf-8")

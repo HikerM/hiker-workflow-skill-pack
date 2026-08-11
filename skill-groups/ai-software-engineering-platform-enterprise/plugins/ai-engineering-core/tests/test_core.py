@@ -73,6 +73,39 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(["服务端技术路由", "服务端功能实现"], names)
             self.assertTrue(all(item["plugin"] == "02 浏览器端与服务端工程" for item in data["selected"]))
 
+    def test_router_distinguishes_web_api_desktop_and_react_native(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "Api.csproj").write_text('<Project Sdk="Microsoft.NET.Sdk.Web"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>', encoding="utf-8")
+            api = route(root, "修改登录逻辑")
+            self.assertEqual("backend", api["architecture"])
+            self.assertEqual(["服务端技术路由", "服务端功能实现"], [x["skill"] for x in api["selected"]])
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "package.json").write_text(json.dumps({"dependencies": {"react": "19.0.0", "react-native": "0.80.0"}}), encoding="utf-8")
+            mobile = route(root, "修改登录逻辑")
+            self.assertEqual("cs", mobile["architecture"])
+            self.assertEqual(["客户端技术路由", "客户端组件实现"], [x["skill"] for x in mobile["selected"]])
+
+    def test_router_handles_fastify_hybrid_and_plugin_diagnostics(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "package.json").write_text(json.dumps({"dependencies": {"fastify": "5.2.0"}}), encoding="utf-8")
+            data = route(root, "修改登录逻辑")
+            self.assertEqual("backend", data["architecture"])
+            self.assertEqual(["服务端技术路由", "服务端功能实现"], [x["skill"] for x in data["selected"]])
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "package.json").write_text(json.dumps({"dependencies": {"react": "19.0.0", "express": "5.1.0"}}), encoding="utf-8")
+            data = route(root, "修改登录功能，包含前端页面和后端接口")
+            self.assertEqual("hybrid", data["architecture"])
+            self.assertEqual(["任务分流与会话规划"], [x["skill"] for x in data["selected"]])
+            self.assertEqual("medium", data["confidence"])
+        for request in ("检查桌面端插件为什么选择很慢", "Skill 是否会走偏和变慢"):
+            data = route(Path(td), request)
+            self.assertEqual("tooling", data["architecture"])
+            self.assertEqual("完整变更风险评估", data["selected"][0]["skill"])
+
     def test_router_receipt_uses_chinese_names_without_consuming_functional_slot(self):
         with tempfile.TemporaryDirectory() as td:
             data=route(Path(td),"大型项目风险审核，并告诉我用了什么插件")
@@ -160,7 +193,7 @@ class CoreTests(unittest.TestCase):
     def test_session_recovery_prefers_workspace_current_context(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);initialize(root);(root/".ai/governance/project-state.json").write_text(json.dumps({"project_id":"APP"}));(root/"CURRENT_CONTEXT.md").write_text("# 当前上下文\n\n- Task ID：KG-999\n",encoding="utf-8")
-            result=subprocess.run([sys.executable,str(PLUGIN/"scripts/session_context.py")],cwd=root,input=json.dumps({"cwd":str(root),"source":"compact"}),text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=True)
+            result=subprocess.run([sys.executable,str(PLUGIN/"scripts/session_context.py")],cwd=root,input=json.dumps({"cwd":str(root),"source":"compact"}),text=True,encoding="utf-8",errors="replace",stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=True)
             context=json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"];self.assertIn("KG-999",context);self.assertIn("CURRENT_CONTEXT.md",context)
 
     def test_bounded_context_and_checkpoint_ledger(self):

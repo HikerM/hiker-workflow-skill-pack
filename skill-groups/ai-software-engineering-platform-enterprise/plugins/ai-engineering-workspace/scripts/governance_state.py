@@ -271,6 +271,10 @@ def create_task(root: Path, args: argparse.Namespace) -> dict[str, Any]:
         raise RuntimeError(f"task already exists: {task_id}")
     if args.branch in {"main", "develop", "release"}:
         raise RuntimeError("feature task cannot write a protected branch")
+    open_tasks = [item for item in all_tasks(root) if item.get("state") not in {"Merged", "Released"}]
+    max_open = int(project.get("parallel_budget", {}).get("max_total_active_tasks", 5))
+    if len(open_tasks) >= max_open:
+        raise RuntimeError(f"total open task budget exceeded: {len(open_tasks)}/{max_open}")
     task = {
         "schema_version": SCHEMA,
         "project_id": project["project_id"],
@@ -480,6 +484,9 @@ def validate(root: Path) -> dict[str, Any]:
     merge_debt = [t for t in all_tasks(root) if t.get("state") in {"Review", "Testing"}]
     if len(merge_debt) > int(budget.get("max_merge_debt", 2)):
         issues.append("Review/Testing tasks exceed the merge debt budget")
+    open_tasks = [t for t in all_tasks(root) if t.get("state") not in {"Merged", "Released"}]
+    if len(open_tasks) > int(budget.get("max_total_active_tasks", 5)):
+        issues.append("open tasks exceed the total active task budget")
     return {"ok": not missing and not issues, "schema_version": SCHEMA, "missing": missing, "issues": issues, "git": git, "task_count": len(all_tasks(root))}
 
 

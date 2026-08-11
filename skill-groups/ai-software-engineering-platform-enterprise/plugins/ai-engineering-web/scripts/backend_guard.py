@@ -13,6 +13,21 @@ from pathlib import Path
 SKIP = {".git", ".ai", "node_modules", "dist", "build", "obj", "bin", ".venv", "venv", "vendor", "target", "coverage"}
 MARKERS = {"package.json", "pyproject.toml", "requirements.txt", "pom.xml", "build.gradle", "build.gradle.kts", "go.mod", "Cargo.toml", "composer.json", "Gemfile"}
 CONTRACT_NAMES = {"openapi.json", "openapi.yaml", "openapi.yml", "swagger.json", "swagger.yaml", "swagger.yml", "schema.graphql"}
+NODE_FRAMEWORKS = (("@nestjs/core", "NestJS"), ("fastify", "Fastify"), ("express", "Express"), ("koa", "Koa"), ("@hapi/hapi", "Hapi"), ("hapi", "Hapi"), ("@adonisjs/core", "AdonisJS"), ("egg", "Egg.js"))
+PYTHON_FRAMEWORKS = (("django", "Django"), ("fastapi", "FastAPI"), ("flask", "Flask"), ("litestar", "Litestar"), ("sanic", "Sanic"), ("falcon", "Falcon"), ("tornado", "Tornado"))
+
+
+def clean_version(value: object) -> str:
+    text = str(value or "unknown").strip()
+    match = re.search(r"\d+(?:\.\d+){0,3}(?:[-+][0-9A-Za-z.-]+)?", text)
+    return match.group(0) if match else "unknown"
+
+
+def sibling_package_manager(path: Path, declared: object) -> str:
+    if declared: return str(declared)
+    for filename, manager in (("pnpm-lock.yaml", "pnpm"), ("yarn.lock", "yarn"), ("package-lock.json", "npm"), ("bun.lock", "bun"), ("bun.lockb", "bun")):
+        if (path.parent / filename).is_file(): return manager
+    return "unknown"
 
 
 def bounded_files(root: Path, max_depth: int = 4, max_dirs: int = 240) -> list[Path]:
@@ -32,9 +47,11 @@ def bounded_files(root: Path, max_depth: int = 4, max_dirs: int = 240) -> list[P
 def package_signal(path: Path) -> dict:
     try: data = json.loads(path.read_text(encoding="utf-8"))
     except Exception: return {}
-    deps = {**(data.get("dependencies") or {}), **(data.get("devDependencies") or {})}; names = " ".join(deps).lower()
-    framework = next((value for key, value in (("@nestjs/", "NestJS"), ("fastify", "Fastify"), ("express", "Express"), ("koa", "Koa"), ("hapi", "Hapi")) if key in names), "Node.js")
-    return {"family": "node-typescript", "framework": framework, "runtime": str((data.get("engines") or {}).get("node") or "unknown"), "package_manager": str(data.get("packageManager") or "unknown"), "source": str(path)}
+    deps = {str(k).lower(): v for section in ("dependencies", "devDependencies") for k, v in (data.get(section) or {}).items()}
+    selected = next(((key, label) for key, label in NODE_FRAMEWORKS if key in deps), None)
+    if not selected: return {}
+    key, framework = selected
+    return {"family": "node-typescript", "framework": framework, "framework_version": clean_version(deps[key]), "runtime": str((data.get("engines") or {}).get("node") or "unknown"), "package_manager": sibling_package_manager(path, data.get("packageManager")), "source": str(path)}
 
 
 def python_signal(path: Path) -> dict:
@@ -42,27 +59,45 @@ def python_signal(path: Path) -> dict:
     if path.name == "pyproject.toml":
         match = re.search(r'^\s*requires-python\s*=\s*["\']([^"\']+)["\']', text, re.MULTILINE)
         if match: runtime = match.group(1)
-    low = text.lower(); framework = "Django" if "django" in low else "FastAPI" if "fastapi" in low else "Flask" if "flask" in low else "Python"
-    return {"family": "python", "framework": framework, "runtime": runtime, "package_manager": "pyproject" if path.name == "pyproject.toml" else "requirements", "source": str(path)}
+    low = text.lower(); selected = next(((key, label) for key, label in PYTHON_FRAMEWORKS if re.search(rf"(?m)(?:^|[\s\"']){re.escape(key)}(?:\[[^\]]+\])?\s*(?:[=<>~!^]+\s*)?[0-9*]*", low)), None)
+    if not selected: return {}
+    key, framework = selected
+    version_match = re.search(rf"{re.escape(key)}(?:\[[^\]]+\])?\s*(?:[=<>~!^]+\s*)?([0-9]+(?:\.[0-9]+){{0,3}}(?:[-+][\w.-]+)?)", low)
+    return {"family": "python", "framework": framework, "framework_version": version_match.group(1) if version_match else "unknown", "runtime": runtime, "package_manager": "pyproject" if path.name == "pyproject.toml" else "requirements", "source": str(path)}
 
 
 def dotnet_signal(path: Path) -> dict:
     try:
-        root = ET.fromstring(path.read_text(encoding="utf-8", errors="ignore")); values = [x.text for x in root.iter() if x.tag.split("}")[-1] in {"TargetFramework", "TargetFrameworks"} and x.text]
+        text = path.read_text(encoding="utf-8", errors="ignore"); root = ET.fromstring(text); values = [x.text for x in root.iter() if x.tag.split("}")[-1] in {"TargetFramework", "TargetFrameworks"} and x.text]
         runtime = ";".join(values) or "unknown"
-    except Exception: runtime = "unknown"
-    return {"family": "dotnet", "framework": "ASP.NET Core", "runtime": runtime, "package_manager": "NuGet", "source": str(path)}
+    except Exception: return {}
+    low = text.lower(); sdk = str(root.attrib.get("Sdk") or root.attrib.get("sdk") or "").lower()
+    packages = {str(x.attrib.get("Include") or x.attrib.get("Update") or "").lower(): x.attrib.get("Version") for x in root.iter() if x.tag.split("}")[-1] == "PackageReference"}
+    if "microsoft.net.sdk.web" not in sdk and "microsoft.aspnetcore" not in low and "include=\"aspnetcore\"" not in low: return {}
+    explicit = next((version for name, version in packages.items() if name.startswith("microsoft.aspnetcore") and version), None)
+    return {"family": "dotnet", "framework": "ASP.NET Core", "framework_version": clean_version(explicit), "runtime": runtime, "package_manager": "NuGet", "source": str(path)}
 
 
 def generic_signal(path: Path) -> dict:
     low = path.read_text(encoding="utf-8", errors="ignore").lower(); name = path.name
-    if name in {"pom.xml", "build.gradle", "build.gradle.kts"}: family, framework, manager = "jvm", "Spring Boot" if "spring" in low else "JVM", "Maven" if name == "pom.xml" else "Gradle"
-    elif name == "go.mod": family, framework, manager = "go", "Go", "Go Modules"
-    elif name == "Cargo.toml": family, framework, manager = "rust", "Rust", "Cargo"
-    elif name == "composer.json": family, framework, manager = "php", "Laravel" if "laravel" in low else "PHP", "Composer"
-    else: family, framework, manager = "ruby", "Rails" if "rails" in low else "Ruby", "Bundler"
+    if name in {"pom.xml", "build.gradle", "build.gradle.kts"}:
+        candidates = (("spring", "Spring Boot"), ("quarkus", "Quarkus"), ("micronaut", "Micronaut")); selected = next(((token, label) for token, label in candidates if token in low), None)
+        if not selected: return {}
+        _, framework = selected; family, manager = "jvm", "Maven" if name == "pom.xml" else "Gradle"
+    elif name == "go.mod":
+        family, manager = "go", "Go Modules"; framework = next((label for token, label in (("github.com/gin-gonic/gin", "Gin"), ("github.com/labstack/echo", "Echo"), ("github.com/gofiber/fiber", "Fiber"), ("github.com/go-chi/chi", "Chi")) if token in low), "Go HTTP")
+    elif name == "Cargo.toml":
+        family, manager = "rust", "Cargo"; framework = next((label for token, label in (("actix-web", "Actix Web"), ("axum", "Axum"), ("rocket", "Rocket"), ("warp", "Warp")) if token in low), "Rust HTTP")
+    elif name == "composer.json":
+        if not any(x in low for x in ("laravel", "symfony", "slim/", "cakephp")): return {}
+        family, manager = "php", "Composer"; framework = "Laravel" if "laravel" in low else "Symfony" if "symfony" in low else "Slim" if "slim/" in low else "CakePHP"
+    else:
+        if not any(x in low for x in ("rails", "sinatra", "hanami")): return {}
+        family, manager = "ruby", "Bundler"; framework = "Rails" if "rails" in low else "Sinatra" if "sinatra" in low else "Hanami"
     runtime = next(iter(re.findall(r"(?:java|go|rust-version|php|ruby)[\s\"':=><~^]+([0-9][^\s\"',<]*)", low)), "unknown")
-    return {"family": family, "framework": framework, "runtime": runtime, "package_manager": manager, "source": str(path)}
+    framework_token = framework.lower().replace(" ", "[-_. ]?")
+    framework_match = re.search(framework_token + r"[^\d]{0,24}(\d+(?:\.\d+){0,3})", low)
+    return {"family": family, "framework": framework, "framework_version": framework_match.group(1) if framework_match else "unknown", "runtime": runtime, "package_manager": manager, "source": str(path)}
 
 
 def digest(paths: list[Path], root: Path) -> str:

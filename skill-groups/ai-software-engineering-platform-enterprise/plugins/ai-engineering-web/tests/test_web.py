@@ -41,8 +41,21 @@ class WebTests(unittest.TestCase):
             root=Path(td);(root/"server").mkdir();(root/"server/package.json").write_text(json.dumps({"engines":{"node":">=20"},"packageManager":"pnpm@9","dependencies":{"@nestjs/core":"11.0.0"}}))
             (root/"server/openapi.yaml").write_text("openapi: 3.1.0\n");(root/"server/migrations").mkdir();(root/"server/migrations/001.sql").write_text("create table x(id int);\n")
             data=backend_detect(root);self.assertEqual("NestJS",data["stacks"][0]["framework"]);self.assertIn("server/openapi.yaml",data["contracts"]);self.assertIn("server/migrations/001.sql",data["migrations"])
+            self.assertEqual("11.0.0",data["stacks"][0]["framework_version"])
             reviewed=backend_audit(root);self.assertEqual("PASS_WITH_WARNINGS",reviewed["result"]);self.assertTrue(any("回滚" in x for x in reviewed["warnings"]))
     def test_backend_guard_does_not_guess_without_manifest(self):
         with tempfile.TemporaryDirectory() as td:
             data=backend_audit(Path(td));self.assertEqual("BLOCKED",data["result"]);self.assertTrue(data["blockers"])
+    def test_backend_guard_rejects_frontend_and_desktop_false_positives(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);(root/"package.json").write_text(json.dumps({"dependencies":{"react":"19.0.0","vite":"7.0.0"}}),encoding="utf-8")
+            self.assertEqual([],backend_detect(root)["stacks"])
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);(root/"App.csproj").write_text('<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0-windows</TargetFramework><UseWPF>true</UseWPF></PropertyGroup></Project>',encoding="utf-8")
+            self.assertEqual([],backend_detect(root)["stacks"])
+    def test_backend_guard_extracts_framework_runtime_and_package_manager(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);(root/"package.json").write_text(json.dumps({"engines":{"node":">=22"},"dependencies":{"express":"^5.1.0"}}),encoding="utf-8");(root/"pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n",encoding="utf-8")
+            stack=backend_detect(root)["stacks"][0]
+            self.assertEqual(("Express","5.1.0",">=22","pnpm"),(stack["framework"],stack["framework_version"],stack["runtime"],stack["package_manager"]))
 if __name__=="__main__": unittest.main()

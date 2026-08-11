@@ -9,6 +9,8 @@ from context_memory import ensure_memory_policy, limit_text, memory_status
 
 
 def main() -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     try: payload = json.load(sys.stdin)
     except Exception: payload = {}
     root = Path(payload.get("cwd") or ".").resolve(); ai = ai_root(root)

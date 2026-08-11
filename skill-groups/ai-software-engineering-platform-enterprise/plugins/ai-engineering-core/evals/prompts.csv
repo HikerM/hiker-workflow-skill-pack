@@ -21,3 +21,6 @@ core-19,true,ai-engineering-router,"审核现有WPF客户端并识别真实.NET�
 core-20,false,ai-engineering-router,"把这段中文翻译成英文"
 core-21,true,brownfield-requirement-reconciliation,"已有一部分工程源码，要在不覆盖现有能力的前提下融合新增自定义需求"
 core-22,false,brownfield-requirement-reconciliation,"空目录从零创建一个新系统"
+core-23,true,ai-engineering-router,"检查桌面端插件为什么选择很慢"
+core-24,true,ai-engineering-router,"Skill 是否会走偏和变慢"
+core-25,true,ai-engineering-router,"修改登录功能，包含前端页面和后端接口"

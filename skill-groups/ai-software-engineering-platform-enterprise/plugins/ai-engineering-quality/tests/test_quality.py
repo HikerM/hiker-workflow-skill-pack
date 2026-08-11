@@ -3,6 +3,7 @@ import json,subprocess,sys,tempfile,unittest
 from pathlib import Path
 PLUGIN=Path(__file__).resolve().parents[1];sys.path.insert(0,str(PLUGIN/"scripts"))
 from change_set import collect
+from architecture_guard import evaluate as architecture_evaluate
 from graph_store import connect,impact,index
 from qualitylib import glob_match,worktree_fingerprint
 from risk_review import review
@@ -62,6 +63,14 @@ class QualityTests(unittest.TestCase):
             finally:c.close()
             self.assertIn(("Assets/Panel.prefab","Assets/Shared.mat","references_asset"),edges)
             self.assertIn(("App/App.csproj","Lib/Lib.csproj","depends_on_project"),edges)
+    def test_graph_semantic_index_is_incremental(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);repo(root);assets=root/"Assets";assets.mkdir();guid="0123456789abcdef0123456789abcdef"
+            (assets/"Shared.mat").write_text("Material\n",encoding="utf-8");(assets/"Shared.mat.meta").write_text(f"guid: {guid}\n",encoding="utf-8");prefab=assets/"Panel.prefab";prefab.write_text(f"guid: {guid}\n",encoding="utf-8")
+            db=root/"graph.db";first=index(root,db,[]);second=index(root,db,[])
+            self.assertTrue(first["semantic_full_rebuild"]);self.assertFalse(second["semantic_full_rebuild"]);self.assertEqual(0,second["semantic_sources_updated"])
+            prefab.write_text(f"name: changed\nguid: {guid}\n",encoding="utf-8");third=index(root,db,[])
+            self.assertFalse(third["semantic_full_rebuild"]);self.assertEqual(1,third["semantic_sources_updated"])
     def test_graph_and_test_plan_ignore_dependency_caches(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);repo(root);(root/"node_modules/pkg").mkdir(parents=True);(root/"node_modules/pkg/package.json").write_text(json.dumps({"scripts":{"test":"bad"}}));(root/"node_modules/pkg/x.ts").write_text("export const x=1")
@@ -77,6 +86,14 @@ class QualityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);repo(root);(root/"README.md").write_text("one\n");git(root,"add","README.md");(root/"README.md").write_text("one\ntwo\n");(root/"u.txt").write_text("a\nb\n")
             data=collect(root,"all-local");by={x["path"]:x for x in data["files"]};self.assertGreaterEqual(by["README.md"]["added"],2);self.assertEqual(2,by["u.txt"]["added"])
+    def test_architecture_guard_handles_utf8_history_and_skips_binary_growth(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);repo(root);source=root/"说明.txt";source.write_text("中文历史\n",encoding="utf-8");git(root,"add",".");git(root,"commit","-m","docs: 中文历史")
+            source.write_text("中文历史\n新增内容\n",encoding="utf-8");(root/"bundle.zip").write_bytes(b"PK\x03\x04\x00\xff\x80\x00"*1000);git(root,"add",".");git(root,"commit","-m","docs: 更新")
+            data=architecture_evaluate(root,mode="range",base="HEAD~1",target="HEAD")
+            by={item["path"]:item for item in data["file_growth"]}
+            self.assertEqual("binary",by["bundle.zip"]["skipped"]);self.assertEqual(1,by["说明.txt"]["growth"])
+            self.assertFalse(any("bundle.zip" in item for item in data["blockers"]+data["warnings"]))
     def test_test_plan_monorepo_cwd(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);repo(root);web=root/"web";web.mkdir();(web/"package.json").write_text(json.dumps({"packageManager":"pnpm@9","scripts":{"test":"vitest run"}}));data=plan(root,{"risk":{"level":"MEDIUM","tags":[]},"changes":[{"path":"web/src/a.ts"}]});self.assertTrue(any(x.get("cwd")=="web" and x["command"]=="pnpm test" for x in data["mandatory"]))

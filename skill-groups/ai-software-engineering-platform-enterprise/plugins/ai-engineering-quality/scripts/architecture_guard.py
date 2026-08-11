@@ -38,7 +38,7 @@ def text_lines(path: Path) -> int | None:
 
 
 def git_lines(root: Path, rel: str, ref: str = "HEAD") -> int:
-    result = subprocess.run(["git", "show", f"{ref}:{rel}"], cwd=root, text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    result = subprocess.run(["git", "show", f"{ref}:{rel}"], cwd=root, text=True, encoding="utf-8", errors="replace", stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     return len(result.stdout.splitlines()) if result.returncode == 0 else 0
 
 
@@ -107,6 +107,9 @@ def evaluate(root: Path, task_id: str | None = None, mode: str = "all-local", ba
     budget = dict(DEFAULT_BUDGET); budget.update((contract.get("file_growth_budget") or {}) if isinstance(contract, dict) else {})
     growth = []
     for item in changes:
+        if item.get("binary"):
+            growth.append({"path": item["path"], "before": None, "after": None, "growth": None, "skipped": "binary"})
+            continue
         current = text_lines(root / item["path"]); previous = git_lines(root, item.get("old_path") or item["path"], baseline_ref); delta = None if current is None else current - previous
         row = {"path": item["path"], "before": previous, "after": current, "growth": delta}; growth.append(row)
         if current is not None and current >= int(budget["block_lines"]): blockers.append(f"文件超过阻断预算 {budget['block_lines']} 行: {item['path']} ({current})")

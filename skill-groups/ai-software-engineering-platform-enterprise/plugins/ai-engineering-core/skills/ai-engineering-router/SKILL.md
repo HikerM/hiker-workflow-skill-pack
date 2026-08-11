@@ -27,9 +27,11 @@ description: AI软件工程原子Skill的唯一轻量自动入口。收到从0�
 - 已有部分源码、半成品或二次开发且要融合新需求：先进入 `project-bootstrap` 与 `brownfield-requirement-reconciliation`，不得重新套脚手架覆盖现有实现。
 - 现有仓库首次接管或技术栈变化：进入 `project-bootstrap`。
 - B/S、C/S、Unity、质量、工作区、多会话分别懒加载对应原子 Skill；一轮最多两个。
+- 同时涉及浏览器端、客户端或服务端的实现与审核先进入任务分流，不允许因分支顺序只处理其中一端。
 - 需求同时跨越多个阶段时，先选当前最早未通过门禁的阶段，不把设计、实现、审核、发布一次性全载入。
 - 找不到可靠证据时显式输出 `unknown`，不得默认最新框架或把 Unity 当作所有 C/S。
 - 插件、Skill、Marketplace、Codex扩展或桌面安装任务优先识别为工具链工程，不得因出现“桌面端、审核”而误路由到C/S客户端。
+- `.csproj` 必须依据 Web SDK、ASP.NET Core、WPF、WinForms、WinUI、Avalonia 或 MAUI 等内容证据分类；不得仅凭文件扩展名认定为客户端或服务端。
 
 ## 性能预算
 

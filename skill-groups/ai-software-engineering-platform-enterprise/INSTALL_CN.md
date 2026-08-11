@@ -23,9 +23,24 @@ py -3 .\install_personal.py
 1. 将 5 个插件复制到 `~/.codex/plugins/`；
 2. 备份并合并 `~/.agents/plugins/marketplace.json`；
 3. 不覆盖其他 Marketplace 条目；
-4. 输出安装结果。
+4. 默认安全合并并备份 `~/.codex/AGENTS.md` 中的自动应用与插件回执规则；
+5. 自动发现 Codex CLI 并安装启用五个插件；
+6. 输出结构化安装、启用和后续操作结果。
 
-完成后重启 ChatGPT 桌面端，进入 **Work 或 Codex → Plugins** 安装需要的插件。
+安装输出中的 `plugin_activation.status` 为 `activated` 才表示五个插件已经自动启用。若为 `manual-required`，执行输出中的 `manual_commands`。完成后重启 ChatGPT 桌面端并新建任务。
+
+可选参数：
+
+```powershell
+# 不修改全局AGENTS.md
+py -3 -B .\install_personal.py --no-merge-global-agents
+
+# 只注册Marketplace，不调用Codex CLI
+py -3 -B .\install_personal.py --no-activate-plugins
+
+# 显式指定桌面端Codex CLI
+py -3 -B .\install_personal.py --codex-cli C:\path\to\codex.exe
+```
 
 ## 方法二：安装到具体仓库
 
@@ -69,6 +84,8 @@ codex plugin marketplace add /absolute/path/to/ai-software-engineering-platform-
 
 ## 全局自动应用与应用回执
 
-把 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 中带标记的区块合并到 `C:\Users\<用户名>\.codex\AGENTS.md`。之后软件工程任务会自动选择最小必要插件/Skill，并在开始和结束时展示实际应用项、触发原因、项目和执行模式。只替换 `ai-engineering-global-governance` 标记区块，禁止覆盖用户已有全局规则。
+个人安装器默认把 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 中带标记的区块合并到 `C:\Users\<用户名>\.codex\AGENTS.md`。之后软件工程任务会自动选择最小必要插件/Skill，并在开始和结束时展示实际应用项、触发原因、项目和执行模式。安装器只替换 `ai-engineering-global-governance` 标记区块，禁止覆盖用户已有全局规则。
 
 自动选择不意味着自动获得外部写权限；push、merge、部署、发布和生产数据写入仍按用户授权与门禁执行。
+
+这里的“显示”是任务对话中的文本回执，不是桌面插件列表新增一个实时监控徽章。插件列表显示安装/启用状态，应用回执显示本次任务实际采用的插件和Skill。

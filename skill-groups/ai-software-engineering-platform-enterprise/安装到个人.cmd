@@ -1,3 +1,3 @@
 @echo off
-py -3 "%~dp0install_personal.py"
+py -3 -B "%~dp0install_personal.py" %*
 pause

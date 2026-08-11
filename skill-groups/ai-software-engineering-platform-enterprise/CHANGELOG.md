@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 5.0.1
+
+- 个人安装器默认安全合并 `~/.codex/AGENTS.md` 中的全局自动应用与插件回执区块，并在修改前备份。
+- 安装器自动发现Codex CLI并安装启用五个插件；CLI不可用时输出明确的 `manual_commands`，不冒充已启用。
+- 重复安装只更新同一标记区块；新增 `--no-merge-global-agents`、`--no-activate-plugins` 和 `--codex-cli`。
+- 卸载器默认只移除自己管理的全局区块并保留其他指令，可用 `--keep-global-agents` 保留。
+
 ## 5.0.0
 
 - 将 Workspace 插件从三个工具型 Skill 升级为十个 Skill 的大型工程多Agent控制平面。

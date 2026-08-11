@@ -51,7 +51,7 @@
 
 它适合长期、跨模块或多人/多会话的软件工程项目。推荐先运行 `project-bootstrap`，让核心插件建立真实项目上下文，再由 Web、Unity、质量和工作区插件消费同一份 `.ai/` 状态。
 
-该组使用“个人 Marketplace → 安装插件”的两阶段安装方式。仅复制目录并不会自动启用插件，必须再安装 5 个插件。完整命令见：[安装指南](docs/INSTALLATION.md#第二组ai-software-engineering-platform-enterprise-50)。
+该组的个人安装器会复制插件、注册个人 Marketplace、合并全局自动应用/回执规则，并在找到Codex CLI时自动安装启用5个插件；找不到CLI时会明确输出手动命令。完整说明见：[安装指南](docs/INSTALLATION.md#第二组ai-software-engineering-platform-enterprise-50)。
 
 ## 第三组：桌面软件等价重建 Skill
 

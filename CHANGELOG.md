@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1
+
+- Made the Enterprise personal installer automatically merge the managed global Codex governance block while preserving and backing up existing `~/.codex/AGENTS.md` content.
+- Added automatic five-plugin activation through a discovered or explicitly supplied Codex CLI, with honest manual-command fallback when no runnable CLI is available.
+- Added idempotent reinstall, opt-out flags, and safe uninstall of only the installer-owned global instruction block.
+- Extended integration coverage for automatic routing rules, visible plugin receipts, reinstall idempotency, opt-out behavior, and safe uninstall.
+
 ## 0.5.0
 
 - Upgraded AI Software Engineering Platform Enterprise to 5.0.0 with 5 plugins and 25 Skills while preserving all three independent groups.

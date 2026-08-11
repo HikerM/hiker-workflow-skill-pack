@@ -23,10 +23,18 @@ def main()->int:
         run([sys.executable,str(QUALITY/"graph_store.py"),"--root",str(root),"index"],root);imp=run([sys.executable,str(QUALITY/"graph_store.py"),"--root",str(root),"impact","--seed","src/a.ts","--depth","2","--limit","1"],root);idata=json.loads(imp.stdout);checks.append(("graph-limit",len(idata["nodes"])<=1))
         plan=run([sys.executable,str(QUALITY/"test_plan.py"),"--root",str(root)],root);pd=json.loads(plan.stdout);cmds={x["command"] for x in pd["mandatory"]+pd["recommended"]};checks.append(("real-commands",{"pnpm lint","pnpm test","pnpm build"}.issubset(cmds)))
         # Personal marketplace installation is verified in an isolated HOME.
-        fake_home=Path(td)/"home";fake_home.mkdir();env=dict(os.environ);env["HOME"]=str(fake_home);env["USERPROFILE"]=str(fake_home)
-        inst=subprocess.run([sys.executable,str(ROOT/"install_personal.py")],cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        fake_home=Path(td)/"home";fake_home.mkdir();(fake_home/".codex").mkdir();(fake_home/".codex/AGENTS.md").write_text("# Existing rules\n\n- keep me\n",encoding="utf-8");env=dict(os.environ);env["HOME"]=str(fake_home);env["USERPROFILE"]=str(fake_home)
+        inst=subprocess.run([sys.executable,str(ROOT/"install_personal.py"),"--no-activate-plugins"],cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         market=json.loads((fake_home/".agents/plugins/marketplace.json").read_text(encoding="utf-8")) if inst.returncode==0 else {}
         checks.append(("personal-install",inst.returncode==0 and all(str(x.get("source",{}).get("path","")).startswith("./.codex/plugins/") for x in market.get("plugins",[]))))
+        agents=(fake_home/".codex/AGENTS.md").read_text(encoding="utf-8") if inst.returncode==0 else "";checks.append(("global-auto-application","keep me" in agents and agents.count("<!-- ai-engineering-global-governance start -->")==1 and "插件应用回执" in agents))
+        inst2=subprocess.run([sys.executable,str(ROOT/"install_personal.py"),"--no-activate-plugins"],cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        agents2=(fake_home/".codex/AGENTS.md").read_text(encoding="utf-8") if inst2.returncode==0 else "";checks.append(("global-rules-idempotent",inst2.returncode==0 and agents2.count("<!-- ai-engineering-global-governance start -->")==1))
+        uninstall=subprocess.run([sys.executable,str(ROOT/"uninstall_personal.py"),"--yes"],cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        after=(fake_home/".codex/AGENTS.md").read_text(encoding="utf-8") if uninstall.returncode==0 else "";checks.append(("global-rules-safe-uninstall",uninstall.returncode==0 and "keep me" in after and "ai-engineering-global-governance" not in after))
+        opt_home=Path(td)/"opt-out-home";opt_home.mkdir();opt_env=dict(os.environ);opt_env["HOME"]=str(opt_home);opt_env["USERPROFILE"]=str(opt_home)
+        opt=subprocess.run([sys.executable,str(ROOT/"install_personal.py"),"--no-merge-global-agents","--no-activate-plugins"],cwd=ROOT,env=opt_env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        checks.append(("global-rules-opt-out",opt.returncode==0 and not (opt_home/".codex/AGENTS.md").exists()))
         repo_dest=Path(td)/"target";repo_dest.mkdir();ri=subprocess.run([sys.executable,str(ROOT/"install_repo.py"),str(repo_dest)],cwd=ROOT,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         checks.append(("repo-install",ri.returncode==0 and (repo_dest/".agents/plugins/marketplace.json").exists()))
     failed=[name for name,value in checks if not value];print(json.dumps({"ok":not failed,"checks":[{"name":n,"ok":bool(v)} for n,v in checks],"failed":failed},ensure_ascii=False,indent=2));return 0 if not failed else 2

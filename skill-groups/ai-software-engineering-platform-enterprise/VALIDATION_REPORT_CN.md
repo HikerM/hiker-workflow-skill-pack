@@ -25,6 +25,8 @@
 - 测试命令发现：已验证读取项目真实 package scripts
 - 本机重新安装：5 个插件均通过个人 Marketplace 安装并显示为 `installed: true, enabled: true`，版本为 `5.0.0+codex.<cachebuster>`
 - 全局自动应用：已把带标记治理区块合并到 `C:\Users\Administrator\.codex\AGENTS.md`，要求任务开始/结束展示实际插件与Skill回执
+- 分发安装器：已在隔离用户目录验证保留原AGENTS规则、默认写入自动应用/回执、重复安装不重复、退出参数生效、卸载只删除托管区块。
+- 插件自动启用：已在隔离用户目录通过显式桌面Codex CLI验证5/5插件自动安装成功；无可执行CLI时输出 `manual-required` 和手动命令。
 
 ## UI 视觉与反模板验证
 
@@ -95,6 +97,22 @@
     },
     {
       "name": "personal-install",
+      "ok": true
+    },
+    {
+      "name": "global-auto-application",
+      "ok": true
+    },
+    {
+      "name": "global-rules-idempotent",
+      "ok": true
+    },
+    {
+      "name": "global-rules-safe-uninstall",
+      "ok": true
+    },
+    {
+      "name": "global-rules-opt-out",
       "ok": true
     },
     {

@@ -67,10 +67,11 @@
 
 ### 推荐范围
 
-这是 ChatGPT/Codex 桌面应用的个人插件套件，包含 5 个插件和 25 个 Skill。安装分为两步：
+这是 ChatGPT/Codex 桌面应用的个人插件套件，包含 5 个插件和 25 个 Skill。个人安装器默认完成三件事：
 
 1. 复制插件并注册个人 Marketplace；
-2. 从该 Marketplace 安装并启用 5 个插件。
+2. 安全合并全局自动应用与插件回执规则；
+3. 从该 Marketplace 安装并启用 5 个插件。
 
 ### 第一步：注册个人 Marketplace
 
@@ -84,11 +85,15 @@ py -3 -B .\install_personal.py
 - 复制插件到 `~/.codex/plugins/`；
 - 合并 `~/.agents/plugins/marketplace.json`；
 - 保留其他 Marketplace 条目；
-- 更新同名插件时创建备份。
+- 更新同名插件时创建备份；
+- 默认安全合并并备份 `~/.codex/AGENTS.md`；
+- 自动发现Codex CLI并安装启用五个插件。
 
-### 第二步：安装并启用 5 个插件
+安装输出中的 `plugin_activation.status` 为 `activated` 才表示自动启用完成；为 `manual-required` 时执行输出中的 `manual_commands`。可用 `--no-merge-global-agents` 退出全局规则，或用 `--no-activate-plugins` 只注册Marketplace。
 
-如果终端可调用 Codex CLI：
+### 第二步：确认5个插件已启用
+
+新版安装器默认自动完成本步骤。仅当输出为 `manual-required` 时执行：
 
 ```powershell
 codex plugin add ai-engineering-core@personal-ai-engineering-marketplace --json
@@ -98,7 +103,7 @@ codex plugin add ai-engineering-workspace@personal-ai-engineering-marketplace --
 codex plugin add ai-engineering-quality@personal-ai-engineering-marketplace --json
 ```
 
-也可以重启 ChatGPT 桌面应用，在 **Work 或 Codex → Plugins → Personal / 个人插件** 中逐个点击安装。若要全局自动选择并显示应用回执，把 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 的标记区块合并进 `~/.codex/AGENTS.md`；只替换同名标记区块，不覆盖其他全局规则。
+也可以重启 ChatGPT 桌面应用，在 **Work 或 Codex → Plugins → Personal / 个人插件** 中逐个点击安装。全局自动选择与应用回执默认已由安装器写入；只有使用 `--no-merge-global-agents` 时才需要手工合并模板。
 
 验证状态：
 

@@ -10,6 +10,8 @@
 
 当前套件包含 5 个插件、25 个 Skill。设计收敛采用问题驱动循环；大型工程由 Master、Planning、Developer、Review、Test、Merge、Document 七类职责契约贯穿需求到发布。
 
+个人安装器默认完成插件复制、个人Marketplace注册、五插件CLI安装启用，以及 `~/.codex/AGENTS.md` 全局自动应用/回执区块的安全合并。原规则会保留并备份，重复安装保持幂等；CLI不可用时输出手动命令。
+
 ## 关键约束
 
 - **一次识别，多次复用**：领域插件读取 `.ai/context/`，不得重复全仓库技术栈分析。

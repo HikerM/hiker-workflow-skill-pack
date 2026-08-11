@@ -98,4 +98,4 @@
 
 ## 七、全局自动应用与可见回执
 
-合并 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 到 `~/.codex/AGENTS.md` 后，软件工程任务会自动选择最小必要Skill。每次任务开头和结尾会显示实际使用的插件、Skill、触发原因、项目和执行模式；未使用的插件不会被冒充为“已应用”。
+个人安装器默认把 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 安全合并到 `~/.codex/AGENTS.md`，软件工程任务会自动选择最小必要Skill。每次任务开头和结尾会显示实际使用的插件、Skill、触发原因、项目和执行模式；未使用的插件不会被冒充为“已应用”。安装完成后检查 `plugin_activation.status=activated`，再重启桌面端并新建任务。

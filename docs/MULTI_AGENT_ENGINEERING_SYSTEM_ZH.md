@@ -210,6 +210,6 @@ Created → Planning → Development → Review → Testing → Merged → Relea
 
 ## 12. 全局自动应用与可见回执
 
-安装五个插件后，把 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 的标记区块合并到 `~/.codex/AGENTS.md`。它会要求软件工程任务自动选择最小必要Skill，并在首次实质动作前显示插件、Skill、触发原因、项目和执行模式；结束时显示实际使用项和证据位置。
+运行个人安装器后，它会默认安装启用五个插件，并把 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 的标记区块安全合并到 `~/.codex/AGENTS.md`。它会要求软件工程任务自动选择最小必要Skill，并在首次实质动作前显示插件、Skill、触发原因、项目和执行模式；结束时显示实际使用项和证据位置。重复安装不会重复追加，原文件会备份，可用 `--no-merge-global-agents` 退出。
 
 这只影响选择与透明度，不赋予额外外部写权限。push、merge、部署、生产数据写入仍需用户请求或既有明确授权。

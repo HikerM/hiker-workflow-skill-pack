@@ -13,10 +13,10 @@ sys.path.insert(0, str(PLUGIN / "scripts"))
 from closure_gate import evaluate as closure_evaluate
 from file_lock import acquire, check, release
 from git_workspace import cmd_create, cmd_list, cmd_pause, cmd_remove, validate_branch_policy
-from governance_state import control, create_task, init_project, load_task, record, transition, validate
+from governance_state import checkpoint, control, create_task, init_project, load_task, record, save_task, transition, validate
 from merge_guard import conflict_probe, evaluate as merge_evaluate, flow_ok
 from task_router import route
-from workspacelib import common_dir, safe_branch, state_lock
+from workspacelib import common_dir, read_json, safe_branch, state_lock
 
 
 def ns(**values): return argparse.Namespace(**values)
@@ -122,6 +122,36 @@ class WorkspaceTests(unittest.TestCase):
             root = Path(td); self.repo(root); lock = common_dir(root) / "ai-engineering/workspace.lock"; lock.parent.mkdir(parents=True, exist_ok=True); lock.write_text('{"pid":999999,"created":0}')
             with state_lock(root, timeout=1, stale_after=0.01): pass
             self.assertFalse(lock.exists())
+
+    def test_workspace_context_and_checkpoints_stay_bounded(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.repo(root); self.governance(root)
+            from workspacelib import atomic_json
+            atomic_json(root / ".ai/governance/context-retention.json", {
+                "schema_version": "1.0.0", "active_context_max_chars": 1800,
+                "session_context_max_chars": 1200, "max_items_per_section": 3,
+                "max_recent_checkpoints": 2, "max_milestone_checkpoints": 1,
+                "max_ledger_entries": 3,
+            })
+            task = load_task(root, "KG-001"); task["completed_changes"] = [f"change-{i}" for i in range(20)]
+            atomic_json(root / ".ai/tasks/KG-001.json", task)
+            for i in range(6): checkpoint(root, task, f"rolling-{i}")
+            for i in range(4): checkpoint(root, task, f"pause-{i}")
+            context = (root / "CURRENT_CONTEXT.md").read_text(encoding="utf-8")
+            self.assertIn("完整事实见", context); self.assertLessEqual(len(context), 2200)
+            self.assertLessEqual(len(list((root / ".ai/runtime/checkpoints").glob("*.json"))), 3)
+            ledger = read_json(root / ".ai/runtime/checkpoint-ledger.json", {})
+            self.assertGreaterEqual(ledger.get("pruned_count", 0), 7); self.assertTrue(ledger.get("pruned_hash_chain"))
+
+    def test_closed_task_index_is_bounded_without_deleting_task_facts(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.repo(root)
+            init_project(root, ns(project_id="PROJECT-A", architecture="bs", version="1.0.0", database_version="001", api_version="v1"))
+            for i in range(205):
+                save_task(root, {"schema_version":"2.0.0", "project_id":"PROJECT-A", "task_id":f"KG-{i+1:03d}", "goal":f"closed-{i}", "state":"Released", "control_status":"ACTIVE", "owner_agent":"Master Agent", "branch":f"feature/KG-{i+1:03d}", "updated_at":""})
+            index = read_json(root / ".ai/governance/task-index.json", {})
+            self.assertEqual(200, index.get("retained_closed_count")); self.assertEqual(5, index.get("compacted_closed_count"))
+            self.assertTrue(index.get("compacted_hash_chain")); self.assertEqual(205, len(list((root / ".ai/tasks").glob("*.json"))))
 
 
 if __name__ == "__main__": unittest.main()

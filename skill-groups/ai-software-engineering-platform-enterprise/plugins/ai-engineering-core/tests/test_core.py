@@ -14,7 +14,8 @@ sys.path.insert(0, str(PLUGIN / "scripts"))
 from bootstrap_project import initialize
 from detect_project import detect
 from runtime_control import classify
-from statectl import checkpoint
+from statectl import checkpoint, update_active
+from corelib import atomic_write_json
 
 
 class CoreTests(unittest.TestCase):
@@ -67,5 +68,27 @@ class CoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); initialize(root); cp = checkpoint(root, "test")
             data = json.loads(cp.read_text()); self.assertIn("git", data); self.assertIn("runtime/task.json", data["files"])
+
+    def test_bounded_context_and_checkpoint_ledger(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); initialize(root)
+            atomic_write_json(root / ".ai/governance/context-retention.json", {
+                "schema_version": "1.0.0", "active_context_max_chars": 1800,
+                "session_context_max_chars": 1200, "max_items_per_section": 3,
+                "max_recent_checkpoints": 2, "max_milestone_checkpoints": 1,
+                "max_ledger_entries": 3,
+            })
+            task = json.loads((root / ".ai/runtime/task.json").read_text(encoding="utf-8"))
+            task.update({"id": "KG-001", "goal": "长期多会话开发", "completed": [f"完成-{i}" for i in range(20)], "pending": [f"待办-{i}" for i in range(20)]})
+            update_active(root, task)
+            active = (root / ".ai/runtime/active-context.md").read_text(encoding="utf-8")
+            self.assertLessEqual(len(active), 1801); self.assertIn("完整事实见", active)
+            for i in range(6): checkpoint(root, f"rolling-{i}", event="auto")
+            for i in range(4): checkpoint(root, f"complete-{i}", event="manual")
+            files = list((root / ".ai/runtime/checkpoints").glob("*.json"))
+            self.assertLessEqual(len(files), 3)
+            ledger = json.loads((root / ".ai/runtime/checkpoint-ledger.json").read_text(encoding="utf-8"))
+            self.assertGreaterEqual(ledger["pruned_count"], 7); self.assertLessEqual(len(ledger["recent_pruned"]), 3)
+            self.assertTrue(ledger["pruned_hash_chain"])
 
 if __name__ == "__main__": unittest.main()

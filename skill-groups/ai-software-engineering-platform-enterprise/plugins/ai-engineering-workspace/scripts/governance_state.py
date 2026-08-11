@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import subprocess
@@ -9,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from workspacelib import atomic_json, read_json, repo_root, run, safe_id, state_lock
+from bounded_context import bounded_bullets, crop, ensure_policy, limit_text, retain_checkpoints
 
 SCHEMA = "2.0.0"
 TASK_STATES = ["Created", "Planning", "Development", "Review", "Testing", "Merged", "Released"]
@@ -52,6 +54,37 @@ def task_file(root: Path, task_id: str) -> Path:
     return root / ".ai" / "tasks" / f"{safe_id(task_id)}.json"
 
 
+def task_index_file(root: Path) -> Path:
+    return root / ".ai" / "governance" / "task-index.json"
+
+
+def task_summary(task: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "task_id": task.get("task_id"), "goal": crop(task.get("goal"), 240), "state": task.get("state"),
+        "control_status": task.get("control_status"), "owner_agent": task.get("owner_agent"),
+        "branch": task.get("branch"), "updated_at": task.get("updated_at"),
+    }
+
+
+def update_task_index(root: Path, task: dict[str, Any]) -> None:
+    path = task_index_file(root); index = read_json(path, {}) or {}
+    summaries = [item for item in index.get("tasks", []) if isinstance(item, dict) and item.get("task_id") != task.get("task_id")]
+    summaries.append(task_summary(task)); summaries.sort(key=lambda item: str(item.get("updated_at") or ""), reverse=True)
+    active = [item for item in summaries if item.get("state") not in {"Merged", "Released"}]
+    closed = [item for item in summaries if item.get("state") in {"Merged", "Released"}]
+    keep_closed = ensure_policy(root)["max_task_index_closed"]; overflow = closed[keep_closed:]
+    chain = str(index.get("compacted_hash_chain") or ""); compacted = int(index.get("compacted_closed_count") or 0)
+    for item in reversed(overflow):
+        digest = hashlib.sha256(json.dumps(item, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+        chain = hashlib.sha256(f"{chain}|{item.get('task_id')}|{digest}".encode("utf-8")).hexdigest(); compacted += 1
+    atomic_json(path, {
+        "schema_version": SCHEMA, "tasks": active + closed[:keep_closed],
+        "active_count": len(active), "retained_closed_count": min(len(closed), keep_closed),
+        "compacted_closed_count": compacted, "compacted_hash_chain": chain or None,
+        "facts_source": ".ai/tasks/*.json", "updated_at": now(),
+    })
+
+
 def load_project(root: Path) -> dict[str, Any]:
     data = read_json(state_file(root), {}) or {}
     if not data:
@@ -69,6 +102,7 @@ def load_task(root: Path, task_id: str) -> dict[str, Any]:
 def save_task(root: Path, task: dict[str, Any]) -> None:
     task["updated_at"] = now()
     atomic_json(task_file(root, str(task["task_id"])), task)
+    update_task_index(root, task)
 
 
 def all_tasks(root: Path) -> list[dict[str, Any]]:
@@ -87,12 +121,13 @@ def managed_write(path: Path, title: str, body: str) -> None:
     path.write_text(updated, encoding="utf-8", newline="\n")
 
 
-def bullets(values: list[str]) -> list[str]:
-    return [f"- {value}" for value in values] or ["- 无"]
+def bullets(values: list[str], limit: int = 20, source: str = ".ai/tasks/") -> list[str]:
+    return bounded_bullets(values, limit, source)
 
 
 def render_project_state(root: Path, project: dict[str, Any]) -> None:
-    tasks = all_tasks(root)
+    index = read_json(task_index_file(root), {}) or {}
+    tasks = index.get("tasks", []) if isinstance(index.get("tasks"), list) else []
     completed = [f"{t.get('task_id')}：{t.get('goal')}（{t.get('state')}）" for t in tasks if t.get("state") in {"Merged", "Released"}]
     developing = [f"{t.get('task_id')}：{t.get('goal')}（{t.get('state')} / {t.get('control_status')}）" for t in tasks if t.get("state") not in {"Merged", "Released"}]
     pending = list(project.get("pending_issues", []))
@@ -101,14 +136,14 @@ def render_project_state(root: Path, project: dict[str, Any]) -> None:
     lines = [
         "## 当前版本", f"- {project.get('version') or '未设置'}", "",
         "## 当前分支", f"- {git['branch']}", "",
-        "## 已完成功能", *bullets(completed), "",
-        "## 开发中功能", *bullets(developing), "",
-        "## 待处理问题", *bullets(pending), "",
+        "## 已完成功能", *bullets(completed, 20, ".ai/tasks/"), "",
+        "## 开发中功能", *bullets(developing, 20, ".ai/tasks/"), "",
+        "## 待处理问题", *bullets(pending, 20, ".ai/governance/project-state.json"), "",
         "## 数据库版本", f"- {project.get('database_version') or '未设置'}", "",
         "## API版本", f"- {project.get('api_version') or '未设置'}", "",
-        "## 风险列表", *bullets(risks), "",
+        "## 风险列表", *bullets(risks, 20, ".ai/governance/project-state.json"), "",
         "## 项目标识", f"- Project ID：{project.get('project_id')}", f"- Architecture：{project.get('architecture')}",
-        f"- Git HEAD：{git['head'] or '无'}", f"- 更新时间：{now()}",
+        f"- Git HEAD：{git['head'] or '无'}", f"- 已收敛历史任务索引：{index.get('compacted_closed_count', 0)}（完整事实仍在 `.ai/tasks/`）", f"- 更新时间：{now()}",
     ]
     managed_write(root / "PROJECT_STATE.md", "项目状态", "\n".join(lines))
 
@@ -117,18 +152,23 @@ def render_context(root: Path, task: dict[str, Any] | None) -> None:
     if not task:
         managed_write(root / "CURRENT_CONTEXT.md", "当前上下文", "当前没有活动任务。")
         return
+    policy = ensure_policy(root); section_limit = policy["max_items_per_section"]
+    source = f".ai/tasks/{safe_id(str(task.get('task_id')))}.json"
     lines = [
-        "## 当前目标", f"- {task.get('goal') or '未设置'}", "",
+        "## 当前目标", f"- {crop(task.get('goal') or '未设置')}", "",
         "## 当前任务", f"- Task ID：{task.get('task_id')}", f"- 状态：{task.get('state')} / {task.get('control_status')}",
         f"- 负责人：{task.get('owner_agent')}", f"- 分支：{task.get('branch')}", "",
-        "## 已完成修改", *bullets(task.get("completed_changes", [])), "",
-        "## 未完成事项", *bullets(task.get("pending_items", [])), "",
-        "## 关键决定", *bullets(task.get("decisions", [])), "",
-        "## 禁止事项", *bullets(task.get("prohibitions", [])), "",
-        "## 影响文件", *bullets(task.get("affected_files", [])), "",
+        "## 已完成修改", *bullets(task.get("completed_changes", []), section_limit, source), "",
+        "## 未完成事项", *bullets(task.get("pending_items", []), section_limit, source), "",
+        "## 关键决定", *bullets(task.get("decisions", []), section_limit, source), "",
+        "## 禁止事项", *bullets(task.get("prohibitions", []), section_limit, source), "",
+        "## 影响文件", *bullets(task.get("affected_files", []), section_limit, source), "",
+        "## 上下文策略", "- 本文件只保存固定大小的当前工作集；完整任务事实保存在机器状态、Git和正式文档中。",
+        "- 新会话按项目身份 → Task/决定 → Git → 文档 → checkpoint → 聊天摘要顺序恢复。", "",
         f"- 更新时间：{now()}",
     ]
-    managed_write(root / "CURRENT_CONTEXT.md", "当前上下文", "\n".join(lines))
+    body = limit_text("\n".join(lines), policy["active_context_max_chars"], source)
+    managed_write(root / "CURRENT_CONTEXT.md", "当前上下文", body)
 
 
 def ensure_supporting_docs(root: Path, architecture: str) -> None:
@@ -166,6 +206,10 @@ def init_project(root: Path, args: argparse.Namespace) -> dict[str, Any]:
     atomic_json(state_file(root), project)
     (root / ".ai" / "tasks").mkdir(parents=True, exist_ok=True)
     (root / ".ai" / "runtime" / "checkpoints").mkdir(parents=True, exist_ok=True)
+    ensure_policy(root)
+    if not task_index_file(root).exists():
+        for task in all_tasks(root):
+            if task: update_task_index(root, task)
     ensure_supporting_docs(root, args.architecture)
     render_project_state(root, project)
     render_context(root, None)
@@ -268,10 +312,10 @@ def record(root: Path, args: argparse.Namespace) -> dict[str, Any]:
 
 def checkpoint(root: Path, task: dict[str, Any], label: str) -> Path:
     git = git_snapshot(root)
-    data = {"schema_version": SCHEMA, "created_at": now(), "label": label, "task": task, "git": git}
+    data = {"schema_version": SCHEMA, "created_at": now(), "label": label, "event": "WorkspaceCheckpoint", "task": task, "git": git}
     stamp = now().replace(":", "-")
     path = root / ".ai" / "runtime" / "checkpoints" / f"{stamp}-{safe_id(task['task_id'])}-{safe_id(label)}.json"
-    atomic_json(path, data); render_context(root, task)
+    atomic_json(path, data); render_context(root, task); retain_checkpoints(root, now())
     return path
 
 

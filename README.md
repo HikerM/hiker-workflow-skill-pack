@@ -2,14 +2,14 @@
 
 这是一个面向 ChatGPT/Codex 桌面应用的中文 Skill 集合仓库。仓库当前包含 **三组彼此独立的 Skill**，每组有不同的目标、安装方式和使用边界。
 
-> 重要：这里的“三组”不是三个 Skill。第一组包含 9 个 Skill，第二组包含 5 个插件和 29 个 Skill，第三组包含 1 个轻量总路由和 4 个阶段原子 Skill，共计 43 个 Skill。三组各自路由，单次任务不会全量加载。
+> 重要：这里的“三组”不是三个 Skill。第一组包含 9 个 Skill，第二组包含 5 个插件和 30 个 Skill，第三组包含 1 个轻量总路由和 4 个阶段原子 Skill，共计 44 个 Skill。三组各自路由，单次任务不会全量加载。
 
 ## 三组总览
 
 | 组别 | 名称 | 版本 | 内容规模 | 主要用途 | 源码位置 |
 |---|---|---:|---:|---|---|
 | 第一组 | Hiker 工作流守护 Skill Pack | 0.3.0 | 9 个 Skill | 工程复核、阶段验收、证据测试、契约审计、NodeTs、Unity、设计交付和架构咨询 | [`.agents/skills`](.agents/skills) |
-| 第二组 | AI Software Engineering Platform Enterprise | 5.1.0 | 5 个插件、29 个 Skill | 真实技术/版本识别、非模板化B/S、多技术栈C/S前后端、多Agent、Git与发布门禁 | [`skill-groups/ai-software-engineering-platform-enterprise`](skill-groups/ai-software-engineering-platform-enterprise) |
+| 第二组 | AI Software Engineering Platform Enterprise | 5.2.0 | 5 个插件、30 个 Skill | 真实技术/版本识别、非模板化B/S、多技术栈C/S前后端、有界多会话记忆、多Agent、Git与发布门禁 | [`skill-groups/ai-software-engineering-platform-enterprise`](skill-groups/ai-software-engineering-platform-enterprise) |
 | 第三组 | Desktop App Reconstruction ZH | 1.2.0 | 5 个 Skill | 轻量路由已授权桌面软件的发现、技术方案、实现、验证与发布 | [`skill-groups/desktop-app-reconstruction-zh`](skill-groups/desktop-app-reconstruction-zh) |
 
 三组的详细说明和全部 Skill 清单见：[三组 Skill 中文详解](docs/THREE_SKILL_GROUPS_ZH.md)。
@@ -39,11 +39,11 @@
 .\INSTALL.ps1 -TargetRoot C:\path\to\project -Apply -Backup -Skills all -MergeAgents
 ```
 
-## 第二组：AI Software Engineering Platform Enterprise 5.1
+## 第二组：AI Software Engineering Platform Enterprise 5.2
 
 这一组是完整的软件工程插件平台，按职责拆成 5 个插件：
 
-1. `ai-engineering-core`：识别真实技术栈，建立 `.ai/` 项目状态，生成版本对应规范，并支持长任务中断与上下文恢复。
+1. `ai-engineering-core`：识别真实技术栈，建立 `.ai/` 项目状态，生成版本对应规范，并用固定大小工作集、检查点保留策略和哈希账本支持长任务中断与上下文恢复。
 2. `ai-engineering-web`：从当前需求、工作流、路由和技术栈动态识别页面，按复杂度完成增量 Web UI 设计、组件实现和只读质量审核。
 3. `ai-engineering-unity`（显示为“03 C/S客户端工程”）：先识别语言、运行时、框架、SDK、构建工具及版本证据，再按需支持Unity、Qt、.NET桌面、Electron/Tauri、Flutter、Android、Apple原生、React Native、Java桌面和嵌入式HMI；Unity专项能力完整保留。
 4. `ai-engineering-workspace`：提供 Master/Planning/Developer/Review/Test/Merge/Document 七角色控制平面、项目状态、Task ID、Context Snapshot、多项目隔离、文件锁、Git Worktree、验收闭环和安全合并。
@@ -95,7 +95,7 @@ py -3 -B .\scripts\install_skill.py --scope user
 .
 ├─ .agents/skills/                              # 第一组：9 个 Hiker 工作流 Skill
 ├─ skill-groups/
-│  ├─ ai-software-engineering-platform-enterprise/ # 第二组：5 插件 / 29 Skill
+│  ├─ ai-software-engineering-platform-enterprise/ # 第二组：5 插件 / 30 Skill
 │  └─ desktop-app-reconstruction-zh/                # 第三组：1 路由 + 4 原子 Skill
 ├─ docs/
 │  ├─ THREE_SKILL_GROUPS_ZH.md                  # 三组详细中文说明
@@ -115,7 +115,7 @@ py -3 -B .\scripts\install_skill.py --scope user
 .\VALIDATE.ps1 -Root .
 ```
 
-验证器会检查第一组的 9 个 Skill、第二组的插件清单和 29 个 Skill，以及第三组的5个Skill与完整共享资源结构。
+验证器会检查第一组的 9 个 Skill、第二组的插件清单和 30 个 Skill，以及第三组的5个Skill与完整共享资源结构。
 
 ## 安全默认值
 

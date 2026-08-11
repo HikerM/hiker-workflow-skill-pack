@@ -1,6 +1,6 @@
 # Skill 索引
 
-仓库包含三组，共 43 个 Skill。每组都有轻量入口，单次只选择当前意图、技术栈和阶段所需的原子能力。
+仓库包含三组，共 44 个 Skill。每组都有轻量入口，单次只选择当前意图、技术栈和阶段所需的原子能力。
 
 ## 第一组：Hiker 工作流守护组（9 个）
 
@@ -18,7 +18,7 @@
 
 源码：`../.agents/skills/`
 
-## 第二组：AI 软件工程平台 Enterprise（29 个）
+## 第二组：AI 软件工程平台 Enterprise（30 个）
 
 ### `ai-engineering-core`
 
@@ -28,6 +28,7 @@
 | `official-standards-resolver` | 按真实版本生成官方依据的项目规范 |
 | `interruptible-task-control` | 管理长期任务启动、暂停、继续和检查点 |
 | `context-recovery` | 从 `.ai/` 状态恢复目标、决策、分支和下一步 |
+| `bounded-context-memory` | 用固定大小工作集、分级检查点和哈希账本支持多会话恢复，避免上下文持续增重 |
 
 ### `ai-engineering-web`
 

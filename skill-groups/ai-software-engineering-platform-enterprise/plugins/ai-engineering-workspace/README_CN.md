@@ -5,7 +5,7 @@
 ## 控制平面
 
 - `multi-agent-project-governance`：Master Agent 总入口，协调七角色、状态、Git、锁、验收和发布。
-- `project-state-manager`：维护 PROJECT_STATE、CURRENT_CONTEXT、CHANGELOG、ARCHITECTURE 与机器状态。
+- `project-state-manager`：维护有界 PROJECT_STATE、CURRENT_CONTEXT、CHANGELOG、ARCHITECTURE 与机器状态；与01号有界记忆协作，避免多会话持续增重。
 - `task-lifecycle-manager`：管理 Task ID 和 Created → Released 状态机。
 - `multi-project-portfolio-manager`：隔离多个 Git 仓库的项目身份和上下文。
 - `plugin-application-receipt`：展示本次实际启用的插件、Skill、原因和项目。

@@ -1,6 +1,6 @@
 {
   "name": "ai-engineering-workspace",
-  "version": "5.1.0",
+  "version": "5.2.0",
   "description": "大型B/S与C/S工程的多Agent控制、项目状态、任务生命周期、文件锁、Git与验收闭环治理",
   "author": {
     "name": "AI Engineering Toolkit"
@@ -16,7 +16,7 @@
   "interface": {
     "displayName": "04 工作区与多会话协作",
     "shortDescription": "多Agent、项目状态、任务、文件锁、Git和验收闭环",
-    "longDescription": "以轻量路由和七类角色长期管理大型B/S及多技术栈C/S工程；提供项目状态、Task ID、Context Snapshot、多仓库隔离、文件锁、分支治理、合并门禁与功能闭环。",
+    "longDescription": "以轻量路由和七类角色长期管理大型B/S及多技术栈C/S工程；提供有界项目状态、Task ID、Context Snapshot、多仓库隔离、文件锁、分支治理、合并门禁与功能闭环。",
     "developerName": "AI Engineering Toolkit",
     "category": "Productivity",
     "capabilities": [

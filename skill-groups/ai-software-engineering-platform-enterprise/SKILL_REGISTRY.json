@@ -2,6 +2,12 @@
   "schema_version": "1.0.0",
   "rule": "core detects once; domain skills consume .ai/context; reviewers do not modify source",
   "skills": {
+    "bounded-context-memory": {
+      "plugin": "ai-engineering-core",
+      "mode": "workflow",
+      "project_detection": "consume-core-context",
+      "may_modify_source": false
+    },
     "context-recovery": {
       "plugin": "ai-engineering-core",
       "mode": "workflow",

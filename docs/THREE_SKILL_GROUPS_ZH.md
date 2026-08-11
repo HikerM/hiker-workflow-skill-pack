@@ -107,7 +107,7 @@ quote → create → worker/provider → resource_transfer → result normalizat
 
 ---
 
-## 三、第二组：AI Software Engineering Platform Enterprise 5.1
+## 三、第二组：AI Software Engineering Platform Enterprise 5.2
 
 ### 3.1 设计目标
 
@@ -122,14 +122,15 @@ quote → create → worker/provider → resource_transfer → result normalizat
 
 核心原则是“核心插件只探测一次，其他插件消费统一 `.ai/` 上下文”。这样 Web、Unity、质量和工作区模块不会重复猜测技术栈。
 
-### 3.2 五个插件和 29 个 Skill
+### 3.2 五个插件和 30 个 Skill
 
-#### 插件一：`ai-engineering-core`（4 个 Skill）
+#### 插件一：`ai-engineering-core`（5 个 Skill）
 
 - `project-bootstrap`：首次接管仓库时识别语言、框架、精确版本、包管理器、Unity 版本和子项目，并建立 `.ai/` 状态。
 - `official-standards-resolver`：根据真实版本查阅对应官方文档，生成项目专属规范；禁止用无版本依据的通用模板冒充官方标准。
 - `interruptible-task-control`：管理长期任务的启动、暂停、继续、调整和检查点；用户插入指令时保留已经完成的工作。
 - `context-recovery`：从 `.ai/` 状态和最新检查点恢复目标、决策、分支和下一步，不把旧聊天摘要当作唯一事实来源。
+- `bounded-context-memory`：把关键需求、决定、任务、证据和Git事实持久化，只向会话注入固定大小工作集；近期与里程碑checkpoint分别限额，旧冗余副本收敛到有界索引和哈希链，避免长期使用越来越重。
 
 `ai-engineering-core` 提供保存和恢复工程状态的脚本。当前 Codex 插件 manifest 不注册已不受支持的 `hooks` 字段，相关脚本由 Skill 或外部编排显式调用。
 
@@ -321,4 +322,4 @@ context-recovery → interruptible-task-control
 - 任务重点是“长期工程怎么持续执行”——选第二组。
 - 任务重点是“完整重建一个已授权桌面软件”——选第三组。
 - 同时需要执行和独立验收——第二组执行，第一组复核。
-- 不要把第二组29个Skill拆散安装成普通平铺Skill；第三组的五个可发现Skill可以按阶段选择，但共享参考、脚本和模板不能从主资源包剥离。
+- 不要把第二组30个Skill拆散安装成普通平铺Skill；第三组的五个可发现Skill可以按阶段选择，但共享参考、脚本和模板不能从主资源包剥离。

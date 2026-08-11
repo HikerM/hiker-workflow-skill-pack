@@ -7,6 +7,7 @@ import shutil
 from pathlib import Path
 
 from corelib import ai_root, atomic_write_json, atomic_write_text, ensure_schema, git_info, read_json, sha256_file, utc_now
+from context_memory import bounded_items, crop, enforce_checkpoint_retention, ensure_memory_policy, limit_text, memory_status
 
 
 def task_path(root: Path) -> Path: return ai_root(root) / "runtime" / "task.json"
@@ -23,12 +24,16 @@ def save_task(root: Path, task: dict) -> None:
 
 
 def update_active(root: Path, task: dict) -> None:
-    lines = ["# 当前有效上下文", "", f"- 任务：{task.get('id') or '无'}", f"- 目标：{task.get('goal') or '无'}", f"- 状态：{task.get('status')}", f"- 计划版本：{task.get('plan_version', 0)}", f"- 允许范围：{task.get('scope') or '未定义'}", "", "## 已完成"]
-    lines += [f"- {x}" for x in task.get("completed", [])] or ["- 无"]
-    lines += ["", "## 正在进行"] + ([f"- {x}" for x in task.get("working", [])] or ["- 无"])
-    lines += ["", "## 待处理"] + ([f"- {x}" for x in task.get("pending", [])] or ["- 无"])
-    lines += ["", "## 风险"] + ([f"- {x}" for x in task.get("risks", [])] or ["- 无"])
-    atomic_write_text(ai_root(root) / "runtime" / "active-context.md", "\n".join(lines))
+    policy = ensure_memory_policy(root); limit = policy["max_items_per_section"]
+    source = ".ai/runtime/task.json"
+    lines = ["# 当前有效上下文", "", f"- 任务：{crop(task.get('id') or '无', 120)}", f"- 目标：{crop(task.get('goal') or '无')}", f"- 状态：{task.get('status')}", f"- 计划版本：{task.get('plan_version', 0)}", f"- 允许范围：{crop(task.get('scope') or '未定义')}", "", "## 已完成"]
+    lines += bounded_items(task.get("completed"), limit, source)
+    lines += ["", "## 正在进行"] + bounded_items(task.get("working"), limit, source)
+    lines += ["", "## 待处理"] + bounded_items(task.get("pending"), limit, source)
+    lines += ["", "## 风险"] + bounded_items(task.get("risks"), limit, source)
+    lines += ["", "## 恢复规则", "- 本文件是有界工作集，不是完整历史。", "- 事实恢复顺序：项目身份 → Task/决定 → Git → 文档 → 检查点 → 聊天摘要。"]
+    text = limit_text("\n".join(lines), policy["active_context_max_chars"], source)
+    atomic_write_text(ai_root(root) / "runtime" / "active-context.md", text)
 
 
 def checkpoint(root: Path, label: str, event: str = "manual") -> Path:
@@ -49,16 +54,7 @@ def checkpoint(root: Path, label: str, event: str = "manual") -> Path:
         src = ai / rel
         if src.exists():
             dst = state_dir / rel; dst.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(src, dst)
-    # Automatic compaction snapshots are bounded; manual/milestone checkpoints are retained.
-    automatic=[]
-    for item in cp_dir.glob("*.json"):
-        try:
-            data=read_json(item,{}) or {}
-            if data.get("event") in {"PreCompact","Stop","auto"}:automatic.append(item)
-        except Exception:pass
-    for old in sorted(automatic,key=lambda x:x.stat().st_mtime,reverse=True)[30:]:
-        try:old.unlink();shutil.rmtree(cp_dir/(old.stem+"-state"),ignore_errors=True)
-        except OSError:pass
+    enforce_checkpoint_retention(root)
     return path
 
 
@@ -74,6 +70,7 @@ def main() -> int:
     p = sub.add_parser("checkpoint"); p.add_argument("--label", required=True)
     sub.add_parser("complete")
     sub.add_parser("validate")
+    sub.add_parser("memory-status")
     p = sub.add_parser("lock-decision"); p.add_argument("--id", required=True); p.add_argument("--content", required=True); p.add_argument("--reason", required=True)
     args = ap.parse_args(); root = Path(args.root).resolve()
     ok, version = ensure_schema(root)
@@ -95,11 +92,13 @@ def main() -> int:
         required = ["context/project.json", "context/tech-stack.json", "runtime/task.json", "runtime/active-context.md", "governance/locked-decisions.json"]
         missing = [x for x in required if not (ai_root(root) / x).exists()]
         print(json.dumps({"ok": ok and not missing, "schema": version, "missing": missing, "git": git_info(root)}, ensure_ascii=False, indent=2)); return 0 if ok and not missing else 2
+    elif args.cmd == "memory-status":
+        print(json.dumps({"ok": True, "memory": memory_status(root)}, ensure_ascii=False, indent=2)); return 0
     elif args.cmd == "lock-decision":
         path = ai_root(root) / "governance" / "locked-decisions.json"; data = read_json(path, {"schema_version": "1.0.0", "decisions": []}); decisions = data.setdefault("decisions", [])
         if any(d.get("id") == args.id for d in decisions): raise SystemExit("decision id already exists")
         decisions.append({"id": args.id, "status": "LOCKED", "content": args.content, "reason": args.reason, "created_at": utc_now(), "superseded_by": None}); atomic_write_json(path, data)
-    if args.cmd not in {"status", "validate", "checkpoint"}: print(json.dumps({"ok": True, "command": args.cmd, "task": load_task(root)}, ensure_ascii=False, indent=2))
+    if args.cmd not in {"status", "validate", "checkpoint", "memory-status"}: print(json.dumps({"ok": True, "command": args.cmd, "task": load_task(root)}, ensure_ascii=False, indent=2))
     return 0
 
 if __name__ == "__main__": raise SystemExit(main())

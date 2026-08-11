@@ -1,7 +1,7 @@
 {
   "name": "ai-engineering-core",
-  "version": "5.1.0",
-  "description": "项目识别、动态规范、可中断状态与上下文恢复",
+  "version": "5.2.0",
+  "description": "项目识别、动态规范、可中断状态与有界上下文恢复",
   "author": {
     "name": "AI Engineering Toolkit"
   },
@@ -15,8 +15,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "01 AI工程核心",
-    "shortDescription": "项目识别、动态规范、可中断状态与上下文恢复",
-    "longDescription": "从锁文件、工程文件和工具链证据识别B/S与C/S真实语言、框架和版本，建立统一.ai状态，并保存、恢复和校验长期任务上下文。",
+    "shortDescription": "项目识别、动态规范、可中断状态与有界记忆",
+    "longDescription": "从工程证据识别B/S与C/S真实技术和版本，建立统一.ai状态；以固定大小工作集、分级checkpoint、压缩账本和哈希链保存、恢复长期多会话工程事实。",
     "developerName": "AI Engineering Toolkit",
     "category": "Productivity",
     "capabilities": [
@@ -25,7 +25,8 @@
     ],
     "defaultPrompt": [
       "初始化当前工程并生成项目专属规范。",
-      "恢复当前任务上下文并继续执行。"
+      "恢复当前任务上下文并继续执行。",
+      "检查有界记忆状态，确保多轮压缩后可恢复且不会持续增重。"
     ],
     "brandColor": "#1F5EFF",
     "composerIcon": "./assets/icon.png",

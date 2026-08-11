@@ -1,7 +1,7 @@
 {
   "name": "ai-software-engineering-enterprise",
   "interface": {
-    "displayName": "AI软件工程平台 Enterprise 5.1"
+    "displayName": "AI软件工程平台 Enterprise 5.2"
   },
   "plugins": [
     {

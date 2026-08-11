@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0
+
+- Added `bounded-context-memory` to plugin 01 and coordinated it with plugin 04 for durable multi-session handoff without loading full chat history.
+- Bounded active context, session injection, per-section items, recent checkpoints, milestone checkpoints, and the pruning ledger through a project-level retention policy.
+- Preserved essential requirements, decisions, task state, evidence and Git facts in canonical stores; compacted redundant checkpoint copies into a capped index and continuous hash chain.
+- Added a bounded task-summary index so routine status rendering does not rescan every historical task while full task facts remain available on demand.
+- Increased Enterprise to 30 Skills and the three-group repository total to 44 Skills.
+
 ## 0.6.0
 
 - Expanded plugin 03 from Unity-only coverage to a general C/S client layer for Unity, Qt, .NET desktop, Electron/Tauri, Flutter, Android, Apple native, React Native, Java desktop, and embedded HMI.

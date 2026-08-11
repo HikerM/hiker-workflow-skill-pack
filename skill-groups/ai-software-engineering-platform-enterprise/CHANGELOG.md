@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 5.2.0
+
+- 新增 `bounded-context-memory`，明确01号负责有界持久记忆，04号负责多会话Task/Agent/Worktree/合并交接。
+- 新增项目级 `context-retention.json`，限制活动上下文、会话注入、每节条目、近期checkpoint、里程碑checkpoint和压缩账本大小。
+- 新增 `checkpoint-ledger.json`：旧冗余checkpoint在移除前记录有界索引、SHA-256和连续哈希链；Task、正式决定、Git和验收证据不被清理。
+- `CURRENT_CONTEXT.md`、`active-context.md` 与 `PROJECT_STATE.md` 改为有界工作集，并指向完整机器事实源，避免多轮压缩和多年任务持续增重。
+- 新增有界 `task-index.json`，日常状态刷新不再扫描全部历史Task；默认只保留最近200个已关闭摘要，完整Task文件不删除。
+- Enterprise Skill数量由29个增至30个。
+
 ## 5.1.0
 
 - 将03号从Unity专项扩展为通用C/S客户端工程：新增轻量技术栈路由、通用UI设计、组件实现和独立质量审核，原Unity三项能力完整保留。

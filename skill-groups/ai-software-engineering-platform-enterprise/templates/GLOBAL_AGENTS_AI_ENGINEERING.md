@@ -12,6 +12,9 @@
 - 执行结束时再次汇总实际使用的插件/Skill、生成的状态或证据文件、未触发的相关插件及原因。
 - 自动应用不扩大权限：不得因插件存在而自动 push、merge、部署、发布、写生产数据、强制删除 Worktree 或修改 main。按用户明确授权和各 Skill 门禁执行。
 - 当用户暂停、调整、插入需求或恢复时，保留任务状态与工作现场，并生成 checkpoint；不得用删除目录或回退提交代替暂停。
+- 长期、多会话、多Agent或上下文压缩任务，04号使用 `multi-agent-project-governance` 管理Task/会话/Worktree/交接，01号同时使用 `bounded-context-memory` 与 `context-recovery` 管理有界持久记忆；不得把完整聊天历史重复注入新会话。
+- 压缩或交接前先将新增需求、关键决定、完成项、待办、风险和证据写入正式状态；当前工作集、会话注入、每节条目和checkpoint数量必须遵守 `.ai/governance/context-retention.json` 上限。
+- 新会话恢复必须显示“有界记忆回执”：活动工作集字符数/上限、保留/已收敛checkpoint数、当前Task、事实源和恢复下一步；原始聊天只作线索。
 
 回执格式：
 

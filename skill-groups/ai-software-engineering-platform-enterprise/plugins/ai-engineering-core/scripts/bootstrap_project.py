@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from corelib import SCHEMA_VERSION, ai_root, atomic_write_json, atomic_write_text, git_info, read_json, utc_now
+from context_memory import ensure_memory_policy
 from detect_project import detect
 
 DEFAULT_POLICY = {
@@ -57,6 +58,7 @@ def initialize(root: Path, force: bool = False) -> dict:
     if force or not (ai / "knowledge" / "metadata.json").exists():
         atomic_write_json(ai / "knowledge" / "metadata.json", {"schema_version": SCHEMA_VERSION, "graph_format": "sqlite-file-relations-v1", "last_indexed_commit": None, "updated_at": None})
     (ai / "runtime" / "checkpoints").mkdir(parents=True, exist_ok=True)
+    ensure_memory_policy(root)
     (ai / "logs").mkdir(parents=True, exist_ok=True)
     return detected
 

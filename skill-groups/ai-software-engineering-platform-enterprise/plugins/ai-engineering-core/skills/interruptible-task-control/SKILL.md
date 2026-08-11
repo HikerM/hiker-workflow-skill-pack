@@ -26,8 +26,9 @@ python3 <plugin-root>/scripts/statectl.py --root . task-start \
 2. 不把中断当作失败；
 3. 保存当前有效状态；
 4. 对调整指令做影响分析，仅废弃受影响方案；
-5. 更新计划版本和 `active-context.md`；
-6. 在无破坏性风险时继续，不重复询问已知信息。
+5. 更新计划版本和有界 `active-context.md`；
+6. 用 `bounded-context-memory` 检查工作集与checkpoint保留上限；
+7. 在无破坏性风险时继续，不重复询问已知信息。
 
 若已安装 `ai-engineering-workspace` 且项目存在 `.ai/governance/project-state.json`，优先使用其 `governance_state.py control`：暂停只改变 `control_status`，保留生命周期状态、Worktree、锁归属和未提交修改；调整写入新决定与 checkpoint；插入需求创建新的 Task ID 和依赖；恢复前重新校验项目身份、Git 与锁。不得把暂停实现成删除 Worktree 或回退提交。
 

@@ -1,0 +1,155 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import shutil
+from pathlib import Path
+from typing import Any
+
+from corelib import ai_root, atomic_write_json, read_json, sha256_file, utc_now
+
+DEFAULT_MEMORY_POLICY = {
+    "schema_version": "1.0.0",
+    "active_context_max_chars": 12000,
+    "session_context_max_chars": 6500,
+    "max_items_per_section": 12,
+    "max_recent_checkpoints": 12,
+    "max_milestone_checkpoints": 8,
+    "max_ledger_entries": 32,
+    "max_task_index_closed": 200,
+}
+
+MILESTONE_WORDS = ("start", "pause", "adjust", "plan", "review", "test", "merge", "release", "complete", "handoff")
+
+
+def policy_path(root: Path) -> Path:
+    return ai_root(root) / "governance" / "context-retention.json"
+
+
+def ensure_memory_policy(root: Path) -> dict[str, Any]:
+    path = policy_path(root)
+    current = read_json(path, {}) or {}
+    policy = dict(DEFAULT_MEMORY_POLICY)
+    if isinstance(current, dict):
+        for key, default in DEFAULT_MEMORY_POLICY.items():
+            value = current.get(key)
+            if key == "schema_version":
+                if isinstance(value, str) and value:
+                    policy[key] = value
+            elif isinstance(value, int) and value > 0:
+                policy[key] = value
+    if current != policy:
+        atomic_write_json(path, policy)
+    return policy
+
+
+def crop(value: Any, limit: int = 600) -> str:
+    text = str(value or "").strip()
+    return text if len(text) <= limit else text[: max(0, limit - 14)].rstrip() + "…（详见事实源）"
+
+
+def bounded_items(values: Any, limit: int, source: str, newest: bool = True) -> list[str]:
+    raw = values if isinstance(values, (list, tuple)) else list(values or [])
+    selected_raw = raw[-limit:] if newest else raw[:limit]
+    selected = [crop(item) for item in selected_raw if str(item).strip()]
+    lines = [f"- {item}" for item in selected] or ["- 无"]
+    if len(raw) > len(selected_raw):
+        lines.append(f"- 另有 {len(raw) - len(selected_raw)} 项未注入会话；完整事实见 `{source}`。")
+    return lines
+
+
+def limit_text(text: str, max_chars: int, source: str) -> str:
+    if len(text) <= max_chars:
+        return text
+    suffix = f"\n\n> 工作集已达到 {max_chars} 字符上限；其余事实未丢弃，按需读取 `{source}`。\n"
+    return text[: max(0, max_chars - len(suffix))].rstrip() + suffix
+
+
+def is_milestone(data: dict[str, Any]) -> bool:
+    label = str(data.get("label") or "").lower()
+    event = str(data.get("event") or "").lower()
+    if event in {"precompact", "stop", "auto", "workspacecheckpoint"} and not any(word in label for word in MILESTONE_WORDS):
+        return False
+    return any(word in label for word in MILESTONE_WORDS) or event in {"milestone", "manual"}
+
+
+def _chain(previous: str, name: str, digest: str | None) -> str:
+    payload = f"{previous}|{name}|{digest or 'unreadable'}".encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def enforce_checkpoint_retention(root: Path) -> dict[str, Any]:
+    policy = ensure_memory_policy(root)
+    folder = ai_root(root) / "runtime" / "checkpoints"
+    folder.mkdir(parents=True, exist_ok=True)
+    ledger_path = ai_root(root) / "runtime" / "checkpoint-ledger.json"
+    records: list[tuple[Path, dict[str, Any]]] = []
+    for path in folder.glob("*.json"):
+        data = read_json(path, {}) or {}
+        if isinstance(data, dict):
+            records.append((path, data))
+    records.sort(key=lambda item: (str(item[1].get("created_at") or ""), item[0].name), reverse=True)
+    milestones = [item for item in records if is_milestone(item[1])]
+    rolling = [item for item in records if not is_milestone(item[1])]
+    keep = {path for path, _ in milestones[: policy["max_milestone_checkpoints"]]}
+    keep.update(path for path, _ in rolling[: policy["max_recent_checkpoints"]])
+    prune = [(path, data) for path, data in records if path not in keep]
+
+    ledger = read_json(ledger_path, {}) or {}
+    if not isinstance(ledger, dict):
+        ledger = {}
+    entries = list(ledger.get("recent_pruned", [])) if isinstance(ledger.get("recent_pruned"), list) else []
+    chain = str(ledger.get("pruned_hash_chain") or "")
+    first = ledger.get("first_pruned_at")
+    count = int(ledger.get("pruned_count") or 0)
+    for path, data in sorted(prune, key=lambda item: (str(item[1].get("created_at") or ""), item[0].name)):
+        digest = sha256_file(path)
+        created = data.get("created_at")
+        chain = _chain(chain, path.name, digest)
+        entries.append({
+            "name": path.name,
+            "created_at": created,
+            "label": data.get("label"),
+            "event": data.get("event"),
+            "sha256": digest,
+        })
+        first = first or created or utc_now()
+        count += 1
+        path.unlink(missing_ok=True)
+        shutil.rmtree(folder / f"{path.stem}-state", ignore_errors=True)
+    entries = entries[-policy["max_ledger_entries"] :]
+    retained = []
+    for path, data in records:
+        if path in keep and path.exists():
+            retained.append({"name": path.name, "created_at": data.get("created_at"), "label": data.get("label"), "event": data.get("event")})
+    out = {
+        "schema_version": "1.0.0",
+        "policy": policy,
+        "retained_count": len(retained),
+        "retained": retained,
+        "pruned_count": count,
+        "first_pruned_at": first,
+        "last_pruned_at": (entries[-1].get("created_at") if entries else ledger.get("last_pruned_at")),
+        "pruned_hash_chain": chain or None,
+        "recent_pruned": entries,
+        "updated_at": utc_now(),
+    }
+    atomic_write_json(ledger_path, out)
+    return out
+
+
+def memory_status(root: Path) -> dict[str, Any]:
+    policy = ensure_memory_policy(root)
+    active = ai_root(root) / "runtime" / "active-context.md"
+    ledger = read_json(ai_root(root) / "runtime" / "checkpoint-ledger.json", {}) or {}
+    return {
+        "policy": policy,
+        "active_context_chars": len(active.read_text(encoding="utf-8")) if active.exists() else 0,
+        "retained_checkpoints": int(ledger.get("retained_count") or 0),
+        "pruned_checkpoints": int(ledger.get("pruned_count") or 0),
+        "pruned_hash_chain": ledger.get("pruned_hash_chain"),
+        "canonical_sources": [
+            "PROJECT_STATE.md", "CURRENT_CONTEXT.md", "CHANGELOG.md", "ARCHITECTURE.md",
+            ".ai/tasks/*.json", ".ai/governance/locked-decisions.json", "Git history/status",
+        ],
+    }

@@ -13,7 +13,8 @@ def main()->int:
         run([sys.executable,str(CORE/"bootstrap_project.py"),"--root",str(root)],root);checks.append(("bootstrap",(root/".ai/context/tech-stack.json").exists()))
         run([sys.executable,str(CORE/"statectl.py"),"--root",str(root),"task-start","--id","REQ-SMOKE-001","--goal","smoke","--scope","src"],root)
         payload=json.dumps({"cwd":str(root),"trigger":"auto","session_id":"smoke"});pc=run([sys.executable,str(CORE/"precompact_snapshot.py")],root,payload);checks.append(("precompact",json.loads(pc.stdout).get("continue") is True and any((root/".ai/runtime/checkpoints").glob("*.json"))))
-        sc=run([sys.executable,str(CORE/"session_context.py")],root,json.dumps({"cwd":str(root),"source":"compact"}));checks.append(("recovery", "REQ-SMOKE-001" in json.loads(sc.stdout).get("hookSpecificOutput",{}).get("additionalContext","")))
+        sc=run([sys.executable,str(CORE/"session_context.py")],root,json.dumps({"cwd":str(root),"source":"compact"}));session=json.loads(sc.stdout).get("hookSpecificOutput",{}).get("additionalContext","");checks.append(("recovery", "REQ-SMOKE-001" in session))
+        memory=json.loads(run([sys.executable,str(CORE/"statectl.py"),"--root",str(root),"memory-status"],root).stdout).get("memory",{});checks.append(("bounded-memory",len(session)<=6501 and memory.get("active_context_chars",99999)<=12000 and (root/".ai/governance/context-retention.json").exists() and (root/".ai/runtime/checkpoint-ledger.json").exists()))
         run([sys.executable,str(WORK/"governance_state.py"),"--root",str(root),"init","--project-id","SMOKE","--architecture","bs"],root)
         run([sys.executable,str(WORK/"governance_state.py"),"--root",str(root),"task-create","--task-id","KG-001","--goal","smoke web feature","--branch","feature/KG-001-web"],root)
         run([sys.executable,str(WORK/"governance_state.py"),"--root",str(root),"transition","--task-id","KG-001","--to","Planning","--agent-role","Planning Agent"],root)
@@ -27,7 +28,7 @@ def main()->int:
         inst=subprocess.run([sys.executable,str(ROOT/"install_personal.py"),"--no-activate-plugins"],cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         market=json.loads((fake_home/".agents/plugins/marketplace.json").read_text(encoding="utf-8")) if inst.returncode==0 else {}
         checks.append(("personal-install",inst.returncode==0 and all(str(x.get("source",{}).get("path","")).startswith("./.codex/plugins/") for x in market.get("plugins",[]))))
-        agents=(fake_home/".codex/AGENTS.md").read_text(encoding="utf-8") if inst.returncode==0 else "";checks.append(("global-auto-application","keep me" in agents and agents.count("<!-- ai-engineering-global-governance start -->")==1 and "插件应用回执" in agents))
+        agents=(fake_home/".codex/AGENTS.md").read_text(encoding="utf-8") if inst.returncode==0 else "";checks.append(("global-auto-application","keep me" in agents and agents.count("<!-- ai-engineering-global-governance start -->")==1 and "插件应用回执" in agents and "bounded-context-memory" in agents))
         inst2=subprocess.run([sys.executable,str(ROOT/"install_personal.py"),"--no-activate-plugins"],cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         agents2=(fake_home/".codex/AGENTS.md").read_text(encoding="utf-8") if inst2.returncode==0 else "";checks.append(("global-rules-idempotent",inst2.returncode==0 and agents2.count("<!-- ai-engineering-global-governance start -->")==1))
         uninstall=subprocess.run([sys.executable,str(ROOT/"uninstall_personal.py"),"--yes"],cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)

@@ -53,7 +53,7 @@
 - 五个插件的仓库源码→桌面版本化缓存逐文件差异：全部 0。
 - `config.toml` 中五个插件各有且只有一个启用段，均为 `enabled = true`。
 - `~/.codex/AGENTS.md` 中托管区块只有一份；仅第二组自动，第一组与第三组手动；回执只显示中文插件名和中文 Skill 名。
-- 最近一次安装备份：`C:\Users\Administrator\.codex\plugins-backup\20260811T093529Z`、`C:\Users\Administrator\.codex\agents-backup\20260811T093529Z\AGENTS.md`。
+- 最近一次插件备份：`C:\Users\Administrator\.codex\plugins-backup\20260811T094019Z`；最近一次全局规则变更备份：`C:\Users\Administrator\.codex\agents-backup\20260811T093529Z\AGENTS.md`。
 - 当前已打开任务不会热替换其 Skill 快照；安装后优先新建桌面任务。只有新任务仍显示旧版本时才需要重启桌面应用。
 
 ## 分发包

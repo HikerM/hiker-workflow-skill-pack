@@ -1,6 +1,6 @@
 {
   "name": "ai-engineering-workspace",
-  "version": "5.3.0",
+  "version": "5.4.0+codex.20260811173000",
   "description": "大型B/S与C/S工程的多Agent控制、项目状态、任务生命周期、文件锁、Git与验收闭环治理",
   "author": {
     "name": "AI Engineering Toolkit"

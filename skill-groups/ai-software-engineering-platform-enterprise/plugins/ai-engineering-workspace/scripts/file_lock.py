@@ -38,13 +38,14 @@ def normalize(root: Path, value: str) -> str:
 
 def category(path: str) -> str:
     low = path.lower()
-    if low.startswith("projectsettings/"): return "unity-projectsettings"
+    parts = [part.lower() for part in Path(path).parts]
+    if "projectsettings" in parts: return "unity-projectsettings"
     if low.endswith(".unity"): return "unity-scene"
     if low.endswith(".prefab"): return "unity-prefab"
     if low.endswith(".meta"): return "unity-meta"
     if "migration" in low or "/migrations/" in f"/{low}": return "database-migration"
     if any(token in low for token in ("openapi", "swagger", "api-contract", "/contracts/", "/dto/")): return "api-contract"
-    if ("/service" in low or low.endswith("service.ts")) and low.endswith((".ts", ".tsx")): return "nodets-core-service"
+    if ("/service" in f"/{low}" or Path(low).stem.endswith("service")) and low.endswith((".ts", ".tsx", ".cs", ".java", ".kt", ".py")): return "core-service"
     return "source-file"
 
 
@@ -106,9 +107,10 @@ def heartbeat(root: Path, args: argparse.Namespace) -> dict[str, Any]:
 def check(root: Path, args: argparse.Namespace) -> dict[str, Any]:
     task_id = safe_id(args.task_id).upper(); paths = [normalize(root, x) for x in args.files]; data = load_locks(root); missing = []; blocked = []
     owned = {(x.get("task_id"), x.get("path")) for x in data["locks"]}
+    owned_assets = {(x.get("task_id"), asset_key(str(x.get("path")))) for x in data["locks"]}
     for path in paths:
         cat = category(path)
-        if cat != "source-file" and (task_id, path) not in owned: missing.append({"path": path, "category": cat})
+        if cat != "source-file" and (task_id, path) not in owned and (task_id, asset_key(path)) not in owned_assets: missing.append({"path": path, "category": cat})
         for existing in data["locks"]:
             if conflicts(existing, path, cat, task_id): blocked.append({"path": path, "conflict": existing})
     return {"ok": not missing and not blocked, "missing_required_locks": missing, "conflicts": blocked}

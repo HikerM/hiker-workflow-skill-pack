@@ -8,7 +8,7 @@ description: 在C/S、桌面、移动、游戏客户端或嵌入式HMI任务开�
 1. 先读取 `.ai/context/tech-stack.json`；不存在时调用 `project-bootstrap`，不要自行递归扫描全仓。
 2. 运行 `python <plugin-root>/scripts/client_stack.py --root .`，使用其紧凑结果确定 `family`、语言/运行时/框架/SDK/构建工具版本、证据和不确定项。
 3. 只选择当前阶段的一个能力：设计用 `cs-ui-design`，实现用 `cs-component-implementation`，审核用 `cs-quality-review`；Unity任务优先使用同阶段的 `unity-*` 专项 Skill。
-4. 仅在需要框架差异时，读取 [技术族路由表](references/framework-routing.md) 中命中的一个小节，不加载无关技术族资料。
+4. 仅在需要框架差异时，先读 [技术族路由表](references/framework-routing.md)，再只读取其指向的一个原子参考：Qt、.NET桌面、跨平台桌面、原生移动/Java桌面或嵌入式HMI；不加载无关技术族资料。`hybrid-client` 必须先确定当前子项目，不能一次展开所有参考。
 5. 涉及服务端、数据库或API实现时交给 `cs-backend` 与 `contract-data` 通道；本路由器不代替后端工程。
 
 ## 性能预算

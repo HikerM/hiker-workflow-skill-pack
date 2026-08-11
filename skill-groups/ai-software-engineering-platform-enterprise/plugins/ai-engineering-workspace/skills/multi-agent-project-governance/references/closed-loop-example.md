@@ -1,4 +1,4 @@
-# 端到端示例：KG-001 学生登录
+# 端到端示例：KG-001 统一账户登录
 
 1. Master Agent读取项目状态，创建 `KG-001`，目标为“Web 与 Unity 客户端使用同一后端登录”。
 2. Planning Agent拆出 `bs-frontend`、`cs-client`、`contract-data`、`bs/cs-backend`，定义 401、锁定、刷新令牌和离线场景。

@@ -33,7 +33,7 @@ def worktree_fingerprint(root:Path)->str:
     for row in parts:
         if len(row)<4:continue
         raw=row[3:];path=posix(raw.split(" -> ")[-1])
-        if path.startswith((".ai/","node_modules/","Library/","Temp/","dist/","build/","obj/","bin/",".venv/")):continue
+        if path in {"PROJECT_STATE.md","CURRENT_CONTEXT.md"} or path.startswith((".ai/","node_modules/","Library/","Temp/","dist/","build/","obj/","bin/",".venv/")):continue
         p=root/path
         h.update(row[:3].encode("utf-8",errors="ignore"));h.update(path.encode())
         try:

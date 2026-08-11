@@ -13,7 +13,7 @@ sys.path.insert(0, str(PLUGIN / "scripts"))
 from closure_gate import evaluate as closure_evaluate
 from file_lock import acquire, check, release
 from git_workspace import cmd_create, cmd_list, cmd_pause, cmd_remove, validate_branch_policy
-from governance_state import checkpoint, control, create_task, init_project, load_task, record, save_task, transition, validate
+from governance_state import checkpoint, control, create_task, init_project, load_task, record, save_task, set_change_contract, transition, validate
 from merge_guard import conflict_probe, evaluate as merge_evaluate, flow_ok
 from task_router import route
 from workspacelib import common_dir, read_json, safe_branch, state_lock
@@ -34,13 +34,14 @@ class WorkspaceTests(unittest.TestCase):
         init_project(root, ns(project_id="PROJECT-A", architecture="hybrid", version="1.0.0", database_version="001", api_version="v1"))
         create_task(root, ns(task_id=task_id, goal="登录", owner_agent="Planning Agent", branch=branch, base_branch="develop", affected_files=["src/AuthService.ts"]))
         transition(root, ns(task_id=task_id, to="Planning", agent_role="Planning Agent", commit_id=None))
+        set_change_contract(root, ns(task_id=task_id, agent_role="Planning Agent", allowed_files=["src/AuthService.ts", "evidence.log", "CHANGELOG.md", "ARCHITECTURE.md"], allowed_modules=None, protected_modules=None, public_contract_changes=None, behavior_invariants=["原有认证行为保持不变"], characterization_tests=[], consumer_tests=[], required_tests=["认证单测", "登录回归"], consumers=[], max_blast_radius=80, warn_lines=None, block_lines=None, warn_growth=None, block_growth=None))
         transition(root, ns(task_id=task_id, to="Development", agent_role="Developer Agent", commit_id=None))
 
     def test_router_forces_frontend_and_backend_for_bs_and_cs(self):
         data = route("设计 B/S 管理端和 C/S Unity 客户端，共享 NodeTS 后端")
         names = {item["lane"] for item in data["lanes"]}
         self.assertEqual("hybrid", data["architecture"])
-        self.assertTrue({"bs-frontend", "bs-backend", "cs-client", "cs-backend", "contract-data", "review", "testing", "documentation", "merge"}.issubset(names))
+        self.assertTrue({"bs-frontend", "cs-client", "backend-service", "contract-data", "review", "testing", "documentation", "merge"}.issubset(names))
         self.assertTrue(all(item.get("agent_role") for item in data["lanes"]))
 
     def test_router_recognizes_general_cs_families_and_keeps_backend_lane(self):
@@ -48,7 +49,7 @@ class WorkspaceTests(unittest.TestCase):
             with self.subTest(prompt=prompt):
                 data=route(prompt); names={item["lane"] for item in data["lanes"]}
                 self.assertEqual("cs",data["architecture"]);self.assertIn(expected,data["client_families"])
-                self.assertTrue({"cs-client","cs-backend","contract-data"}.issubset(names))
+                self.assertTrue({"cs-client","backend-service","contract-data"}.issubset(names))
 
     def test_governance_state_and_human_control_documents(self):
         with tempfile.TemporaryDirectory() as td:
@@ -69,12 +70,24 @@ class WorkspaceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); self.repo(root); self.governance(root)
             create_task(root, ns(task_id="KG-002", goal="并发修改", owner_agent="Planning Agent", branch="feature/KG-002-other", base_branch="develop", affected_files=[]))
-            transition(root, ns(task_id="KG-002", to="Planning", agent_role="Planning Agent", commit_id=None)); transition(root, ns(task_id="KG-002", to="Development", agent_role="Developer Agent", commit_id=None))
+            transition(root, ns(task_id="KG-002", to="Planning", agent_role="Planning Agent", commit_id=None)); set_change_contract(root, ns(task_id="KG-002", agent_role="Planning Agent", allowed_files=["Assets/Main.unity.meta", "db/migrations/002.sql"], allowed_modules=None, protected_modules=None, public_contract_changes=None, behavior_invariants=["已有场景和迁移顺序保持不变"], characterization_tests=[], consumer_tests=[], required_tests=["场景与迁移回归"], consumers=[], max_blast_radius=80, warn_lines=None, block_lines=None, warn_growth=None, block_growth=None)); transition(root, ns(task_id="KG-002", to="Development", agent_role="Developer Agent", commit_id=None))
             acquired = acquire(root, ns(task_id="KG-001", agent_role="Developer Agent", owner="agent-a", paths=["Assets/Main.unity", "db/migrations/001.sql"]))
             self.assertEqual(2, len(acquired["acquired"]))
             result = check(root, ns(task_id="KG-002", files=["Assets/Main.unity.meta", "db/migrations/002.sql"]))
             self.assertFalse(result["ok"]); self.assertEqual(2, len(result["conflicts"]))
             release(root, ns(task_id="KG-001", paths=[]))
+
+    def test_file_lock_handles_nested_projectsettings_and_meta_alias(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);self.repo(root);self.governance(root)
+            acquire(root,ns(task_id="KG-001",agent_role="Developer Agent",owner="agent-a",paths=["client/ProjectSettings/ProjectVersion.txt","Assets/Panel.prefab"]))
+            own=check(root,ns(task_id="KG-001",files=["Assets/Panel.prefab.meta"]));self.assertTrue(own["ok"],own)
+            self.assertEqual([],own["missing_required_locks"])
+
+    def test_agent_role_cannot_forge_review_evidence(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);self.repo(root);self.governance(root)
+            with self.assertRaises(RuntimeError):record(root,ns(task_id="KG-001",kind="review",value="self review",status="PASS",command=None,reason=None,agent_role="Developer Agent"))
 
     def test_worktree_policy_and_lifecycle(self):
         with tempfile.TemporaryDirectory() as td:
@@ -94,6 +107,9 @@ class WorkspaceTests(unittest.TestCase):
             git(root, "add", "."); git(root, "commit", "-m", "feat(auth): implement KG-001 login")
             head = git(root, "rev-parse", "HEAD").stdout.strip()
             record(root, ns(task_id="KG-001", kind="commit", value=head, status=None, command=None, reason=None, agent_role="Developer Agent"))
+            quality_scripts = PLUGIN.parent / "ai-engineering-quality" / "scripts"
+            run_guard = subprocess.run([sys.executable, str(quality_scripts / "architecture_guard.py"), "--root", str(root), "check", "--task-id", "KG-001"], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.assertEqual(0, run_guard.returncode, run_guard.stdout + run_guard.stderr)
             transition(root, ns(task_id="KG-001", to="Review", agent_role="Developer Agent", commit_id=None))
             record(root, ns(task_id="KG-001", kind="review", value="independent review", status="PASS", command=None, reason=None, agent_role="Review Agent"))
             transition(root, ns(task_id="KG-001", to="Testing", agent_role="Review Agent", commit_id=None))
@@ -102,6 +118,8 @@ class WorkspaceTests(unittest.TestCase):
             record(root, ns(task_id="KG-001", kind="document", value="CHANGELOG.md", status="UPDATED", command=None, reason=None, agent_role="Document Agent"))
             record(root, ns(task_id="KG-001", kind="document", value="ARCHITECTURE.md", status="NOT_APPLICABLE", command=None, reason="no architecture change", agent_role="Document Agent"))
             git(root, "add", "."); git(root, "commit", "-m", "docs: record KG-001 acceptance evidence")
+            run_guard = subprocess.run([sys.executable, str(quality_scripts / "architecture_guard.py"), "--root", str(root), "check", "--task-id", "KG-001"], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.assertEqual(0, run_guard.returncode, run_guard.stdout + run_guard.stderr)
             task = load_task(root, "KG-001"); closure = closure_evaluate(root, task, "merge"); self.assertTrue(closure["ok"], closure["failures"])
             task["closure"]["merge"] = "PASS"
             from workspacelib import atomic_json

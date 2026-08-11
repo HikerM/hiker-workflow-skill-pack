@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from workspacelib import atomic_json, read_json, repo_root, run, safe_id, state_lock
+from workspacelib import atomic_json, read_json, repo_root, run, safe_id, state_lock, worktree_fingerprint
 from bounded_context import bounded_bullets, crop, ensure_policy, limit_text, retain_checkpoints
 
 SCHEMA = "2.0.0"
@@ -31,6 +31,20 @@ ROLE_TARGETS = {
     "Merged": {"Master Agent", "Merge Agent"},
     "Released": {"Master Agent", "Merge Agent"},
 }
+RECORD_ROLES = {
+    "commit": {"Developer Agent", "Merge Agent"},
+    "review": {"Review Agent"},
+    "test": {"Test Agent"},
+    "release": {"Master Agent"},
+    "artifact": {"Developer Agent", "Test Agent", "Review Agent"},
+    "document": {"Document Agent"},
+    "decision": {"Master Agent", "Planning Agent"},
+    "prohibition": {"Master Agent", "Planning Agent", "Review Agent"},
+    "risk": {"Master Agent", "Planning Agent", "Review Agent", "Test Agent"},
+    "completed": {"Developer Agent", "Document Agent"},
+    "pending": {"Master Agent", "Planning Agent", "Developer Agent", "Review Agent", "Test Agent", "Document Agent"},
+}
+RECORD_STATES = {"commit": {"Development"}, "review": {"Review"}, "test": {"Testing"}, "release": {"Merged"}}
 MANAGED_START = "<!-- AI-GOVERNANCE:START -->"
 MANAGED_END = "<!-- AI-GOVERNANCE:END -->"
 
@@ -186,6 +200,32 @@ def ensure_supporting_docs(root: Path, architecture: str) -> None:
             "## 数据与契约\n\n- 数据库版本、迁移、API/事件契约和兼容策略。\n\n"
             "## 部署与发布\n\n- 环境、构建、迁移、回滚和观测。\n",
             encoding="utf-8", newline="\n")
+    architecture_dir = root / ".ai" / "architecture"
+    architecture_dir.mkdir(parents=True, exist_ok=True)
+    defaults = {
+        "module-registry.json": {
+            "schema_version": "1.0.0", "mode": "auto-discovery",
+            "modules": [],
+            "note": "零配置时按目录和依赖自动识别；仅为受保护或边界敏感模块补充显式条目。",
+        },
+        "dependency-rules.json": {
+            "schema_version": "1.0.0", "mode": "advisory-until-configured",
+            "rules": [],
+            "note": "空规则不阻塞普通开发；发现跨层、循环或受保护边界风险时再渐进配置。",
+        },
+        "public-surface.json": {
+            "schema_version": "1.0.0", "surfaces": [],
+            "note": "只登记跨模块公共接口、协议、迁移和共享资产，避免全量登记造成配置耦合。",
+        },
+        "runtime-topology.json": {
+            "schema_version": "1.0.0", "nodes": [], "edges": [],
+            "note": "仅在运行时调用关系无法由源码和清单推断时补充。",
+        },
+    }
+    for filename, payload in defaults.items():
+        path = architecture_dir / filename
+        if not path.exists():
+            atomic_json(path, payload)
 
 
 def init_project(root: Path, args: argparse.Namespace) -> dict[str, Any]:
@@ -237,6 +277,19 @@ def create_task(root: Path, args: argparse.Namespace) -> dict[str, Any]:
         "branch": args.branch,
         "base_branch": args.base_branch,
         "affected_files": args.affected_files or [],
+        "change_contract": {
+            "allowed_files": args.affected_files or [],
+            "allowed_modules": [],
+            "protected_modules": [],
+            "public_contract_changes": [],
+            "behavior_invariants": [],
+            "characterization_tests": [],
+            "consumer_tests": [],
+            "required_tests": [],
+            "consumers": [],
+            "max_blast_radius": 80,
+            "file_growth_budget": {"warn_lines": 400, "block_lines": 700, "warn_growth": 80, "block_growth": 200},
+        },
         "dependencies": getattr(args, "dependencies", None) or [],
         "commits": [],
         "review": {"status": "PENDING", "records": []},
@@ -269,8 +322,21 @@ def transition(root: Path, args: argparse.Namespace) -> dict[str, Any]:
         raise RuntimeError(f"{args.agent_role} cannot transition a task to {target}")
     if task.get("control_status") == "PAUSED":
         raise RuntimeError("paused task must be resumed before transition")
-    if target == "Review" and not task.get("commits"):
-        raise RuntimeError("Development -> Review requires at least one commit")
+    if target == "Development":
+        contract = task.get("change_contract", {})
+        if not (contract.get("allowed_files") or contract.get("allowed_modules")):
+            raise RuntimeError("Planning -> Development requires an allowed file or module scope")
+        if not contract.get("behavior_invariants") or not contract.get("required_tests"):
+            raise RuntimeError("Planning -> Development requires behavior invariants and required tests")
+    if target == "Review":
+        if not task.get("commits"):
+            raise RuntimeError("Development -> Review requires at least one commit")
+        evidence = read_json(root / ".ai" / "evidence" / "architecture-guard" / f"{safe_id(str(task['task_id']))}.json", {}) or {}
+        current = git_snapshot(root)
+        if evidence.get("result") not in {"PASS", "PASS_WITH_WARNINGS"}:
+            raise RuntimeError("Development -> Review requires architecture guard evidence")
+        if evidence.get("head") != current.get("head") or evidence.get("worktree_fingerprint") != worktree_fingerprint(root):
+            raise RuntimeError("architecture guard evidence is stale; rerun it for the current change set")
     if target == "Testing" and task.get("review", {}).get("status") != "PASS":
         raise RuntimeError("Review -> Testing requires Review Agent PASS evidence")
     if target == "Merged":
@@ -291,7 +357,14 @@ def transition(root: Path, args: argparse.Namespace) -> dict[str, Any]:
 
 def record(root: Path, args: argparse.Namespace) -> dict[str, Any]:
     task = load_task(root, args.task_id)
-    item = {"at": now(), "value": args.value, "status": args.status, "command": args.command, "reason": args.reason}
+    if args.agent_role not in RECORD_ROLES.get(args.kind, set()):
+        raise RuntimeError(f"{args.agent_role} cannot record {args.kind} evidence")
+    allowed_states = RECORD_STATES.get(args.kind)
+    if allowed_states and task.get("state") not in allowed_states:
+        raise RuntimeError(f"{args.kind} evidence is not allowed while task state is {task.get('state')}")
+    if task.get("control_status") != "ACTIVE":
+        raise RuntimeError("task must be ACTIVE before recording evidence")
+    item = {"at": now(), "value": args.value, "status": args.status, "command": args.command, "reason": args.reason, "agent_role": args.agent_role}
     if args.kind == "commit":
         task["commits"].append(args.value)
     elif args.kind in {"review", "test", "release"}:
@@ -307,6 +380,43 @@ def record(root: Path, args: argparse.Namespace) -> dict[str, Any]:
     else: raise RuntimeError(f"unsupported record kind: {args.kind}")
     task["history"].append({"at": now(), "event": f"RECORD:{args.kind}", "agent_role": args.agent_role})
     save_task(root, task); render_context(root, task); render_project_state(root, load_project(root))
+    return task
+
+
+def set_change_contract(root: Path, args: argparse.Namespace) -> dict[str, Any]:
+    task = load_task(root, args.task_id)
+    if args.agent_role not in {"Master Agent", "Planning Agent"}:
+        raise RuntimeError("only Master Agent or Planning Agent may set a change contract")
+    if task.get("state") not in {"Created", "Planning", "Development"}:
+        raise RuntimeError("change contract can only be set before Review")
+    contract = dict(task.get("change_contract") or {})
+    list_fields = {
+        "allowed_files": args.allowed_files,
+        "allowed_modules": args.allowed_modules,
+        "protected_modules": args.protected_modules,
+        "public_contract_changes": args.public_contract_changes,
+        "behavior_invariants": args.behavior_invariants,
+        "characterization_tests": args.characterization_tests,
+        "consumer_tests": args.consumer_tests,
+        "required_tests": args.required_tests,
+        "consumers": args.consumers,
+    }
+    for key, value in list_fields.items():
+        if value is not None:
+            contract[key] = list(dict.fromkeys(value))
+    if args.max_blast_radius is not None:
+        contract["max_blast_radius"] = args.max_blast_radius
+    budget = dict(contract.get("file_growth_budget") or {})
+    for key in ("warn_lines", "block_lines", "warn_growth", "block_growth"):
+        value = getattr(args, key)
+        if value is not None:
+            budget[key] = value
+    contract["file_growth_budget"] = budget
+    task["change_contract"] = contract
+    task["affected_files"] = contract.get("allowed_files", [])
+    task["history"].append({"at": now(), "event": "CHANGE_CONTRACT_UPDATED", "agent_role": args.agent_role})
+    save_task(root, task)
+    render_context(root, task)
     return task
 
 
@@ -353,10 +463,11 @@ def validate(root: Path) -> dict[str, Any]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(); ap.add_argument("--root", default="."); sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("init"); p.add_argument("--project-id", required=True); p.add_argument("--architecture", choices=["bs", "cs", "hybrid"], required=True); p.add_argument("--version", default="0.1.0"); p.add_argument("--database-version", default="unversioned"); p.add_argument("--api-version", default="v1")
+    p = sub.add_parser("init"); p.add_argument("--project-id", required=True); p.add_argument("--architecture", choices=["bs", "cs", "hybrid", "backend"], required=True); p.add_argument("--version", default="0.1.0"); p.add_argument("--database-version", default="unversioned"); p.add_argument("--api-version", default="v1")
     p = sub.add_parser("task-create"); p.add_argument("--task-id", required=True); p.add_argument("--goal", required=True); p.add_argument("--owner-agent", default="Master Agent"); p.add_argument("--branch", required=True); p.add_argument("--base-branch", default="develop"); p.add_argument("--affected-files", nargs="*")
     p = sub.add_parser("transition"); p.add_argument("--task-id", required=True); p.add_argument("--to", choices=TASK_STATES, required=True); p.add_argument("--agent-role", required=True); p.add_argument("--commit-id")
     p = sub.add_parser("record"); p.add_argument("--task-id", required=True); p.add_argument("--kind", choices=["commit", "review", "test", "artifact", "document", "decision", "prohibition", "risk", "completed", "pending", "release"], required=True); p.add_argument("--value", required=True); p.add_argument("--status"); p.add_argument("--command"); p.add_argument("--reason"); p.add_argument("--agent-role", required=True)
+    p = sub.add_parser("contract-set"); p.add_argument("--task-id", required=True); p.add_argument("--agent-role", required=True); p.add_argument("--allowed-files", nargs="*"); p.add_argument("--allowed-modules", nargs="*"); p.add_argument("--protected-modules", nargs="*"); p.add_argument("--public-contract-changes", nargs="*"); p.add_argument("--behavior-invariants", nargs="*"); p.add_argument("--characterization-tests", nargs="*"); p.add_argument("--consumer-tests", nargs="*"); p.add_argument("--required-tests", nargs="*"); p.add_argument("--consumers", nargs="*"); p.add_argument("--max-blast-radius", type=int); p.add_argument("--warn-lines", type=int); p.add_argument("--block-lines", type=int); p.add_argument("--warn-growth", type=int); p.add_argument("--block-growth", type=int)
     p = sub.add_parser("checkpoint"); p.add_argument("--task-id", required=True); p.add_argument("--label", required=True)
     p = sub.add_parser("control"); p.add_argument("--task-id", required=True); p.add_argument("--action", choices=["pause", "resume", "adjust", "insert"], required=True); p.add_argument("--instruction", default=""); p.add_argument("--new-task-id"); p.add_argument("--branch"); p.add_argument("--base-branch", default="develop")
     p = sub.add_parser("status"); p.add_argument("--task-id")
@@ -368,6 +479,7 @@ def main() -> int:
             elif args.cmd == "task-create": data = create_task(root, args)
             elif args.cmd == "transition": data = transition(root, args)
             elif args.cmd == "record": data = record(root, args)
+            elif args.cmd == "contract-set": data = set_change_contract(root, args)
             elif args.cmd == "checkpoint": data = {"path": str(checkpoint(root, load_task(root, args.task_id), args.label))}
             elif args.cmd == "control": data = control(root, args)
             elif args.cmd == "status": data = {"project": load_project(root), "task": load_task(root, args.task_id) if args.task_id else None, "tasks": all_tasks(root), "git": git_snapshot(root)}

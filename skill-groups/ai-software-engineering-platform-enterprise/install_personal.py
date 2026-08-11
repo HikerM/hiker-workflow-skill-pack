@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-PLUGIN_NAMES = sorted(p.name for p in (ROOT / "plugins").iterdir() if p.is_dir())
+PLUGIN_NAMES = ["ai-engineering-core", "ai-engineering-web", "ai-engineering-unity", "ai-engineering-workspace", "ai-engineering-quality"]
 GLOBAL_TEMPLATE = ROOT / "templates" / "GLOBAL_AGENTS_AI_ENGINEERING.md"
 BLOCK_START = "<!-- ai-engineering-global-governance start -->"
 BLOCK_END = "<!-- ai-engineering-global-governance end -->"
@@ -42,6 +42,28 @@ def atomic_text(path: Path, text: str) -> None:
 def load(path: Path) -> dict:
     try: return json.loads(path.read_text(encoding="utf-8"))
     except Exception: return {}
+
+
+def plugin_display(name: str) -> str:
+    manifest = load(ROOT / "plugins" / name / ".codex-plugin" / "plugin.json")
+    return str(manifest.get("interface", {}).get("displayName") or "未命名工程插件")
+
+
+def seed_plugin_cache(dest: Path, marketplace_name: str, installed: list[dict], backup: Path) -> list[dict]:
+    cache_root = dest / "cache" / marketplace_name
+    seeded = []
+    for item in installed:
+        name = item["id"]; src = Path(item["path"])
+        manifest = load(src / ".codex-plugin" / "plugin.json"); version = str(manifest.get("version") or "").strip()
+        if not version: raise RuntimeError(f"{name}: plugin version missing")
+        parent = cache_root / name; target = parent / version; tmp = parent / (version + ".installing")
+        parent.mkdir(parents=True, exist_ok=True); shutil.rmtree(tmp, ignore_errors=True)
+        if target.exists():
+            cached_backup = backup / "cache" / name / version; cached_backup.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(target, cached_backup, dirs_exist_ok=True); shutil.rmtree(target)
+        shutil.copytree(src, tmp); os.replace(tmp, target)
+        seeded.append({"plugin": plugin_display(name), "version": version, "path": str(target)})
+    return seeded
 
 
 def managed_block() -> str:
@@ -86,47 +108,88 @@ def find_codex_cli(home: Path, explicit: str | None) -> Path | None:
     return None
 
 
-def activate_plugins(home: Path, marketplace_name: str, explicit_cli: str | None, skip: bool) -> dict:
+def enable_plugins_in_config(home: Path, marketplace_name: str, stamp: str) -> dict:
+    target = home / ".codex" / "config.toml"
+    original = target.read_text(encoding="utf-8") if target.exists() else ""
+    updated = original
+    enabled = []
+    for name in PLUGIN_NAMES:
+        plugin_id = f'{name}@{marketplace_name}'
+        header = f'[plugins."{plugin_id}"]'
+        section = re.compile(rf'(?ms)^{re.escape(header)}[ \t]*$.*?(?=^\[|\Z)')
+        match = section.search(updated)
+        if match:
+            body = match.group(0)
+            if re.search(r'(?m)^[ \t]*enabled[ \t]*=[ \t]*(?:true|false)[ \t]*$', body):
+                body = re.sub(r'(?m)^[ \t]*enabled[ \t]*=[ \t]*(?:true|false)[ \t]*$', 'enabled = true', body, count=1)
+            else:
+                body = body.rstrip() + "\nenabled = true\n\n"
+            updated = updated[:match.start()] + body + updated[match.end():]
+        else:
+            updated = updated.rstrip() + ("\n\n" if updated.strip() else "") + header + "\nenabled = true\n"
+        enabled.append(plugin_display(name))
+    backup_path = None
+    if updated != original:
+        if target.exists():
+            backup_path = home / ".codex" / "config-backup" / stamp / "config.toml"
+            backup_path.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(target, backup_path)
+        atomic_text(target, updated)
+    return {"status": "updated" if updated != original else "unchanged", "path": str(target), "backup": str(backup_path) if backup_path else None, "enabled": enabled}
+
+
+def activate_plugins(home: Path, marketplace_name: str, explicit_cli: str | None, skip: bool, stamp: str) -> dict:
     commands = [f"codex plugin add {name}@{marketplace_name} --json" for name in PLUGIN_NAMES]
     if skip: return {"status": "skipped", "cli": None, "results": [], "manual_commands": commands}
+    config = enable_plugins_in_config(home, marketplace_name, stamp)
+    if not explicit_cli:
+        return {"status": "activated", "method": "desktop-config", "cli": None, "config": config, "results": [{"plugin": name, "ok": True, "returncode": None} for name in config["enabled"]], "failed": [], "manual_commands": []}
     cli = find_codex_cli(home, explicit_cli)
-    if not cli: return {"status": "manual-required", "cli": None, "results": [], "manual_commands": commands}
+    supports_plugin_add = False
+    if cli:
+        try:
+            probe = subprocess.run([str(cli), "plugin", "--help"], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+            supports_plugin_add = probe.returncode == 0 and bool(re.search(r"(?m)^\s+add\s", probe.stdout))
+        except (OSError, subprocess.SubprocessError):
+            supports_plugin_add = False
+    if not supports_plugin_add:
+        return {"status": "activated", "method": "desktop-config", "cli": str(cli) if cli else None, "config": config, "results": [{"plugin": name, "ok": True, "returncode": None} for name in config["enabled"]], "failed": [], "manual_commands": []}
     results = []; failed = []
     for name in PLUGIN_NAMES:
         plugin_id = f"{name}@{marketplace_name}"
         try:
             completed = subprocess.run([str(cli), "plugin", "add", plugin_id, "--json"], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            item = {"plugin_id": plugin_id, "ok": completed.returncode == 0, "returncode": completed.returncode}
-            if completed.returncode != 0: item["error"] = (completed.stderr or completed.stdout).strip()[:1000]; failed.append(plugin_id)
+            item = {"plugin": plugin_display(name), "ok": completed.returncode == 0, "returncode": completed.returncode}
+            if completed.returncode != 0: item["error"] = (completed.stderr or completed.stdout).strip()[:1000]; failed.append(plugin_display(name))
         except OSError as exc:
-            item = {"plugin_id": plugin_id, "ok": False, "returncode": None, "error": str(exc)}; failed.append(plugin_id)
+            item = {"plugin": plugin_display(name), "ok": False, "returncode": None, "error": str(exc)}; failed.append(plugin_display(name))
         results.append(item)
-    return {"status": "activated" if not failed else "partial-failure", "cli": str(cli), "results": results, "failed": failed, "manual_commands": commands if failed else []}
+    return {"status": "activated" if not failed else "partial-failure", "method": "cli", "cli": str(cli), "results": results, "failed": failed, "manual_commands": commands if failed else []}
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="安装AI软件工程插件，并默认安全合并Codex全局自动应用规则。")
     parser.add_argument("--no-merge-global-agents", action="store_true", help="只安装插件，不修改 ~/.codex/AGENTS.md")
     parser.add_argument("--no-activate-plugins", action="store_true", help="只注册Marketplace，不调用Codex CLI安装启用插件")
-    parser.add_argument("--codex-cli", help="显式指定codex或codex.exe路径")
+    parser.add_argument("--codex-cli", help="仅为旧版兼容显式指定codex或codex.exe；桌面端安装默认不需要")
     args = parser.parse_args()
     home = Path.home(); dest = home / ".codex" / "plugins"; market = home / ".agents" / "plugins" / "marketplace.json"; stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"); backup = home / ".codex" / "plugins-backup" / stamp
     dest.mkdir(parents=True, exist_ok=True); installed = []
     for name in PLUGIN_NAMES:
         src = ROOT / "plugins" / name; target = dest / name
         if target.exists(): backup.mkdir(parents=True, exist_ok=True); shutil.copytree(target, backup / name, dirs_exist_ok=True); shutil.rmtree(target)
-        tmp = dest / (name + ".installing"); shutil.rmtree(tmp, ignore_errors=True); shutil.copytree(src, tmp); os.replace(tmp, target); installed.append({"name": name, "path": str(target)})
+        tmp = dest / (name + ".installing"); shutil.rmtree(tmp, ignore_errors=True); shutil.copytree(src, tmp); os.replace(tmp, target); installed.append({"id": name, "name": plugin_display(name), "path": str(target)})
     current = load(market); plugins = [item for item in current.get("plugins", []) if item.get("name") not in PLUGIN_NAMES]
-    plugins += [{"name": item["name"], "source": {"source": "local", "path": f"./.codex/plugins/{item['name']}"}, "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}, "category": "Productivity"} for item in installed]
+    plugins += [{"name": item["id"], "source": {"source": "local", "path": f"./.codex/plugins/{item['id']}"}, "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}, "category": "Productivity"} for item in installed]
     merged = {"name": current.get("name", "personal-ai-engineering-marketplace"), "interface": current.get("interface", {"displayName": "个人插件"}), "plugins": plugins}
     marketplace_backup = None
     if market.exists(): marketplace_backup = market.with_suffix(f".json.{stamp}.bak"); marketplace_backup.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(market, marketplace_backup)
     atomic_json(market, merged)
+    cache = seed_plugin_cache(dest, str(merged["name"]), installed, backup)
     global_agents = {"status": "skipped", "path": str(home / ".codex" / "AGENTS.md"), "backup": None} if args.no_merge_global_agents else merge_global_agents(home, stamp)
-    activation = activate_plugins(home, str(merged["name"]), args.codex_cli, args.no_activate_plugins)
+    activation = activate_plugins(home, str(merged["name"]), args.codex_cli, args.no_activate_plugins, stamp)
     ok = activation["status"] != "partial-failure"
-    next_step = "重启ChatGPT/Codex桌面端并新建任务。" if activation["status"] == "activated" else "按manual_commands安装启用插件，再重启桌面端并新建任务。"
-    print(json.dumps({"ok": ok, "installed": installed, "marketplace": str(market), "marketplace_backup": str(marketplace_backup) if marketplace_backup else None, "plugin_backup": str(backup) if backup.exists() else None, "global_agents": global_agents, "plugin_activation": activation, "next_step": next_step}, ensure_ascii=False, indent=2)); return 0 if ok else 2
+    next_step = "新建任务即可使用；若插件列表仍显示缓存版本，再重启桌面端。" if activation["status"] == "activated" else "按manual_commands安装启用插件并新建任务；若列表未刷新，再重启桌面端。"
+    print(json.dumps({"ok": ok, "installed": installed, "cache": cache, "marketplace": str(market), "marketplace_backup": str(marketplace_backup) if marketplace_backup else None, "plugin_backup": str(backup) if backup.exists() else None, "global_agents": global_agents, "plugin_activation": activation, "next_step": next_step}, ensure_ascii=False, indent=2)); return 0 if ok else 2
 
 
 if __name__ == "__main__": raise SystemExit(main())

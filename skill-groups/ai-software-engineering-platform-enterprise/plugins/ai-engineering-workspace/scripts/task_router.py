@@ -23,9 +23,19 @@ def lane(name: str, role: str, inputs: list[str], outputs: list[str], mode: str,
     return {"lane": name, "agent_role": role, "inputs": inputs, "outputs": outputs, "permissions": contract["writes"], "forbidden": contract["forbidden"], "mode": mode, "status": "PLANNED", "depends_on": depends or []}
 
 
-def route(text: str) -> dict:
+def flatten(value):
+    if isinstance(value, dict):
+        for key, item in value.items():
+            yield str(key); yield from flatten(item)
+    elif isinstance(value, list):
+        for item in value: yield from flatten(item)
+    elif value is not None: yield str(value)
+
+
+def route(text: str, tech_stack: dict | None = None) -> dict:
     low = text.lower()
-    bs = any(x in low for x in ["b/s", "bs架构", "web", "vue", "react", "浏览器", "前端页面", "saas", "cms"])
+    evidence = " ".join(flatten(tech_stack or {})).lower()
+    explicit_bs = any(x in low for x in ["b/s", "bs架构", "web", "vue", "react", "浏览器", "前端页面", "saas", "cms"])
     client_markers = {
         "unity": ["unity", "ugui", "ui toolkit"],
         "qt": ["qt", "qml", "pyside", "pyqt"],
@@ -38,12 +48,18 @@ def route(text: str) -> dict:
         "java-desktop": ["javafx", "swing"],
         "embedded-hmi": ["lvgl", "hmi", "嵌入式界面"],
     }
-    client_families = [family for family, markers in client_markers.items() if any(x in low for x in markers)]
-    cs = any(x in low for x in ["c/s", "cs架构", "桌面", "客户端", "移动端"]) or bool(client_families)
-    if not bs and not cs:
-        bs = any(x in low for x in ["前端", "后台", "门户"])
-        cs = "客户端" in low
-    architecture = "hybrid" if bs and cs else "bs" if bs else "cs" if cs else "unknown"
+    request_families = [family for family, markers in client_markers.items() if any(x in low for x in markers)]
+    evidence_families = [family for family, markers in client_markers.items() if any(x in evidence for x in markers)]
+    client_families = request_families or evidence_families
+    explicit_cs = any(x in low for x in ["c/s", "cs架构", "桌面", "客户端", "移动端"]) or bool(request_families)
+    explicit_backend = any(x in low for x in ["后端", "服务端", "服务器", "nodets", "nestjs", "express", "fastapi", "django", "spring", "asp.net", "laravel", "数据库", "migration", "api接口", "接口契约"])
+    any_explicit = explicit_bs or explicit_cs or explicit_backend
+    bs = explicit_bs or (not any_explicit and any(x in evidence for x in ["vue", "react", "next.js", "nuxt", "angular", "svelte", "web-node"]))
+    cs = explicit_cs or (not any_explicit and bool(evidence_families))
+    backend = explicit_backend or (not any_explicit and any(x in evidence for x in ["nestjs", "express", "fastapi", "django", "spring boot", "asp.net", "laravel", "rails", "server", "backend"]))
+    if not any((bs, cs, backend)):
+        bs = any(x in low for x in ["前端", "后台页面", "门户"]); cs = "客户端" in low
+    kinds = sum(bool(x) for x in (bs, cs, backend)); architecture = "hybrid" if kinds > 1 else "bs" if bs else "cs" if cs else "backend" if backend else "unknown"
     lanes = [
         lane("planning", "Planning Agent", ["user request", "PROJECT_STATE.md", "CURRENT_CONTEXT.md", "CHANGELOG.md", "ARCHITECTURE.md", "git status"], ["task breakdown", "acceptance criteria", "technical plan", "estimate"], "main-or-read-only-agent"),
     ]
@@ -51,16 +67,16 @@ def route(text: str) -> dict:
     if bs:
         lanes += [
             lane("bs-frontend", "Developer Agent", ["approved plan", "UI/design contracts", "API contracts"], ["browser frontend", "frontend tests"], "separate-worktree", ["planning"]),
-            lane("bs-backend", "Developer Agent", ["approved plan", "data and API contracts"], ["server implementation", "backend tests"], "separate-worktree", ["planning"]),
         ]
-        implementation += ["bs-frontend", "bs-backend"]
+        implementation += ["bs-frontend"]
     if cs:
         lanes += [
             lane("cs-client", "Developer Agent", ["approved plan", "client family receipt", "client UI and lifecycle contracts", "versioned API contracts"], ["client implementation in existing framework", "client tests"], "separate-worktree", ["planning"]),
-            lane("cs-backend", "Developer Agent", ["approved plan", "data and API contracts"], ["server implementation", "backend tests"], "separate-worktree", ["planning"]),
         ]
-        implementation += ["cs-client", "cs-backend"]
-    if bs or cs:
+        implementation += ["cs-client"]
+    if bs or cs or backend:
+        lanes.append(lane("backend-service", "Developer Agent", ["approved plan", "data and API contracts", "detected backend stack and version"], ["server implementation", "backend tests", "compatibility evidence"], "separate-worktree", ["planning"]))
+        implementation.append("backend-service")
         lanes.append(lane("contract-data", "Planning Agent", ["frontend/client needs", "backend capabilities"], ["versioned API contract", "database impact", "compatibility rules"], "serial-contract-owner", ["planning"]))
         for item in lanes:
             if item["lane"] in implementation:
@@ -83,7 +99,10 @@ def route(text: str) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser(); ap.add_argument("--root", default="."); ap.add_argument("--request", required=True); ap.add_argument("--output", default=".ai/workspace/task-map.json"); args = ap.parse_args()
-    root = Path(args.root).resolve(); data = route(args.request); atomic_json(root / args.output, data); print(json.dumps(data, ensure_ascii=False, indent=2)); return 0
+    root = Path(args.root).resolve(); stack_path = root / ".ai" / "context" / "tech-stack.json"
+    try: stack = json.loads(stack_path.read_text(encoding="utf-8")) if stack_path.exists() else {}
+    except (OSError, json.JSONDecodeError): stack = {}
+    data = route(args.request, stack); atomic_json(root / args.output, data); print(json.dumps(data, ensure_ascii=False, indent=2)); return 0
 
 
 if __name__ == "__main__": raise SystemExit(main())

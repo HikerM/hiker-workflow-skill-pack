@@ -1,5 +1,5 @@
 from __future__ import annotations
-import contextlib,fnmatch,json,os,re,subprocess,tempfile,time
+import contextlib,fnmatch,hashlib,json,os,re,subprocess,tempfile,time
 from pathlib import Path
 from typing import Any,Iterator
 
@@ -25,6 +25,18 @@ def safe_id(value:str)->str:
     if not value:raise ValueError("empty id")
     return value[:100]
 def safe_branch(value:str)->str:return "/".join(safe_id(x) for x in value.split("/") if x.strip())
+def worktree_fingerprint(root:Path)->str:
+    status=run(["git","status","--porcelain=v1","-z","--untracked-files=all"],root,check=False).stdout;h=hashlib.sha256()
+    for row in status.split("\0"):
+        if len(row)<4:continue
+        raw=row[3:];path=raw.split(" -> ")[-1].replace("\\","/")
+        if path in {"PROJECT_STATE.md","CURRENT_CONTEXT.md"} or path.startswith((".ai/","node_modules/","Library/","Temp/","dist/","build/","obj/","bin/",".venv/")):continue
+        target=root/path;h.update(row[:3].encode("utf-8",errors="ignore"));h.update(path.encode("utf-8",errors="ignore"))
+        try:
+            stat=target.stat();h.update(f"{stat.st_size}:{stat.st_mtime_ns}".encode())
+            if target.is_file() and stat.st_size<=20_000_000:h.update(target.read_bytes())
+        except OSError:h.update(b"missing")
+    return h.hexdigest()
 def pid_alive(pid:int)->bool:
     if pid<=0:return False
     try:os.kill(pid,0);return True

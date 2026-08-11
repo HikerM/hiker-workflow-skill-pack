@@ -2,6 +2,8 @@ from __future__ import annotations
 import csv,json,py_compile,re,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+from evaluate_router import evaluate as evaluate_router
 NAME_RE=re.compile(r"^[a-z0-9][a-z0-9-]*$")
 def frontmatter(path:Path)->dict:
     text=path.read_text(encoding="utf-8");m=re.match(r"^---\n(.*?)\n---\n",text,re.S)
@@ -12,7 +14,7 @@ def frontmatter(path:Path)->dict:
             k,v=line.split(":",1);out[k.strip()]=v.strip().strip('"').strip("'")
     return out
 def main()->int:
-    errors=[];warnings=[];skill_names={};plugins=sorted((ROOT/"plugins").iterdir())
+    errors=[];warnings=[];skill_names={};display_names={};plugins=sorted((ROOT/"plugins").iterdir())
     if len(plugins)!=5:errors.append(f"期望5个插件，实际{len(plugins)}")
     for p in plugins:
         manifest_path=p/".codex-plugin/plugin.json"
@@ -22,6 +24,8 @@ def main()->int:
         if not NAME_RE.match(p.name):errors.append(f"{p.name}: 非法名称")
         for key in ["displayName","shortDescription","longDescription","composerIcon","logo"]:
             if not m.get("interface",{}).get(key):errors.append(f"{p.name}: 缺少 interface.{key}")
+        plugin_display=str(m.get("interface",{}).get("displayName") or "")
+        if re.search(r"[A-Za-z]",plugin_display):errors.append(f"{p.name}: 用户可见插件名称必须使用中文: {plugin_display}")
         for key in ["composerIcon","logo"]:
             rel=m.get("interface",{}).get(key);target=p/str(rel).removeprefix("./")
             if not target.is_file():errors.append(f"{p.name}: 缺少资源 {rel}")
@@ -40,6 +44,12 @@ def main()->int:
             if not (s.parent/"agents/openai.yaml").is_file():errors.append(f"{p.name}/{dirname}: 缺少agents/openai.yaml")
             else:
                 agent_text=(s.parent/"agents/openai.yaml").read_text(encoding="utf-8")
+                display_match=re.search(r'^\s*display_name:\s*["\']?([^"\'\r\n]+)',agent_text,re.M)
+                display=display_match.group(1).strip() if display_match else ""
+                if not display:errors.append(f"{p.name}/{dirname}: 缺少中文 display_name")
+                elif re.search(r"[A-Za-z]",display):errors.append(f"{p.name}/{dirname}: 用户可见Skill名称必须使用中文: {display}")
+                elif display in display_names:errors.append(f"重复用户可见Skill名称 {display}: {display_names[display]} / {p.name}/{dirname}")
+                else:display_names[display]=f"{p.name}/{dirname}"
                 expected="true" if dirname=="ai-engineering-router" else "false"
                 if f"allow_implicit_invocation: {expected}" not in agent_text:errors.append(f"{p.name}/{dirname}: 轻量路由策略要求allow_implicit_invocation: {expected}")
         ev=p/"evals/prompts.csv"
@@ -54,8 +64,18 @@ def main()->int:
         for py in p.rglob("*.py"):
             try:py_compile.compile(str(py),doraise=True)
             except Exception as e:errors.append(f"Python编译失败 {py.relative_to(ROOT)}: {e}")
+        for text_file in [x for x in p.rglob("*") if x.is_file() and x.suffix.lower() in {".md",".py",".yaml",".yml",".json",".csv"}]:
+            text=text_file.read_text(encoding="utf-8",errors="ignore")
+            pollution_pattern="|".join(("学"+"员", "学"+"生", r"\bStu"+"dent\b"))
+            if re.search(pollution_pattern,text,re.I):errors.append(f"业务域样例污染 {text_file.relative_to(ROOT)}")
     market=json.loads((ROOT/".agents/plugins/marketplace.json").read_text(encoding="utf-8"));names={x.get("name") for x in market.get("plugins",[])}
     if names!={p.name for p in plugins}:errors.append("Marketplace插件清单与plugins目录不一致")
-    report={"ok":not errors,"plugin_count":len(plugins),"skill_count":len(skill_names),"errors":errors,"warnings":warnings}
+    governance_skill=(ROOT/"plugins/ai-engineering-workspace/skills/multi-agent-project-governance/SKILL.md").read_text(encoding="utf-8")
+    for required in ["辅助 Skill 时，不加载", "单轮通常读取零到一份", "最多读取两份", "禁止预读全部四份"]:
+        if required not in governance_skill:errors.append(f"多智能体总控缺少懒加载约束: {required}")
+    if "先读取 [角色契约]" in governance_skill:errors.append("多智能体总控退化为启动时预读全部参考")
+    router_eval=evaluate_router()
+    if not router_eval["ok"]:errors.append(f"轻量路由行为Eval失败: {len(router_eval['failures'])} 条")
+    report={"ok":not errors,"plugin_count":len(plugins),"skill_count":len(skill_names),"router_eval":router_eval,"errors":errors,"warnings":warnings}
     print(json.dumps(report,ensure_ascii=False,indent=2));return 0 if not errors else 2
 if __name__=="__main__":raise SystemExit(main())

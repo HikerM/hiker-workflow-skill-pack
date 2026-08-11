@@ -39,11 +39,22 @@ def update_active(root: Path, task: dict) -> None:
 def checkpoint(root: Path, label: str, event: str = "manual") -> Path:
     ai = ai_root(root); cp_dir = ai / "runtime" / "checkpoints"; cp_dir.mkdir(parents=True, exist_ok=True)
     stamp = utc_now().replace(":", "-")
-    key_files = ["schema.json", "context/project.json", "context/tech-stack.json", "context/architecture.json", "context/standards.json", "runtime/task.json", "runtime/control.json", "runtime/active-context.md", "governance/locked-decisions.json", "governance/ownership.json", "workspace/task-map.json", "quality/policy.json", "knowledge/metadata.json", "evidence/index.json"]
+    key_files = ["schema.json", "context/project.json", "context/tech-stack.json", "context/architecture.json", "context/standards.json", "runtime/task.json", "runtime/control.json", "runtime/active-context.md", "governance/locked-decisions.json", "governance/ownership.json", "governance/project-state.json", "governance/task-index.json", "architecture/module-registry.json", "architecture/dependency-rules.json", "architecture/public-surface.json", "workspace/task-map.json", "quality/policy.json", "knowledge/metadata.json", "evidence/index.json"]
+    task_candidates = []
+    for candidate in (ai / "tasks").glob("*.json") if (ai / "tasks").is_dir() else []:
+        data = read_json(candidate, {})
+        if data.get("state") not in {"Merged", "Released"}: task_candidates.append(candidate)
+    for candidate in sorted(task_candidates, key=lambda p: p.stat().st_mtime_ns, reverse=True)[:5]:
+        key_files.append(candidate.relative_to(ai).as_posix())
+    key_files = list(dict.fromkeys(key_files))
+    root_files = ["PROJECT_STATE.md", "CURRENT_CONTEXT.md", "CHANGELOG.md", "ARCHITECTURE.md"]
     snapshot = {"schema_version": "1.0.0", "created_at": utc_now(), "label": label, "event": event, "git": git_info(root), "files": {}}
     for rel in key_files:
         p = ai / rel
         snapshot["files"][rel] = {"exists": p.exists(), "sha256": sha256_file(p)}
+    for rel in root_files:
+        p = root / rel
+        snapshot["files"][f"root/{rel}"] = {"exists": p.exists(), "sha256": sha256_file(p)}
     safe_label = re.sub(r"[^A-Za-z0-9._-]+", "-", label).strip("._-")[:80] or "checkpoint"
     path = cp_dir / f"{stamp}-{safe_label}.json"
     atomic_write_json(path, snapshot)
@@ -54,6 +65,10 @@ def checkpoint(root: Path, label: str, event: str = "manual") -> Path:
         src = ai / rel
         if src.exists():
             dst = state_dir / rel; dst.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(src, dst)
+    for rel in root_files:
+        src = root / rel
+        if src.exists():
+            dst = state_dir / "root" / rel; dst.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(src, dst)
     enforce_checkpoint_retention(root)
     return path
 

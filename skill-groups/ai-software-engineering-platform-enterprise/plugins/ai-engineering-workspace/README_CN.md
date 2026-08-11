@@ -1,22 +1,24 @@
-# 04 工作区与多会话协作 5.0
+# 04 工作区与多会话协作 5.4
 
 本插件已经从“任务分流与 Worktree 工具”升级为大型软件工程多 Agent 控制平面，共 10 个 Skill。
 
 ## 控制平面
 
-- `multi-agent-project-governance`：Master Agent 总入口，协调七角色、状态、Git、锁、验收和发布。
-- `project-state-manager`：维护有界 PROJECT_STATE、CURRENT_CONTEXT、CHANGELOG、ARCHITECTURE 与机器状态；与01号有界记忆协作，避免多会话持续增重。
-- `task-lifecycle-manager`：管理 Task ID 和 Created → Released 状态机。
-- `multi-project-portfolio-manager`：隔离多个 Git 仓库的项目身份和上下文。
-- `plugin-application-receipt`：展示本次实际启用的插件、Skill、原因和项目。
+- **大型工程多智能体总控**：总入口，协调七角色、状态、Git、锁、验收和发布。
+- **项目状态管理**：维护有界 PROJECT_STATE、CURRENT_CONTEXT、CHANGELOG、ARCHITECTURE 与机器状态；与01号有界记忆协作，避免多会话持续增重。
+- **任务生命周期管理**：管理 Task ID 和 Created → Released 状态机及最小变更契约。
+- **多项目组合管理**：隔离多个 Git 仓库的项目身份和上下文。
+- **插件应用回执**：仅用中文名称展示本次实际启用的插件、能力、原因和项目。
 
 ## 执行与门禁
 
-- `workspace-task-router`：B/S 强制拆分浏览器前端/服务端，C/S 强制拆分客户端/服务端，并增加契约数据通道。
-- `worktree-task-manager`：执行受保护分支和 Worktree 规则。
-- `file-lock-manager`：保护 Unity Scene/Prefab/ProjectSettings/meta 及 NodeTS Service、migration、API Contract。
-- `feature-acceptance-closure`：需求、实现、测试、截图/日志、文档和状态闭环。
-- `change-ownership-merge`：检查分支流向、Conventional Commit、冲突、锁和合并证据。
+- **任务分流与会话规划**：按真实需求拆分浏览器端、客户端、共享后端服务、契约/数据、审核、测试、文档和合并通道。
+- **多工作目录任务管理**：执行受保护分支和 Worktree 规则。
+- **多智能体文件锁**：保护 Unity Scene/Prefab/ProjectSettings/meta、核心服务、migration 和 API Contract。
+- **功能验收闭环**：需求、实现、测试、截图/日志、文档和状态闭环。
+- **代码所有权与合并控制**：检查分支流向、Conventional Commit、冲突、锁、架构守卫和合并证据。
+
+普通局部任务只写最小范围、不变量和测试，不要求维护全量架构配置；公共表面、受保护模块或影响半径高的变更才渐进启用消费者登记、模块规则和工程图谱。
 
 七个角色是职责契约：Master、Planning、Developer、Review、Test、Merge、Document。它们可映射到 Codex 主任务、用户明确授权的 Subagent 或不同 Worktree；不要求每次都创建七个并行 Agent。
 

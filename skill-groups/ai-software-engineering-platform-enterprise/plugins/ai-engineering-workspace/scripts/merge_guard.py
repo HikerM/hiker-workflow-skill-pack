@@ -5,7 +5,7 @@ import json
 import re
 from pathlib import Path
 
-from workspacelib import common_dir, glob_match, read_json, repo_root, run, safe_id
+from workspacelib import common_dir, glob_match, read_json, repo_root, run, safe_id, worktree_fingerprint
 
 COMMIT = re.compile(r"^(feat|fix|refactor|docs|test|chore|perf|build|ci)(\([^)]+\))?!?: .+")
 
@@ -50,6 +50,10 @@ def task_gate(root: Path, task_id: str | None) -> list[str]:
     if task.get("review", {}).get("status") != "PASS": failures.append("review evidence is not PASS")
     if task.get("tests", {}).get("status") != "PASS": failures.append("test evidence is not PASS")
     if task.get("closure", {}).get("merge") != "PASS": failures.append("feature closure gate is not PASS")
+    architecture = read_json(root / ".ai" / "evidence" / "architecture-guard" / f"{safe_id(task_id).upper()}.json", {}) or {}
+    current_head = run(["git", "rev-parse", "HEAD"], root, check=False).stdout.strip() or None
+    if architecture.get("result") not in {"PASS", "PASS_WITH_WARNINGS"}: failures.append("architecture guard evidence is missing or blocked")
+    elif architecture.get("head") != current_head or architecture.get("worktree_fingerprint") != worktree_fingerprint(root): failures.append("architecture guard evidence is stale")
     locks = (read_json(common_dir(root) / "ai-engineering" / "file-locks.json", {}) or {}).get("locks", [])
     if any(x.get("task_id") == task.get("task_id") for x in locks): failures.append("task still holds file locks")
     return failures
@@ -69,7 +73,7 @@ def evaluate(root: Path, source: str, target: str, task_id: str | None = None) -
     critical = [x for x in items if re.search(r"(?:migration|schema|auth|permission|package-lock|pnpm-lock|ProjectSettings|Packages/manifest|\.asmdef$|api[-_/]?contract)", x["path"], re.I)]
     unowned = [x for x in ownership if x["status"] == "UNOWNED"]
     result = "FAIL" if failures else ("PASS_WITH_WARNINGS" if critical or unowned else "PASS")
-    return {"ok": not failures, "result": result, "source": source, "target": target, "task_id": task_id, "failures": failures, "commits": messages, "changes": items, "ownership": ownership, "critical_changes": critical, "conflict_probe": probe, "merge_executed": False, "requirements": ["Review Agent PASS", "Test Agent PASS", "feature closure PASS", "CHANGELOG evidence", "clean locks"]}
+    return {"ok": not failures, "result": result, "source": source, "target": target, "task_id": task_id, "failures": failures, "commits": messages, "changes": items, "ownership": ownership, "critical_changes": critical, "conflict_probe": probe, "merge_executed": False, "requirements": ["Review Agent PASS", "Test Agent PASS", "architecture guard PASS", "feature closure PASS", "CHANGELOG evidence", "clean locks"]}
 
 
 def main() -> int:

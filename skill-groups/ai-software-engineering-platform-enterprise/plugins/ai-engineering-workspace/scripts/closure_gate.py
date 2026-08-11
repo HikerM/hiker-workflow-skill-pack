@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
-from workspacelib import atomic_json, common_dir, read_json, repo_root, run, safe_id, state_lock
+from workspacelib import atomic_json, common_dir, read_json, repo_root, run, safe_id, state_lock, worktree_fingerprint
 
 
 def now() -> str:
@@ -26,7 +26,12 @@ def artifact_ok(root: Path, value: str) -> bool:
 def evaluate(root: Path, task: dict, phase: str) -> dict:
     failures = []; warnings = []
     git_branch = run(["git", "branch", "--show-current"], root, check=False).stdout.strip() or "DETACHED"
-    dirty = run(["git", "status", "--porcelain"], root, check=False).stdout.splitlines()
+    dirty_all = run(["git", "status", "--porcelain"], root, check=False).stdout.splitlines()
+    dirty = []
+    for row in dirty_all:
+        rel = row[3:].split(" -> ")[-1].replace("\\", "/") if len(row) >= 4 else row
+        if rel.startswith(".ai/") or rel in {"PROJECT_STATE.md", "CURRENT_CONTEXT.md"}: continue
+        dirty.append(row)
     if phase == "merge":
         if task.get("state") != "Testing": failures.append("task must be in Testing")
         if not task.get("commits"): failures.append("no implementation commit recorded")
@@ -40,6 +45,10 @@ def evaluate(root: Path, task: dict, phase: str) -> dict:
         if not arch or not any(x.get("status") in {"UPDATED", "NOT_APPLICABLE"} and (x.get("status") != "NOT_APPLICABLE" or x.get("reason")) for x in arch): failures.append("ARCHITECTURE.md update or justified NOT_APPLICABLE evidence missing")
         if git_branch != task.get("branch"): failures.append(f"current branch {git_branch} does not match task branch {task.get('branch')}")
         if dirty: failures.append("working tree is not clean")
+        architecture = read_json(root / ".ai" / "evidence" / "architecture-guard" / f"{safe_id(str(task.get('task_id')))}.json", {}) or {}
+        current_head = run(["git", "rev-parse", "HEAD"], root, check=False).stdout.strip() or None
+        if architecture.get("result") not in {"PASS", "PASS_WITH_WARNINGS"}: failures.append("architecture guard evidence is missing or blocked")
+        elif architecture.get("head") != current_head or architecture.get("worktree_fingerprint") != worktree_fingerprint(root): failures.append("architecture guard evidence is stale")
         locks = (read_json(common_dir(root) / "ai-engineering/file-locks.json", {}) or {}).get("locks", [])
         held = [x for x in locks if x.get("task_id") == task.get("task_id")]
         if held: failures.append("task still holds file locks")

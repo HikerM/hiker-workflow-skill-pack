@@ -2,6 +2,7 @@ from __future__ import annotations
 import argparse,json
 from pathlib import Path
 from change_set import collect
+from architecture_guard import evaluate as architecture_evaluate, safe_id
 from graph_store import impact
 from qualitylib import git_root,head,load_json,matches_any,markdown_table,now,posix,repo_ai,worktree_fingerprint,write_json
 
@@ -19,7 +20,7 @@ def policy(root:Path,explicit:str|None)->dict:
         if custom.get("auto_merge") is not None:base.setdefault("merge_gate",{})["enabled"]=bool(custom["auto_merge"])
     return base
 
-def review(root:Path,mode:str="all-local",base:str|None=None,target:str|None=None,files:list[str]|None=None,policy_path:str|None=None)->dict:
+def review(root:Path,mode:str="all-local",base:str|None=None,target:str|None=None,files:list[str]|None=None,policy_path:str|None=None,task_id:str|None=None)->dict:
     pol=policy(root,policy_path);changes=collect(root,mode,base,target,files);generated=pol.get("generated_patterns",[])
     kept=[];ignored=[]
     for f in changes["files"]:
@@ -49,10 +50,23 @@ def review(root:Path,mode:str="all-local",base:str|None=None,target:str|None=Non
         extra=max(0,len(graph_info["nodes"])-len(graph_info["seeds"]));score+=min(20,extra//5)
         if graph_info["truncated"]:findings.append({"severity":"MEDIUM","type":"graph-truncated","evidence":"图谱查询达到节点上限，结果不完整"})
         if graph_info["stale"]:findings.append({"severity":"HIGH","type":"graph-stale","evidence":"图谱索引与当前提交或工作区内容不一致"})
+    architecture_guard=None
+    if kept or task_id:
+        architecture_guard=architecture_evaluate(root,task_id,mode,base,target,files)
+        if task_id:
+            write_json(repo_ai(root)/"evidence"/"architecture-guard"/f"{safe_id(task_id)}.json",architecture_guard)
+        for message in architecture_guard.get("blockers",[]):
+            findings.append({"severity":"HIGH","type":"architecture-guard","evidence":message})
+        for message in architecture_guard.get("warnings",[]):
+            findings.append({"severity":"MEDIUM","type":"architecture-guard","evidence":message})
+        if architecture_guard.get("result")=="BLOCKED":score=max(score,45);tags.add("architecture-guard")
     thresholds=th;level="LOW"
     if score>=int(thresholds.get("critical",75)):level="CRITICAL"
     elif score>=int(thresholds.get("high",45)):level="HIGH"
     elif score>=int(thresholds.get("medium",20)):level="MEDIUM"
+    severities={item.get("severity") for item in findings}
+    if "CRITICAL" in severities:level="CRITICAL"
+    elif "HIGH" in severities and level in {"LOW","MEDIUM"}:level="HIGH"
     evidence=0;possible=5
     if kept:evidence+=1
     if (repo_ai(root)/"context"/"project.json").exists():evidence+=1
@@ -66,12 +80,13 @@ def review(root:Path,mode:str="all-local",base:str|None=None,target:str|None=Non
     if not graph_info:gaps.append("没有可用工程图谱，影响范围仅基于路径规则")
     elif graph_info.get("stale"):gaps.append("工程图谱已过期")
     if unknown_lines:gaps.append(f"{unknown_lines} 个二进制或未知行数文件")
-    return {"schema_version":1,"generated_at":now(),"repository":str(root),"head":head(root),"change_mode":mode,"risk":{"score":score,"level":level,"confidence":confidence,"tags":sorted(tags)},"summary":{"files":len(kept),"ignored_generated":len(ignored),"changed_lines":line_total,"unknown_line_files":unknown_lines},"changes":kept,"ignored":ignored,"findings":findings,"ownership":{"uncovered":uncovered},"graph":graph_info,"evidence_gaps":gaps,"controls":{"auto_merge":False,"recommendation":"先执行回归计划并补齐关键证据" if level in {"HIGH","CRITICAL"} else "按风险范围执行验证"}}
+    task=load_json(repo_ai(root)/"tasks"/f"{safe_id(task_id)}.json",{}) if task_id else {}
+    return {"schema_version":2,"generated_at":now(),"repository":str(root),"project_id":task.get("project_id") if isinstance(task,dict) else None,"task_id":safe_id(task_id) if task_id else None,"head":head(root),"worktree_fingerprint":worktree_fingerprint(root),"change_mode":mode,"risk":{"score":score,"level":level,"confidence":confidence,"tags":sorted(tags)},"summary":{"files":len(kept),"ignored_generated":len(ignored),"changed_lines":line_total,"unknown_line_files":unknown_lines},"changes":kept,"ignored":ignored,"findings":findings,"ownership":{"uncovered":uncovered},"graph":graph_info,"architecture_guard":architecture_guard,"evidence_gaps":gaps,"controls":{"auto_merge":False,"recommendation":"先执行回归计划并补齐关键证据" if level in {"HIGH","CRITICAL"} else "按风险范围执行验证"}}
 
 def to_md(data:dict)->str:
     r=data["risk"];rows=[[f.get("severity"),f.get("type"),f.get("path") or ", ".join(f.get("paths",[])[:3]),f.get("evidence")] for f in data["findings"]]
     return "\n".join(["# 工程变更风险报告","",f"- 风险等级：**{r['level']}**",f"- 风险分数：{r['score']}",f"- 置信度：{r['confidence']}",f"- 有效文件：{data['summary']['files']}",f"- 忽略生成文件：{data['summary']['ignored_generated']}","","## 风险证据",markdown_table(rows,["等级","类型","位置","证据"]) if rows else "未发现规则型风险。","","## 证据缺口",*(f"- {x}" for x in data["evidence_gaps"]),"","## 控制建议",f"- {data['controls']['recommendation']}","- 本报告未执行测试，也不会自动合并代码。"])+"\n"
 def main()->int:
-    ap=argparse.ArgumentParser();ap.add_argument("--root",default=".");ap.add_argument("--mode",choices=["all-local","staged","working-tree","range","files"],default="all-local");ap.add_argument("--base");ap.add_argument("--target");ap.add_argument("--file",action="append",default=[]);ap.add_argument("--policy")
-    a=ap.parse_args();root=git_root(Path(a.root));data=review(root,a.mode,a.base,a.target,a.file,a.policy);out=repo_ai(root)/"evidence"/"risk";write_json(out/"latest.json",data);(out/"latest.md").write_text(to_md(data),encoding="utf-8");print(json.dumps(data,ensure_ascii=False,indent=2));return 0
+    ap=argparse.ArgumentParser();ap.add_argument("--root",default=".");ap.add_argument("--mode",choices=["all-local","staged","working-tree","range","files"],default="all-local");ap.add_argument("--base");ap.add_argument("--target");ap.add_argument("--file",action="append",default=[]);ap.add_argument("--policy");ap.add_argument("--task-id")
+    a=ap.parse_args();root=git_root(Path(a.root));data=review(root,a.mode,a.base,a.target,a.file,a.policy,a.task_id);out=repo_ai(root)/"evidence"/"risk";write_json(out/"latest.json",data);(out/"latest.md").write_text(to_md(data),encoding="utf-8");print(json.dumps(data,ensure_ascii=False,indent=2));return 0
 if __name__=="__main__":raise SystemExit(main())

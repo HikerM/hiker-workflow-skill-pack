@@ -23,13 +23,11 @@ DECORATIVE_EFFECT = re.compile(r"(?:linear-gradient|radial-gradient|box-shadow\s
 def audit(root: Path) -> dict:
     findings = []
     counts = Counter()
-    token_files = []
     scanned = list(source_files(root))
+    token_files = sorted(path.relative_to(root).as_posix() for path in scanned if any(x in path.relative_to(root).as_posix().lower() for x in ("token", "theme", "variable", "design-system", "design_system")))
     for path in scanned:
         rel = path.relative_to(root).as_posix(); text = path.read_text(encoding="utf-8", errors="ignore"); lines = text.count("\n") + 1
         lower = rel.lower()
-        if any(x in lower for x in ("token", "theme", "variable", "design-system", "design_system")):
-            token_files.append(rel)
         if lines > 500: findings.append({"severity":"HIGH","rule":"large-file","path":rel,"detail":f"{lines} lines"}); counts["large_file"] += 1
         elif lines > 300: findings.append({"severity":"MEDIUM","rule":"large-file","path":rel,"detail":f"{lines} lines"}); counts["large_file"] += 1
         if any(x in lower for x in ("/pages/", "/views/", "page.", "view.")) and DIRECT_HTTP.search(text):
@@ -42,11 +40,13 @@ def audit(root: Path) -> dict:
             if n > 3: findings.append({"severity":"MEDIUM","rule":"hardcoded-color","path":rel,"detail":f"hex colors: {n}"}); counts["hardcoded_color"] += n
         n = len(IMPORTANT.findall(text));
         if n > 2: findings.append({"severity":"LOW","rule":"important-overuse","path":rel,"detail":f"!important: {n}"}); counts["important"] += n
-        if BOOTSTRAP_IMPORT.search(text) or BOOTSTRAP_CLASS.search(text):
+        bootstrap_signal = bool(BOOTSTRAP_IMPORT.search(text) or BOOTSTRAP_CLASS.search(text))
+        if bootstrap_signal:
             findings.append({"severity":"MEDIUM","rule":"bootstrap-style-review","path":rel,"detail":"发现 Bootstrap 依赖或典型默认类；需人工核验是否通过项目 Token/组件层形成独立视觉语言"}); counts["bootstrap_style"] += 1
         n = len(CARD_SIGNAL.findall(text))
         if n >= 6:
-            findings.append({"severity":"MEDIUM","rule":"repetitive-card-signal","path":rel,"detail":f"card-like occurrences: {n}; 需逐处核验语义边界，避免卡片汤"}); counts["card_signal"] += n
+            severity = "HIGH" if bootstrap_signal or not token_files else "MEDIUM"
+            findings.append({"severity":severity,"rule":"repetitive-card-signal","path":rel,"detail":f"card-like occurrences: {n}; 与默认框架视觉或缺少 Design Token 同时出现时阻断，避免卡片汤"}); counts["card_signal"] += n
         if not any(x in lower for x in ("token", "theme", "variable", "config")):
             n = len(RAW_SPACING.findall(text))
             if n > 5: findings.append({"severity":"MEDIUM","rule":"hardcoded-spacing","path":rel,"detail":f"raw spacing values: {n}"}); counts["hardcoded_spacing"] += n

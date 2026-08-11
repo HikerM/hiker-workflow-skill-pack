@@ -17,14 +17,17 @@ def main() -> int:
     if not ok:
         print(json.dumps({"continue": False, "stopReason": f"AI工程状态不可恢复：{version}", "systemMessage": "请先运行项目智能初始化或迁移 .ai 协议。"}, ensure_ascii=False)); return 0
     policy = ensure_memory_policy(root)
-    task = read_json(ai / "runtime" / "task.json", {}); decisions = read_json(ai / "governance" / "locked-decisions.json", {}).get("decisions", []); active = ""
-    try: active = (ai / "runtime" / "active-context.md").read_text(encoding="utf-8")
+    decisions = read_json(ai / "governance" / "locked-decisions.json", {}).get("decisions", []); active = ""
+    workspace_context = root / "CURRENT_CONTEXT.md"
+    active_path = workspace_context if (ai / "governance" / "project-state.json").is_file() and workspace_context.is_file() else ai / "runtime" / "active-context.md"
+    try: active = active_path.read_text(encoding="utf-8")
     except OSError: pass
     all_locked = [f"- {d.get('id')}: {d.get('content')}" for d in decisions if d.get("status") == "LOCKED"]; locked = all_locked[-policy["max_items_per_section"]:]
     git = git_info(root)
     status = memory_status(root)
-    receipt = f"Bounded memory: active={status['active_context_chars']} chars; checkpoints={status['retained_checkpoints']} retained/{status['pruned_checkpoints']} compacted"
-    context = "\n".join([f"[AI工程状态协议 {version}]", f"Session source: {payload.get('source')}", f"Git branch/head: {git.get('branch')} / {str(git.get('head'))[:12]}", receipt, active, f"## 锁定决策（共 {len(all_locked)} 项）", *(locked or ["- 无"]), *( ["- 列表已截断；修改前按需读取 .ai/governance/locked-decisions.json。"] if len(all_locked)>len(locked) else [] ), "规则：正式状态优先于聊天摘要；继续前不得覆盖锁定决策；用户中断指令按 control.json 处理。"])
+    status["active_context_chars"] = len(active)
+    receipt = f"有界记忆：活动上下文 {status['active_context_chars']} 字符；检查点保留 {status['retained_checkpoints']} 个、已收敛 {status['pruned_checkpoints']} 个"
+    context = "\n".join([f"[智能工程状态协议 {version}]", f"会话来源：{payload.get('source')}", f"Git分支/提交：{git.get('branch')} / {str(git.get('head'))[:12]}", f"恢复来源：{active_path.relative_to(root).as_posix()}", receipt, active, f"## 锁定决策（共 {len(all_locked)} 项）", *(locked or ["- 无"]), *( ["- 列表已截断；修改前按需读取 .ai/governance/locked-decisions.json。"] if len(all_locked)>len(locked) else [] ), "规则：正式状态优先于聊天摘要；继续前不得覆盖锁定决策；用户中断指令按控制状态处理。"])
     context = limit_text(context, policy["session_context_max_chars"], ".ai/ 与四个根状态文档")
     out = {"continue": True, "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": context}}
     print(json.dumps(out, ensure_ascii=False)); return 0

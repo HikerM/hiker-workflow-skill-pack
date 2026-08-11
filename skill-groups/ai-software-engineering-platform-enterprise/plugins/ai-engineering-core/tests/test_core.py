@@ -26,40 +26,55 @@ class CoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             data = route(Path(td), "从0开始开发一个自定义B/S和C/S教学系统")
             self.assertEqual("greenfield", data["project_mode"])
-            self.assertEqual("greenfield-project-planning", data["selected"][0]["skill"])
+            self.assertEqual("0→1需求融合与选型", data["selected"][0]["skill"])
             self.assertLessEqual(len(data["load"]), 2)
-            common = route(Path(td), "帮我开发一个学生管理系统")
-            self.assertEqual("greenfield-project-planning", common["selected"][0]["skill"])
+            common = route(Path(td), "帮我开发一个通用业务管理系统")
+            self.assertEqual("0→1需求融合与选型", common["selected"][0]["skill"])
 
     def test_router_lazily_loads_cs_version_router(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); (root / "App.csproj").write_text("<Project />", encoding="utf-8")
             data = route(root, "实现这个WPF客户端页面，识别现有框架和版本")
             self.assertEqual("cs", data["architecture"])
-            self.assertEqual(["cs-client-router", "cs-component-implementation"], [x["skill"] for x in data["selected"]])
+            self.assertEqual(["客户端技术路由", "客户端组件实现"], [x["skill"] for x in data["selected"]])
+            self.assertEqual(["03 客户端工程", "03 客户端工程"], [x["plugin"] for x in data["selected"]])
 
     def test_brownfield_router_reconciles_before_implementation(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); (root / "package.json").write_text('{"name":"partial-app"}', encoding="utf-8")
             data = route(root, "已有一部分工程源码，继续融合自定义需求")
             self.assertEqual("brownfield", data["project_mode"])
-            self.assertEqual(["project-bootstrap", "brownfield-requirement-reconciliation"], [x["skill"] for x in data["selected"]])
+            self.assertEqual(["项目智能初始化", "存量源码需求对账"], [x["skill"] for x in data["selected"]])
             self.assertLessEqual(len(data["load"]), 2)
+
+    def test_router_detects_nested_existing_project_and_backend(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);nested=root/"apps/api";nested.mkdir(parents=True);(nested/"package.json").write_text(json.dumps({"dependencies":{"express":"5.0.0"}}),encoding="utf-8")
+            existing=route(root,"开发一个自定义服务");self.assertNotEqual("greenfield",existing["project_mode"])
+            backend=route(root,"修改现有NodeTS后端核心服务");names=[x["skill"] for x in backend["selected"]]
+            self.assertIn("项目智能初始化",names);self.assertIn("任务分流与会话规划",names)
+
+    def test_router_receipt_uses_chinese_names_without_consuming_functional_slot(self):
+        with tempfile.TemporaryDirectory() as td:
+            data=route(Path(td),"大型项目风险审核，并告诉我用了什么插件")
+            self.assertEqual(2,len(data["selected"]));self.assertEqual("完整变更风险评估",data["selected"][0]["skill"])
+            for item in data["selected"]:
+                self.assertIsNone(__import__("re").search(r"[A-Za-z]",item["skill"]));self.assertIsNone(__import__("re").search(r"[A-Za-z]",item["plugin"]))
 
     def test_brownfield_baseline_and_delta_are_evidence_backed(self):
         with tempfile.TemporaryDirectory() as td:
-            root = Path(td); (root / "src").mkdir(); (root / "src/StudentService.ts").write_text("export class StudentService {}", encoding="utf-8")
-            init_brownfield(root, "APP", "扩展现有学生系统")
+            root = Path(td); (root / "src").mkdir(); (root / "src/CoreService.ts").write_text("export class CoreService {}", encoding="utf-8")
+            init_brownfield(root, "APP", "扩展现有业务系统")
             self.assertFalse((root / ".ai/context/greenfield.json").exists())
             baseline = set_baseline(root, {"capabilities": [{
-                "id": "CAP-001", "statement": "已有学生服务", "evidence": ["src/StudentService.ts"],
-                "modules": ["student-service"], "tests": []
+                "id": "CAP-001", "statement": "已有核心服务", "evidence": ["src/CoreService.ts"],
+                "modules": ["core-service"], "tests": []
             }], "unknowns": ["数据库约束待确认"]})
             self.assertTrue(baseline["ok"])
             result = reconcile(root, {"requirements": [{
-                "id": "REQ-001", "statement": "增加学生批量导入", "priority": "must",
+                "id": "REQ-001", "statement": "增加业务数据批量导入", "priority": "must",
                 "acceptance": ["合法表格可导入并返回逐行结果"], "change_type": "modify",
-                "targets": ["CAP-001"], "impact": {"modules": ["student-service"], "tests": ["student-import"]}
+                "targets": ["CAP-001"], "impact": {"modules": ["core-service"], "tests": ["batch-import"]}
             }]})
             self.assertTrue(result["ok"]); self.assertEqual("READY_FOR_PLANNING", result["status"])
             self.assertTrue((root / "REQUIREMENT_DELTA.md").is_file()); self.assertTrue(validate_brownfield(root)["ok"])
@@ -120,8 +135,14 @@ class CoreTests(unittest.TestCase):
 
     def test_checkpoint_records_git_or_non_git(self):
         with tempfile.TemporaryDirectory() as td:
-            root = Path(td); initialize(root); cp = checkpoint(root, "test")
-            data = json.loads(cp.read_text()); self.assertIn("git", data); self.assertIn("runtime/task.json", data["files"])
+            root = Path(td); initialize(root); (root/"CURRENT_CONTEXT.md").write_text("# 当前上下文\n\n- KG-001\n",encoding="utf-8"); cp = checkpoint(root, "test")
+            data = json.loads(cp.read_text()); self.assertIn("git", data); self.assertIn("runtime/task.json", data["files"]);self.assertIn("root/CURRENT_CONTEXT.md",data["files"])
+
+    def test_session_recovery_prefers_workspace_current_context(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);initialize(root);(root/".ai/governance/project-state.json").write_text(json.dumps({"project_id":"APP"}));(root/"CURRENT_CONTEXT.md").write_text("# 当前上下文\n\n- Task ID：KG-999\n",encoding="utf-8")
+            result=subprocess.run([sys.executable,str(PLUGIN/"scripts/session_context.py")],cwd=root,input=json.dumps({"cwd":str(root),"source":"compact"}),text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=True)
+            context=json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"];self.assertIn("KG-999",context);self.assertIn("CURRENT_CONTEXT.md",context)
 
     def test_bounded_context_and_checkpoint_ledger(self):
         with tempfile.TemporaryDirectory() as td:

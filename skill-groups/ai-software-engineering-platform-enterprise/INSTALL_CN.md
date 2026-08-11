@@ -21,13 +21,14 @@ py -3 .\install_personal.py
 脚本会：
 
 1. 将 5 个插件复制到 `~/.codex/plugins/`；
-2. 备份并合并 `~/.agents/plugins/marketplace.json`；
-3. 不覆盖其他 Marketplace 条目；
-4. 默认安全合并并备份 `~/.codex/AGENTS.md` 中的自动应用与插件回执规则；
-5. 自动发现 Codex CLI 并安装启用五个插件；
-6. 输出结构化安装、启用和后续操作结果。
+2. 原子写入 `~/.codex/plugins/cache/<Marketplace>/<插件>/<版本>/`，同版本覆盖前保留缓存备份，避免必须等待桌面端自行刷新；
+3. 备份并合并 `~/.agents/plugins/marketplace.json`；
+4. 不覆盖其他 Marketplace 条目；
+5. 默认安全合并并备份 `~/.codex/AGENTS.md` 中的自动应用与插件回执规则；
+6. 默认直接写入 ChatGPT/Codex 桌面端的五个 `[plugins] enabled = true` 配置，不依赖 CLI；只有显式传入 `--codex-cli` 时才尝试兼容旧版命令；
+7. 输出结构化安装、缓存、启用和后续操作结果。
 
-安装输出中的 `plugin_activation.status` 为 `activated` 才表示五个插件已经自动启用。若为 `manual-required`，执行输出中的 `manual_commands`。完成后重启 ChatGPT 桌面端并新建任务。
+安装输出中的 `plugin_activation.status=activated` 且 `method=desktop-config` 表示已写入桌面端启用状态；旧版显式兼容时也可能显示 `method=cli`。完成后先在桌面应用中新建任务；若插件列表或能力注册仍显示旧缓存，再重启桌面端。
 
 可选参数：
 
@@ -35,10 +36,10 @@ py -3 .\install_personal.py
 # 不修改全局AGENTS.md
 py -3 -B .\install_personal.py --no-merge-global-agents
 
-# 只注册Marketplace，不调用Codex CLI
+# 只注册Marketplace，不启用桌面端插件配置
 py -3 -B .\install_personal.py --no-activate-plugins
 
-# 显式指定桌面端Codex CLI
+# 仅兼容仍支持 plugin add 的旧版CLI；桌面端通常不需要
 py -3 -B .\install_personal.py --codex-cli C:\path\to\codex.exe
 ```
 
@@ -80,11 +81,11 @@ python install_repo.py /path/to/your/repository
 codex plugin marketplace add /absolute/path/to/ai-software-engineering-platform-enterprise
 ```
 
-然后重启桌面端，从“AI软件工程平台 Enterprise 5.0”来源安装所需插件。
+然后新建任务并从个人工程插件来源检查所需插件；若列表仍显示旧版本，再重启桌面端。
 
 ## 全局自动应用与应用回执
 
-个人安装器默认把 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 中带标记的区块合并到 `C:\Users\<用户名>\.codex\AGENTS.md`。之后软件工程任务会自动选择最小必要插件/Skill，并在开始和结束时展示实际应用项、触发原因、项目和执行模式。安装器只替换 `ai-engineering-global-governance` 标记区块，禁止覆盖用户已有全局规则。
+个人安装器默认把 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 中带标记的区块合并到 `C:\Users\<用户名>\.codex\AGENTS.md`。之后软件工程任务只自动进入第二组轻量路由，并在开始和结束时用中文名称展示实际应用项、触发原因、项目和执行模式；另外两组只允许手动选择。安装器只替换自己的标记区块，禁止覆盖用户已有全局规则。
 
 自动选择不意味着自动获得外部写权限；push、merge、部署、发布和生产数据写入仍按用户授权与门禁执行。
 

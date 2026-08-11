@@ -30,6 +30,7 @@ class WebTests(unittest.TestCase):
             data=audit(root); rules={x["rule"] for x in data["findings"]}
             self.assertIn("bootstrap-style-review",rules); self.assertIn("repetitive-card-signal",rules); self.assertIn("hardcoded-spacing",rules)
             self.assertEqual("1.1.0",data["schema_version"])
+            self.assertEqual("FAIL",data["result"])
     def test_audit_records_design_token_evidence(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td); (root/"src/theme").mkdir(parents=True); (root/"src/theme/tokens.css").write_text(":root{--space-2:8px;--color-action:#0369a1}")

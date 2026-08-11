@@ -19,6 +19,19 @@ FAMILY_MARKERS = [
     ("embedded-hmi", {"lvgl", "embedded hmi"}),
 ]
 
+FAMILY_REFERENCES = {
+    "unity": None,
+    "qt": "references/cs-qt.md",
+    "dotnet-desktop": "references/cs-dotnet-desktop.md",
+    "electron-tauri": "references/cs-cross-platform.md#electron-tauri",
+    "flutter": "references/cs-cross-platform.md#flutter",
+    "react-native": "references/cs-cross-platform.md#react-native",
+    "android": "references/cs-native-java.md#android",
+    "apple-native": "references/cs-native-java.md#apple-native",
+    "java-desktop": "references/cs-native-java.md#java-desktop",
+    "embedded-hmi": "references/cs-embedded-hmi.md",
+}
+
 
 def strings(value: Any):
     if isinstance(value, dict):
@@ -64,10 +77,11 @@ def classify(data: dict[str, Any]) -> dict[str, Any]:
         "version_gaps": version_gaps,
         "project_count": len(projects),
         "backend_contract_required": family != "unknown",
+        "lazy_reference": FAMILY_REFERENCES.get(family),
         "routing": {
-            "design": "unity-ui-design" if family == "unity" else "cs-ui-design",
-            "implementation": "unity-component-implementation" if family == "unity" else "cs-component-implementation",
-            "review": "unity-quality-review" if family == "unity" else "cs-quality-review",
+            "design": "游戏引擎界面设计" if family == "unity" else "客户端界面设计",
+            "implementation": "游戏引擎组件与页面实现" if family == "unity" else "客户端组件实现",
+            "review": "游戏引擎质量审核" if family == "unity" else "客户端质量审核",
         },
         "performance_policy": "load-one-phase-and-one-family-only",
         "uncertainties": (["未从tech-stack.json识别客户端框架；需要最小项目清单证据"] if not matches else []) + (["以下技术缺少精确版本证据：" + ", ".join(version_gaps)] if version_gaps else []),

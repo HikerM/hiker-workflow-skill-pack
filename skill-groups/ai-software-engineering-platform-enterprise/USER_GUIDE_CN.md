@@ -133,4 +133,4 @@ REQUIREMENT_DELTA.md
 
 ## 七、全局自动应用与可见回执
 
-个人安装器默认把 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 安全合并到 `~/.codex/AGENTS.md`，软件工程任务会自动选择最小必要Skill。每次任务开头和结尾会显示实际使用的插件、Skill、触发原因、项目和执行模式；未使用的插件不会被冒充为“已应用”。安装完成后检查 `plugin_activation.status=activated`，再重启桌面端并新建任务。
+个人安装器默认把 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 安全合并到 `~/.codex/AGENTS.md`，软件工程任务只自动进入第二组轻量路由并最多加载两个原子能力。每次任务开头和结尾会用中文名称显示实际使用的插件、能力、触发原因、项目和执行模式；未使用的插件不会被冒充为“已应用”。安装完成后检查 `plugin_activation.status=activated` 与 `method=desktop-config`，然后在桌面应用中新建任务；若仍显示旧注册信息，再重启桌面端。

@@ -1,6 +1,6 @@
 {
   "name": "ai-engineering-web",
-  "version": "5.3.0",
+  "version": "5.4.0+codex.20260811173000",
   "description": "非模板化B/S设计系统、视觉丰富度、组件实现和前端质量审核",
   "author": {
     "name": "AI Engineering Toolkit"
@@ -14,7 +14,7 @@
   ],
   "skills": "./skills/",
   "interface": {
-    "displayName": "02 B/S界面与前端工程",
+    "displayName": "02 浏览器端界面与前端工程",
     "shortDescription": "非模板化Web设计系统、视觉增强、实现和质量审核",
     "longDescription": "从真实需求、品牌语境、工作流和技术栈建立项目专属设计系统、色彩、间距、组件复用、视觉焦点与节奏；阻断普通后台模板、Bootstrap式默认视觉、重复卡片汤和单调布局，再按现有框架实现和审核。",
     "developerName": "AI Engineering Toolkit",

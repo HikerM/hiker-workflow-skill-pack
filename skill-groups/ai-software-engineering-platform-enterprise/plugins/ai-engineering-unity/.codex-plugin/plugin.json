@@ -1,6 +1,6 @@
 {
   "name": "ai-engineering-unity",
-  "version": "5.3.0",
+  "version": "5.4.0+codex.20260811173000",
   "description": "通用C/S客户端路由、设计、实现与审核，含Unity专项能力",
   "author": {
     "name": "AI Engineering Toolkit"
@@ -14,7 +14,7 @@
   ],
   "skills": "./skills/",
   "interface": {
-    "displayName": "03 C/S客户端工程",
+    "displayName": "03 客户端工程",
     "shortDescription": "多技术栈C/S客户端工程与Unity专项能力",
     "longDescription": "以轻量路由按需支持Unity、Qt、.NET桌面、Electron/Tauri、Flutter、Android、Apple原生、React Native、Java桌面和嵌入式HMI；覆盖设计系统、组件实现、客户端生命周期、API契约和独立质量审核。",
     "developerName": "AI Engineering Toolkit",

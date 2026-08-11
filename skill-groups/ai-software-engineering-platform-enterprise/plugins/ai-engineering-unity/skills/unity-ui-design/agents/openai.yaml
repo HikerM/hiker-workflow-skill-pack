@@ -1,5 +1,5 @@
 interface:
-  display_name: "Unity界面设计"
+  display_name: "游戏引擎界面设计"
   short_description: "按当前Unity版本和UI体系设计页面"
 policy:
   allow_implicit_invocation: false

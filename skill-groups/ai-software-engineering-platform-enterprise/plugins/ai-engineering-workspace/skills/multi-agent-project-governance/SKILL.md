@@ -5,12 +5,21 @@ description: 面向大型B/S、C/S、Unity和NodeTS工程建立Master/Planning/D
 
 # 多 Agent 项目治理
 
-这是本插件的 Master Agent 入口。先读取 [角色契约](references/agent-role-contracts.md)、[系统分层](references/system-lane-model.md)、[Git治理](references/git-governance.md) 与 [状态模型](references/state-and-task-model.md)。
+这是本插件的 Master Agent 入口。默认只建立有界控制平面，不一次性读取全部治理资料。
+
+## 按需加载
+
+- 作为风险审核、测试或发布的辅助 Skill 时，不加载下列参考文件；只核对项目身份、当前 Task、控制状态和最新证据。
+- 首次接管或分配七类角色时，只读取 [角色契约](references/agent-role-contracts.md)。
+- 拆解前后端、客户端、后端、数据和基础设施通道时，只读取 [系统分层](references/system-lane-model.md)。
+- 涉及 Branch、Worktree、Commit、Merge 或冲突处理时，只读取 [Git治理](references/git-governance.md)。
+- 涉及状态迁移、Task 记录、上下文恢复或 Checkpoint 时，只读取 [状态模型](references/state-and-task-model.md)。
+- 单轮通常读取零到一份参考文件；请求确实同时跨越两个治理域时最多读取两份，禁止预读全部四份。
 
 ## 启动顺序
 
 1. 确认当前 Git 根目录与 `project_id`，不得引用其他项目状态。
-2. 依次读取 `PROJECT_STATE.md`、`CURRENT_CONTEXT.md`、`CHANGELOG.md`、`ARCHITECTURE.md`、Git branch/status/log。
+2. 只读取有界启动事实：`PROJECT_STATE.md`、`CURRENT_CONTEXT.md`、当前 Task 与 Git branch/status；仅在架构、发布或历史核验阶段读取 `ARCHITECTURE.md`、`CHANGELOG.md` 和必要提交记录。
 3. 未初始化时使用 `$project-state-manager` 初始化；需求使用 `$task-lifecycle-manager` 建立 Task ID。
 4. 用 `$workspace-task-router` 生成 B/S 或 C/S 的前后端通道与依赖。
 5. 写代码前用 `$worktree-task-manager` 隔离分支，并用 `$file-lock-manager` 锁定高风险文件。

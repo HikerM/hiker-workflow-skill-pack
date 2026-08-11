@@ -190,11 +190,11 @@ Created → Planning → Development → Review → Testing → Merged → Relea
 
 ## 10. 从需求到发布示例
 
-需求：“Web管理端和Unity学生端增加统一登录，NodeTS后端提供API。”
+需求：“浏览器管理端和游戏引擎客户端增加统一登录，TypeScript后端提供接口。”
 
 1. Master读取状态，创建KG-001。
 2. Planning定义登录、401、锁定、刷新令牌、离线、权限和验收条件；估算前端、客户端、后端、契约、测试工作。
-3. Router生成bs-frontend、bs-backend、cs-client、cs-backend、contract-data、review、testing、documentation、merge、release-control。
+3. Router生成浏览器前端、客户端、共享后端服务、契约/数据、审核、测试、文档、合并和发布控制通道；浏览器端与客户端共享同一后端时不创建重复服务通道。
 4. Developer分别在feature分支/Worktree开发；契约先定版；Unity和NodeTS共享文件加锁。
 5. 每个实现提交 `feat(auth): implement KG-001 ...` 并记录Commit ID。
 6. Review独立审核安全、架构、兼容和Unity生命周期；问题返回Development。
@@ -210,8 +210,16 @@ Created → Planning → Development → Review → Testing → Merged → Relea
 - 多Agent协作：角色权限、状态机和门禁是机器可检查的，不依赖Agent“记得配合”。
 - ChatGPT Desktop/Codex：符合插件manifest、SKILL.md、agents/openai.yaml和个人Marketplace结构；Skill可隐式触发，AGENTS全局规则负责自动选择和可见回执，新任务可加载更新后的插件能力。
 
+### 大型工程结构保护
+
+- Planning为每个任务写最小变更契约：允许文件/模块、原有行为不变量、最低回归、公共契约变化和消费者。
+- 架构守卫自动核对范围漂移、受保护模块、依赖方向、公共表面指纹、消费者回归、图谱影响半径和文件增长；证据绑定当前提交与工作区指纹。
+- 超过400行或单次增长80行默认警告，超过700行或单次增长200行默认阻断；项目可按技术栈调整，但不能用调大阈值代替职责拆分。
+- 文件拆分以职责、依赖方向和公共表面为依据，不按行数机械切片；公共服务变化必须先补特征测试，再验证反向消费者。
+- 模块表、依赖规则、公共表面和运行拓扑均允许为空。普通局部改动依赖自动发现；只有高复用、跨模块、受保护或无法静态推断的边界才显式登记，避免治理配置与源码形成双向耦合。
+
 ## 12. 全局自动应用与可见回执
 
-运行个人安装器后，它会默认安装启用五个插件，并把 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 的标记区块安全合并到 `~/.codex/AGENTS.md`。它会要求软件工程任务自动选择最小必要Skill，并在首次实质动作前显示插件、Skill、触发原因、项目和执行模式；结束时显示实际使用项和证据位置。重复安装不会重复追加，原文件会备份，可用 `--no-merge-global-agents` 退出。
+运行个人安装器后，它会默认安装启用五个插件，并把 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 的标记区块安全合并到 `~/.codex/AGENTS.md`。它只允许第二组自动路由，另外两组保持手动；首次实质动作前用中文名称显示插件、能力、触发原因、项目和执行模式，结束时显示实际使用项和证据位置。重复安装不会重复追加，原文件会备份，可用 `--no-merge-global-agents` 退出。
 
 这只影响选择与透明度，不赋予额外外部写权限。push、merge、部署、生产数据写入仍需用户请求或既有明确授权。

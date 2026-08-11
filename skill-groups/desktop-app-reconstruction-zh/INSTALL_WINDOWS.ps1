@@ -16,14 +16,19 @@ $PythonCommand = $null
 $PythonPrefix = @()
 if (Get-Command py -ErrorAction SilentlyContinue) {
     $PythonCommand = "py"
-    $PythonPrefix = @("-3")
+    $PythonPrefix = @("-3", "-B")
 } elseif (Get-Command python -ErrorAction SilentlyContinue) {
     $PythonCommand = "python"
+    $PythonPrefix = @("-B")
 } elseif (Get-Command python3 -ErrorAction SilentlyContinue) {
     $PythonCommand = "python3"
+    $PythonPrefix = @("-B")
 } else {
-    throw "未找到 Python 3。请先安装 Python 3，再重新运行本脚本。"
+    throw "Python 3 was not found. Install Python 3 and run this installer again."
 }
+
+$env:PYTHONDONTWRITEBYTECODE = "1"
+$env:PYTHONUTF8 = "1"
 
 $Arguments = @($Installer, "--scope", $Scope)
 if ($RepoRoot) { $Arguments += @("--repo-root", $RepoRoot) }

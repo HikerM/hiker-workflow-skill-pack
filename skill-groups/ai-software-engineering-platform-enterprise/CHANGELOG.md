@@ -7,6 +7,7 @@
 - 新增 `brownfield-requirement-reconciliation` 与 `brownfield_reconcile.py`：从真实源码建立 `CAP-*` 能力基线，将新增自定义需求对账为新增、修改、替换或移除，阻止无依据重新脚手架。
 - 其余32个原子Skill全部关闭隐式调用但保留手动可见；验证器强制该性能策略，防止版本回退。
 - 全局AGENTS模板改为短路由契约，不再预列举全部原子Skill。
+- 将核心插件默认提示收敛到客户端支持的三条，并增加本地Cachebuster，避免更新后继续命中旧缓存。
 - Enterprise Skill数量由30个增至33个。
 
 ## 5.2.0

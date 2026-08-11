@@ -5,4 +5,4 @@ interface:
   brand_color: "#1F4E79"
   default_prompt: "使用 $desktop-app-reconstruction-zh 识别当前门禁，并只启用一个对应原子Skill。"
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false

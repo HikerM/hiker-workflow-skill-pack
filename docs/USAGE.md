@@ -2,10 +2,10 @@
 
 ## 第一组：Hiker 工作流守护
 
-### 自动路由
+### 手动路由
 
 ```text
-请先按 hiker-workflow-router 判断该用哪个 Hiker Skill，再执行任务。不要默认写生产 DB、重启服务、真实 Provider 调用、push/merge 或覆盖 AGENTS.md。
+请明确使用 $hiker-workflow-router 判断该用哪个 Hiker Skill，再执行任务。第一组不会自动触发；不要默认写生产 DB、重启服务、真实 Provider 调用、push/merge 或覆盖 AGENTS.md。
 ```
 
 ### 线程结果复核

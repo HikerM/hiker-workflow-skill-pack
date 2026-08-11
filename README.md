@@ -2,7 +2,7 @@
 
 这是一个面向 ChatGPT/Codex 桌面应用的中文 Skill 集合仓库。仓库当前包含 **三组彼此独立的 Skill**，每组有不同的目标、安装方式和使用边界。
 
-> 重要：这里的“三组”不是三个 Skill。第一组包含 9 个 Skill，第二组包含 5 个插件和 33 个 Skill，第三组包含 1 个轻量总路由和 4 个阶段原子 Skill，共计 47 个 Skill。仅三个顶层路由允许隐式触发，44个原子Skill按需懒加载。
+> 重要：这里的“三组”不是三个 Skill。第一组包含 9 个 Skill，第二组包含 5 个插件和 33 个 Skill，第三组包含 1 个轻量总路由和 4 个阶段原子 Skill，共计 47 个 Skill。只有第二组 `ai-engineering-router` 允许隐式触发；其余46个Skill（含第一、第三组的手动路由）只能手动选择或由已选择路由懒加载。
 
 ## 三组总览
 
@@ -115,7 +115,7 @@ py -3 -B .\scripts\install_skill.py --scope user
 .\VALIDATE.ps1 -Root .
 ```
 
-验证器会检查第一组的 9 个 Skill、第二组的插件清单和 33 个 Skill，以及第三组的5个Skill与完整共享资源结构，并强制三组仅三个顶层入口可隐式触发。
+验证器会检查第一组的9个Skill、第二组的插件清单和33个Skill，以及第三组的5个Skill与完整共享资源结构，并强制全仓库只有第二组 `ai-engineering-router` 可隐式触发。
 
 ## 安全默认值
 

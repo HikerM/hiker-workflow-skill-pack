@@ -2,7 +2,8 @@
 
 ## 0.8.0
 
-- 三组改为仅三个顶层路由可隐式触发，43个原子Skill保留手动可见并由路由懒加载，降低发送消息时的候选选择开销。
+- 自动策略收敛为仅第二组 `ai-engineering-router` 可隐式触发；第一组与第三组全部改为手动选择，减少无关任务的候选匹配和上下文干扰。
+- 其余46个Skill保留手动可见，原子Skill由已明确选择的路由懒加载，降低发送消息时的候选选择开销。
 - Enterprise 5.3 新增 `ai-engineering-router` 与 `greenfield-project-planning`，从零项目先融合稳定需求ID、冲突、验收和技术决策Checkpoint。
 - 需求完整历史落盘、聊天只加载有界活动切片，新增需求增量合并而非覆盖旧约束。
 - 桌面重建安装备份移至不可发现的 `.agents/skills-backup`，避免备份目录被当成重复Skill。

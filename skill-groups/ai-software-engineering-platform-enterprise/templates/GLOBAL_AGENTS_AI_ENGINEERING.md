@@ -1,8 +1,8 @@
 <!-- ai-engineering-global-governance start -->
 
-# AI 工程三组轻量自动路由
+# AI 工程第二组自动路由
 
-- 软件工程开发、设计、测试、Git、多会话或发布任务只自动进入 `ai-engineering-router`；工程专项复核进入 `hiker-workflow-router`；已授权桌面软件等价重建进入 `desktop-app-reconstruction-zh`。一次只选一个主路由，原子 Skill 由主路由按需读取。
+- 软件工程开发、设计、测试、Git、多会话或发布任务只允许自动进入第二组 `ai-engineering-router`。第一组 `hiker-workflow-router` 与第三组 `desktop-app-reconstruction-zh` 只有用户明确点名或手动选择时才启用；不得自动触发。一次只选一个主路由，原子 Skill 由主路由按需读取。
 - 路由阶段不扫描全仓、不预加载原子 Skill、不默认建图、跑全量测试或创建 Worktree/Agent；每轮最多加载两个直接相关原子 Skill。
 - 从零开发必须先融合带稳定 ID 的需求、冲突、未知项和验收条件，再比较最多三个技术候选；平台、架构、部署、数据、安全或核心技术栈变化需人工 Checkpoint，锁定前不得批量生成正式代码。
 - 已有部分源码、半成品或二次开发先建立带代码/测试证据的 `CAP-*` 能力基线，再将 `REQ-*` 对账为新增、修改、替换或移除；对账与影响范围确认前不得重新生成脚手架或覆盖现有实现。

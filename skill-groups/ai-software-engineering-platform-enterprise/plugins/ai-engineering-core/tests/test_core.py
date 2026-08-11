@@ -17,6 +17,7 @@ from runtime_control import classify
 from statectl import checkpoint, update_active
 from corelib import atomic_write_json
 from requirements_fusion import init as init_requirements, merge as merge_requirements, validate as validate_requirements
+from brownfield_reconcile import initialize as init_brownfield, set_baseline, reconcile, validate as validate_brownfield
 from suite_router import route
 
 
@@ -36,6 +37,32 @@ class CoreTests(unittest.TestCase):
             data = route(root, "实现这个WPF客户端页面，识别现有框架和版本")
             self.assertEqual("cs", data["architecture"])
             self.assertEqual(["cs-client-router", "cs-component-implementation"], [x["skill"] for x in data["selected"]])
+
+    def test_brownfield_router_reconciles_before_implementation(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); (root / "package.json").write_text('{"name":"partial-app"}', encoding="utf-8")
+            data = route(root, "已有一部分工程源码，继续融合自定义需求")
+            self.assertEqual("brownfield", data["project_mode"])
+            self.assertEqual(["project-bootstrap", "brownfield-requirement-reconciliation"], [x["skill"] for x in data["selected"]])
+            self.assertLessEqual(len(data["load"]), 2)
+
+    def test_brownfield_baseline_and_delta_are_evidence_backed(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); (root / "src").mkdir(); (root / "src/StudentService.ts").write_text("export class StudentService {}", encoding="utf-8")
+            init_brownfield(root, "APP", "扩展现有学生系统")
+            self.assertFalse((root / ".ai/context/greenfield.json").exists())
+            baseline = set_baseline(root, {"capabilities": [{
+                "id": "CAP-001", "statement": "已有学生服务", "evidence": ["src/StudentService.ts"],
+                "modules": ["student-service"], "tests": []
+            }], "unknowns": ["数据库约束待确认"]})
+            self.assertTrue(baseline["ok"])
+            result = reconcile(root, {"requirements": [{
+                "id": "REQ-001", "statement": "增加学生批量导入", "priority": "must",
+                "acceptance": ["合法表格可导入并返回逐行结果"], "change_type": "modify",
+                "targets": ["CAP-001"], "impact": {"modules": ["student-service"], "tests": ["student-import"]}
+            }]})
+            self.assertTrue(result["ok"]); self.assertEqual("READY_FOR_PLANNING", result["status"])
+            self.assertTrue((root / "REQUIREMENT_DELTA.md").is_file()); self.assertTrue(validate_brownfield(root)["ok"])
 
     def test_requirements_merge_preserves_revision_and_conflicts(self):
         with tempfile.TemporaryDirectory() as td:

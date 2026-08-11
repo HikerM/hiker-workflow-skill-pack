@@ -16,16 +16,17 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def paths(root: Path) -> tuple[Path, Path, Path]:
-    return root / ".ai/requirements/ledger.json", root / ".ai/context/greenfield.json", root / "REQUIREMENTS.md"
+def paths(root: Path, mode: str = "greenfield") -> tuple[Path, Path, Path]:
+    context_name = "greenfield.json" if mode == "greenfield" else "requirement-reconciliation.json"
+    return root / ".ai/requirements/ledger.json", root / ".ai/context" / context_name, root / "REQUIREMENTS.md"
 
 
 def load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
 
 
-def render(root: Path, limit: int = 30) -> None:
-    ledger_path, context_path, markdown_path = paths(root)
+def render(root: Path, limit: int = 30, mode: str = "greenfield") -> None:
+    ledger_path, context_path, markdown_path = paths(root, mode)
     ledger, context = load_json(ledger_path), load_json(context_path)
     items = ledger.get("requirements", [])
     active = [x for x in items if x.get("status", "active") != "superseded"][: max(1, limit)]
@@ -42,13 +43,14 @@ def render(root: Path, limit: int = 30) -> None:
     atomic_write_text(markdown_path, "\n".join(lines))
 
 
-def init(root: Path, project_id: str, goal: str) -> dict:
-    ledger_path, context_path, _ = paths(root)
+def init(root: Path, project_id: str, goal: str, mode: str = "greenfield") -> dict:
+    ledger_path, context_path, _ = paths(root, mode)
     if not ledger_path.exists():
         atomic_write_json(ledger_path, {"schema_version": SCHEMA, "revision": 0, "requirements": [], "updated_at": now()})
     if not context_path.exists():
-        atomic_write_json(context_path, {"schema_version": SCHEMA, "project_id": project_id, "goal": goal, "mode": "greenfield", "stage": "REQUIREMENTS", "checkpoint_status": "PENDING", "locked_decisions": [], "unknowns": ["目标平台与部署边界", "数据与安全边界", "可验收的核心工作流"], "updated_at": now()})
-    render(root)
+        unknowns = ["目标平台与部署边界", "数据与安全边界", "可验收的核心工作流"] if mode == "greenfield" else ["现有能力及代码证据", "新增需求与存量行为的冲突", "兼容与迁移边界"]
+        atomic_write_json(context_path, {"schema_version": SCHEMA, "project_id": project_id, "goal": goal, "mode": mode, "stage": "REQUIREMENTS", "checkpoint_status": "PENDING", "locked_decisions": [], "unknowns": unknowns, "updated_at": now()})
+    render(root, mode=mode)
     return {"ok": True, "ledger": str(ledger_path), "context": str(context_path)}
 
 
@@ -61,8 +63,8 @@ def validate_item(item: dict) -> list[str]:
     return errors
 
 
-def merge(root: Path, incoming: list[dict]) -> dict:
-    ledger_path, _, _ = paths(root)
+def merge(root: Path, incoming: list[dict], mode: str = "greenfield") -> dict:
+    ledger_path, _, _ = paths(root, mode)
     ledger = load_json(ledger_path)
     if not ledger: raise RuntimeError("请先执行 init")
     errors = {str(x.get("id", "UNKNOWN")): validate_item(x) for x in incoming}
@@ -86,7 +88,7 @@ def merge(root: Path, incoming: list[dict]) -> dict:
         by_id[item["id"]] = item
     ledger.update({"revision": int(ledger.get("revision", 0)) + 1, "requirements": sorted(by_id.values(), key=lambda x: x["id"]), "updated_at": now()})
     atomic_write_json(ledger_path, ledger)
-    render(root)
+    render(root, mode=mode)
     return {"ok": True, "revision": ledger["revision"], "added": added, "updated": updated, "conflicts": sum(len(x.get("conflicts_with", [])) for x in by_id.values())}
 
 
@@ -101,12 +103,12 @@ def validate(root: Path) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(); sub = parser.add_subparsers(dest="command", required=True)
-    p = sub.add_parser("init"); p.add_argument("--root", default="."); p.add_argument("--project-id", required=True); p.add_argument("--goal", required=True)
+    p = sub.add_parser("init"); p.add_argument("--root", default="."); p.add_argument("--project-id", required=True); p.add_argument("--goal", required=True); p.add_argument("--mode", choices=["greenfield", "brownfield"], default="greenfield")
     p = sub.add_parser("merge"); p.add_argument("--root", default="."); p.add_argument("--input", required=True)
     p = sub.add_parser("validate"); p.add_argument("--root", default=".")
     p = sub.add_parser("slice"); p.add_argument("--root", default="."); p.add_argument("--limit", type=int, default=30)
     args = parser.parse_args(); root = Path(args.root).resolve()
-    if args.command == "init": result = init(root, args.project_id, args.goal)
+    if args.command == "init": result = init(root, args.project_id, args.goal, args.mode)
     elif args.command == "merge":
         payload = json.loads(Path(args.input).read_text(encoding="utf-8")); result = merge(root, payload if isinstance(payload, list) else payload.get("requirements", []))
     elif args.command == "validate": result = validate(root)

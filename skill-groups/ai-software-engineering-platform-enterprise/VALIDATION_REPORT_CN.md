@@ -5,18 +5,19 @@
 
 ## 结构与官方校验
 
-- 插件：5 个；Skill：32 个。
+- 插件：5 个；Skill：33 个。
 - `validate_bundle.py`：通过，并强制只有 `ai-engineering-router` 允许隐式调用。
-- 官方 `quick_validate.py`：三组全部 46 个 Skill 通过。
+- 官方 `quick_validate.py`：三组全部 47 个 Skill 通过。
 - 官方 `validate_plugin.py`：5/5 插件通过。
 - 第三组 `validate_skill_package.py --self-test`：PASS；顶层路由隐式、四个原子Skill非隐式策略通过。
 - 第一组 `validate_skills.py`：PASS；顶层路由隐式、八个原子Skill非隐式策略通过。
 
 ## 功能与回归
 
-- 单元测试：Core 12、Quality 11、C/S与Unity 7、Web 6、Workspace 10，共 46/46 通过。
+- 单元测试：Core 14、Quality 11、C/S与Unity 7、Web 6、Workspace 10，共 48/48 通过。
 - 集成 Smoke：15/15 通过，包括初始化、上下文压缩/恢复、有界记忆、Worktree、完整变更集、风险、图谱限流、真实命令、个人安装、全局规则幂等与安全卸载。
 - 0→1路由：空项目优先进入 `greenfield-project-planning`，不会直接套脚手架。
+- 存量源码路由：半成品、二次开发或部分源码项目依次进入 `project-bootstrap` 和 `brownfield-requirement-reconciliation`；源码能力、需求差异和影响矩阵均有机器可验事实源。
 - 需求融合：稳定 Requirement ID、增量 revision history、冲突记录、活动切片和校验通过。
 - C/S路由：WPF等客户端先进入版本证据识别，再按当前实现/设计/审核阶段加载一个原子Skill；每轮上限两个。
 - 有界多会话：活动上下文、会话注入、每节条目、近期/里程碑checkpoint和压缩账本均有上限；正式Task、决定、Git与验收证据保留在事实源。
@@ -25,9 +26,9 @@
 ## 本机安装结果
 
 - 第一组：0.8.0，9个Skill，只有1个隐式入口。
-- 第二组：5个插件均为5.3.0，`installed: true`、`enabled: true`；32个Skill，只有1个隐式入口。
+- 第二组：5个插件均为5.3.0，`installed: true`、`enabled: true`；33个Skill，只有1个隐式入口。
 - 第三组：1.3.0，5个Skill，只有1个隐式入口。
-- 三组总计46个Skill、3个隐式入口、43个按需原子Skill。
+- 三组总计47个Skill、3个隐式入口、44个按需原子Skill。
 - `.agents/skills` 下可见的 `*.backup-*` 目录：0；旧备份已迁移到 `.agents/skills-backup`，内容可恢复。
 
 ## 自定义指令与性能

@@ -19,3 +19,5 @@ core-17,true,ai-engineering-router,"从0开始开发一个自定义B/S和C/S系�
 core-18,true,greenfield-project-planning,"空目录开始做产品，把新增需求增量融合并保留冲突历史"
 core-19,true,ai-engineering-router,"审核现有WPF客户端并识别真实.NET和框架版本"
 core-20,false,ai-engineering-router,"把这段中文翻译成英文"
+core-21,true,brownfield-requirement-reconciliation,"已有一部分工程源码，要在不覆盖现有能力的前提下融合新增自定义需求"
+core-22,false,brownfield-requirement-reconciliation,"空目录从零创建一个新系统"

@@ -14,6 +14,12 @@
       "project_detection": "greenfield-owner",
       "may_modify_source": false
     },
+    "brownfield-requirement-reconciliation": {
+      "plugin": "ai-engineering-core",
+      "mode": "planning",
+      "project_detection": "brownfield-owner",
+      "may_modify_source": false
+    },
     "bounded-context-memory": {
       "plugin": "ai-engineering-core",
       "mode": "workflow",

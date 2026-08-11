@@ -1,7 +1,7 @@
 {
   "name": "ai-engineering-core",
   "version": "5.3.0",
-  "description": "轻量路由、0→1需求融合、项目识别与有界上下文恢复",
+  "description": "轻量路由、0→1需求融合、存量源码对账、项目识别与有界上下文恢复",
   "author": {
     "name": "AI Engineering Toolkit"
   },
@@ -15,8 +15,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "01 AI工程核心",
-    "shortDescription": "轻量路由、0→1需求融合与有界记忆",
-    "longDescription": "以唯一轻量入口按需加载最多两个原子Skill；空项目先用稳定需求ID、冲突账本和技术决策Checkpoint融合自定义需求，已有工程再从证据识别B/S与C/S真实技术和版本，并以固定大小工作集恢复长期多会话事实。",
+    "shortDescription": "轻量路由、需求融合、源码对账与有界记忆",
+    "longDescription": "以唯一轻量入口按需加载最多两个原子Skill；空项目先用稳定需求ID、冲突账本和技术决策Checkpoint融合自定义需求，部分源码项目先从证据建立CAP能力基线并完成REQ差异对账，已有工程按真实技术和版本执行，并以固定大小工作集恢复长期多会话事实。",
     "developerName": "AI Engineering Toolkit",
     "category": "Productivity",
     "capabilities": [
@@ -26,6 +26,7 @@
     "defaultPrompt": [
       "识别0→1或已有工程，只加载最小原子Skill。",
       "融合自定义需求并建立技术决策Checkpoint。",
+      "对账已有部分源码与新增自定义需求，禁止无依据重新脚手架。",
       "恢复当前任务上下文并继续执行。",
       "检查有界记忆状态，确保多轮压缩后可恢复且不会持续增重。"
     ],

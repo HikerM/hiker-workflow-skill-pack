@@ -2,14 +2,14 @@
 
 这是一个面向 ChatGPT/Codex 桌面应用的中文 Skill 集合仓库。仓库当前包含 **三组彼此独立的 Skill**，每组有不同的目标、安装方式和使用边界。
 
-> 重要：这里的“三组”不是三个 Skill。第一组包含 9 个 Skill，第二组包含 5 个插件和 32 个 Skill，第三组包含 1 个轻量总路由和 4 个阶段原子 Skill，共计 46 个 Skill。仅三个顶层路由允许隐式触发，43个原子Skill按需懒加载。
+> 重要：这里的“三组”不是三个 Skill。第一组包含 9 个 Skill，第二组包含 5 个插件和 33 个 Skill，第三组包含 1 个轻量总路由和 4 个阶段原子 Skill，共计 47 个 Skill。仅三个顶层路由允许隐式触发，44个原子Skill按需懒加载。
 
 ## 三组总览
 
 | 组别 | 名称 | 版本 | 内容规模 | 主要用途 | 源码位置 |
 |---|---|---:|---:|---|---|
 | 第一组 | Hiker 工作流守护 Skill Pack | 0.3.0 | 9 个 Skill | 工程复核、阶段验收、证据测试、契约审计、NodeTs、Unity、设计交付和架构咨询 | [`.agents/skills`](.agents/skills) |
-| 第二组 | AI Software Engineering Platform Enterprise | 5.3.0 | 5 个插件、32 个 Skill | 唯一轻量入口、0→1需求融合、真实技术/版本识别、非模板化B/S、多技术栈C/S前后端、有界多会话记忆、多Agent、Git与发布门禁 | [`skill-groups/ai-software-engineering-platform-enterprise`](skill-groups/ai-software-engineering-platform-enterprise) |
+| 第二组 | AI Software Engineering Platform Enterprise | 5.3.0 | 5 个插件、33 个 Skill | 唯一轻量入口、0→1需求融合、存量源码需求对账、真实技术/版本识别、非模板化B/S、多技术栈C/S前后端、有界多会话记忆、多Agent、Git与发布门禁 | [`skill-groups/ai-software-engineering-platform-enterprise`](skill-groups/ai-software-engineering-platform-enterprise) |
 | 第三组 | Desktop App Reconstruction ZH | 1.3.0 | 5 个 Skill | 轻量路由已授权桌面软件的发现、技术方案、实现、验证与发布 | [`skill-groups/desktop-app-reconstruction-zh`](skill-groups/desktop-app-reconstruction-zh) |
 
 三组的详细说明和全部 Skill 清单见：[三组 Skill 中文详解](docs/THREE_SKILL_GROUPS_ZH.md)。
@@ -115,7 +115,7 @@ py -3 -B .\scripts\install_skill.py --scope user
 .\VALIDATE.ps1 -Root .
 ```
 
-验证器会检查第一组的 9 个 Skill、第二组的插件清单和 32 个 Skill，以及第三组的5个Skill与完整共享资源结构，并强制三组仅三个顶层入口可隐式触发。
+验证器会检查第一组的 9 个 Skill、第二组的插件清单和 33 个 Skill，以及第三组的5个Skill与完整共享资源结构，并强制三组仅三个顶层入口可隐式触发。
 
 ## 安全默认值
 

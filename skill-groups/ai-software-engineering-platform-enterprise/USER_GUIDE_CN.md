@@ -18,7 +18,19 @@ REQUIREMENTS.md
 
 新增需求按 `REQ-001` 等稳定ID增量合并；旧版本进入revision history，冲突和未知项必须显式保留。平台、架构、部署、数据、安全或核心技术栈在一个人工Checkpoint确认后再开始正式脚手架。
 
-已有代码仓库才进入 `@项目智能初始化`，生成：
+已有部分源码、半成品或二次开发项目先由 `@项目智能初始化` 识别真实技术与版本，再进入 `@存量源码需求对账`，生成：
+
+```text
+.ai/requirements/source-baseline.json
+.ai/requirements/ledger.json
+.ai/requirements/reconciliation.json
+.ai/context/requirement-reconciliation.json
+REQUIREMENT_DELTA.md
+```
+
+现有能力使用 `CAP-001` 等稳定ID并附代码或测试证据；自定义需求使用 `REQ-001` 等稳定ID，分类为 `add`、`modify`、`replace` 或 `remove`。涉及公共API、数据、权限或迁移时先建立人工Checkpoint；对账通过前不得重新套脚手架或覆盖现有实现。
+
+成熟已有代码仓库首次接管时进入 `@项目智能初始化`，生成：
 
 生成：
 

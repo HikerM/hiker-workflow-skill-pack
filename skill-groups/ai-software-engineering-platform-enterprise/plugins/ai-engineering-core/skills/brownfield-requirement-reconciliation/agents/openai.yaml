@@ -1,0 +1,6 @@
+interface:
+  display_name: "存量源码需求对账"
+  short_description: "基于代码证据融合半成品和二次开发需求"
+  default_prompt: "使用 $brownfield-requirement-reconciliation 建立现有能力基线，并将新增需求对账为可追踪变更。"
+policy:
+  allow_implicit_invocation: false

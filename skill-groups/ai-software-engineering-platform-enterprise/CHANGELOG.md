@@ -4,9 +4,10 @@
 
 - 新增唯一隐式入口 `ai-engineering-router`，路由阶段只检查有限工程标记并返回最多两个需要读取的原子Skill。
 - 新增 `greenfield-project-planning` 与 `requirements_fusion.py`：稳定 Requirement ID、revision history、冲突、未知项、验收活动切片和技术决策Checkpoint。
-- 其余31个原子Skill全部关闭隐式调用但保留手动可见；验证器强制该性能策略，防止版本回退。
+- 新增 `brownfield-requirement-reconciliation` 与 `brownfield_reconcile.py`：从真实源码建立 `CAP-*` 能力基线，将新增自定义需求对账为新增、修改、替换或移除，阻止无依据重新脚手架。
+- 其余32个原子Skill全部关闭隐式调用但保留手动可见；验证器强制该性能策略，防止版本回退。
 - 全局AGENTS模板改为短路由契约，不再预列举全部原子Skill。
-- Enterprise Skill数量由30个增至32个。
+- Enterprise Skill数量由30个增至33个。
 
 ## 5.2.0
 

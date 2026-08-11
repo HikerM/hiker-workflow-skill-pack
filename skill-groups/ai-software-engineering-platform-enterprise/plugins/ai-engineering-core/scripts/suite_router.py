@@ -7,6 +7,7 @@ from pathlib import Path
 
 PLUGIN_FOR = {
     "greenfield-project-planning": "ai-engineering-core",
+    "brownfield-requirement-reconciliation": "ai-engineering-core",
     "project-bootstrap": "ai-engineering-core",
     "bounded-context-memory": "ai-engineering-core",
     "interruptible-task-control": "ai-engineering-core",
@@ -55,6 +56,11 @@ def route(root: Path, request: str) -> dict:
     explicit_greenfield = any(x in text for x in ("从0", "从零", "空项目", "新项目", "greenfield", "从头开发", "初始化一个项目"))
     create_intent = any(x in text for x in ("开发一个", "创建一个", "新建一个", "搭建一个", "做一个系统", "做一套"))
     greenfield = (explicit_greenfield or create_intent) and not existing
+    brownfield_intent = existing and any(x in text for x in (
+        "已有一部分", "部分源码", "已有源码", "现有源码", "半成品", "遗留系统",
+        "二次开发", "接着开发", "继续开发", "基于现有", "接手项目", "存量项目",
+        "在现有工程", "增量需求",
+    ))
     bs = any(x in text for x in ("b/s", "bs架构", "web", "网页", "前端", "浏览器", "后台", "saas", "网站"))
     unity = "unity" in text
     cs = unity or any(x in text for x in ("c/s", "cs架构", "桌面", "客户端", "wpf", "winui", "qt", "electron", "tauri", "flutter", "android", "ios", "react native", "嵌入式hmi"))
@@ -75,6 +81,10 @@ def route(root: Path, request: str) -> dict:
     if greenfield:
         add("greenfield-project-planning", "空项目需要先融合自定义需求并锁定关键技术决策")
         mode, stage = "greenfield", "planning"
+    elif brownfield_intent:
+        mode, stage = "brownfield", "planning"
+        add("project-bootstrap", "先从现有工程证据识别真实技术、版本和项目边界")
+        add("brownfield-requirement-reconciliation", "建立现有能力基线，并把自定义需求对账为新增、修改、替换或移除")
     else:
         mode = "existing" if existing else "unknown"
         stage = "release" if release else "testing" if test else "review" if review else "design" if design else "development"

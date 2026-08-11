@@ -1,0 +1,6 @@
+interface:
+  display_name: "服务端技术路由"
+  short_description: "识别真实服务端技术与版本并按阶段分流"
+  default_prompt: "识别当前服务端技术和版本，只启用当前阶段需要的能力。"
+policy:
+  allow_implicit_invocation: false

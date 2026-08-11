@@ -26,9 +26,10 @@ py -3 .\install_personal.py
 4. 不覆盖其他 Marketplace 条目；
 5. 默认安全合并并备份 `~/.codex/AGENTS.md` 中的自动应用与插件回执规则；
 6. 默认直接写入 ChatGPT/Codex 桌面端的五个 `[plugins] enabled = true` 配置，不依赖 CLI；只有显式传入 `--codex-cli` 时才尝试兼容旧版命令；
-7. 输出结构化安装、缓存、启用和后续操作结果。
+7. 对源目录、安装目录、版本缓存、启用配置和全局规则做逐插件哈希核验，并写入 `~/.codex/plugin-install-state.json`；
+8. 输出结构化安装、缓存、启用、核验和后续操作结果。
 
-安装输出中的 `plugin_activation.status=activated` 且 `method=desktop-config` 表示已写入桌面端启用状态；旧版显式兼容时也可能显示 `method=cli`。完成后先在桌面应用中新建任务；若插件列表或能力注册仍显示旧缓存，再重启桌面端。
+安装输出中的 `plugin_activation.status=activated`、`method=desktop-config` 且 `verification.ok=true` 表示桌面端启用状态与三层文件已一致；旧版显式兼容时也可能显示 `method=cli`。完成后新建任务以创建新的能力快照；只有新任务仍显示旧版本时才需要重启桌面端。
 
 可选参数：
 
@@ -85,7 +86,7 @@ codex plugin marketplace add /absolute/path/to/ai-software-engineering-platform-
 
 ## 全局自动应用与应用回执
 
-个人安装器默认把 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 中带标记的区块合并到 `C:\Users\<用户名>\.codex\AGENTS.md`。之后软件工程任务只自动进入第二组轻量路由，并在开始和结束时用中文名称展示实际应用项、触发原因、项目和执行模式；另外两组只允许手动选择。安装器只替换自己的标记区块，禁止覆盖用户已有全局规则。
+个人安装器默认把 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 中带标记的区块合并到 `C:\Users\<用户名>\.codex\AGENTS.md`。之后软件工程任务只自动进入“智能工程轻量路由”，正常回执仅显示实际应用的中文插件名称和中文 Skill 名称；其他入口只有手动点名才启用。安装器只替换自己的标记区块，禁止覆盖用户已有全局规则。
 
 自动选择不意味着自动获得外部写权限；push、merge、部署、发布和生产数据写入仍按用户授权与门禁执行。
 

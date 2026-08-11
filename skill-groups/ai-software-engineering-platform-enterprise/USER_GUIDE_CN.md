@@ -95,6 +95,8 @@ REQUIREMENT_DELTA.md
 
 不要让两个写入 Agent 在同一个物理工作树同时编辑。
 
+项目默认最多同时存在两个活动写任务、两个处于审核或测试的待收敛任务。长期项目恢复或任务列表变多时运行任务对账，先发现丢失分支、孤儿 Worktree、陈旧文件锁和合并债务，再决定是否继续开新任务。
+
 修改Unity Scene/Prefab/ProjectSettings/meta、NodeTS核心Service、migration或API Contract前使用 `@多Agent文件锁`；合并前释放。
 
 ## 五、设计就绪与质量审核
@@ -133,4 +135,4 @@ REQUIREMENT_DELTA.md
 
 ## 七、全局自动应用与可见回执
 
-个人安装器默认把 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 安全合并到 `~/.codex/AGENTS.md`，软件工程任务只自动进入第二组轻量路由并最多加载两个原子能力。每次任务开头和结尾会用中文名称显示实际使用的插件、能力、触发原因、项目和执行模式；未使用的插件不会被冒充为“已应用”。安装完成后检查 `plugin_activation.status=activated` 与 `method=desktop-config`，然后在桌面应用中新建任务；若仍显示旧注册信息，再重启桌面端。
+个人安装器默认把 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 安全合并到 `~/.codex/AGENTS.md`，软件工程任务只自动进入“智能工程轻量路由”并最多加载两个原子能力。正常回执只有一行中文插件和中文 Skill 名称，未使用项不会出现。安装完成后检查 `plugin_activation.status=activated`、`method=desktop-config` 与 `verification.ok=true`，然后在桌面应用中新建任务；若新任务仍显示旧注册信息，再重启桌面端。

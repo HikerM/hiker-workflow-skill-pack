@@ -65,15 +65,16 @@
 .\UNINSTALL.ps1 -TargetRoot C:\path\to\project -Apply -RestoreBackup 20260624-210000
 ```
 
-## 第二组：AI Software Engineering Platform Enterprise 5.2
+## 第二组：AI Software Engineering Platform Enterprise 5.5
 
 ### 推荐范围
 
-这是 ChatGPT/Codex 桌面应用的个人插件套件，包含5个插件和30个Skill。个人安装器默认完成三件事：
+这是 ChatGPT/Codex 桌面应用的个人插件套件，包含5个插件和38个Skill。个人安装器默认完成四件事：
 
 1. 复制插件并注册个人 Marketplace；
 2. 安全合并全局自动应用与插件回执规则；
-3. 从该 Marketplace 安装并启用 5 个插件。
+3. 从该 Marketplace 安装并启用 5 个插件；
+4. 校验源码、安装目录、版本缓存、启用配置和全局规则一致性。
 
 ### 第一步：注册个人 Marketplace
 
@@ -89,9 +90,9 @@ py -3 -B .\install_personal.py
 - 保留其他 Marketplace 条目；
 - 更新同名插件时创建备份；
 - 默认安全合并并备份 `~/.codex/AGENTS.md`；
-- 自动发现Codex CLI并安装启用五个插件。
+- 直接写入桌面端启用配置并生成安装状态快照；CLI只作显式旧版兼容。
 
-安装输出中的 `plugin_activation.status` 为 `activated` 才表示自动启用完成；为 `manual-required` 时执行输出中的 `manual_commands`。可用 `--no-merge-global-agents` 退出全局规则，或用 `--no-activate-plugins` 只注册Marketplace。
+安装输出中的 `plugin_activation.status=activated` 且 `verification.ok=true` 才表示桌面端安装完成。可用 `--no-merge-global-agents` 退出全局规则，或用 `--no-activate-plugins` 只注册Marketplace。
 
 ### 第二步：确认5个插件已启用
 
@@ -183,7 +184,7 @@ py -3 -B .\scripts\install_skill.py --scope user --dry-run
 该命令会验证：
 
 - 第一组的包文件、9 个 Skill 和安全默认值；
-- 第二组的5个插件、30个Skill、清单和目录结构；
+- 第二组的5个插件、38个Skill、清单和目录结构；
 - 第三组的 Skill 元数据、脚本、参考资料、模板和包完整性。
 
 ## 生效时机

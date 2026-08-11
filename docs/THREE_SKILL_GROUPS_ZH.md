@@ -109,7 +109,7 @@ quote → create → worker/provider → resource_transfer → result normalizat
 
 ---
 
-## 三、第二组：AI Software Engineering Platform Enterprise 5.2
+## 三、第二组：AI Software Engineering Platform Enterprise 5.5
 
 ### 3.1 设计目标
 
@@ -124,23 +124,31 @@ quote → create → worker/provider → resource_transfer → result normalizat
 
 核心原则是“核心插件只探测一次，其他插件消费统一 `.ai/` 上下文”。这样 Web、Unity、质量和工作区模块不会重复猜测技术栈。
 
-### 3.2 五个插件和 30 个 Skill
+### 3.2 五个插件和 38 个 Skill
 
-#### 插件一：`ai-engineering-core`（5 个 Skill）
+#### 插件一：`ai-engineering-core`（8 个 Skill）
 
 - `project-bootstrap`：首次接管仓库时识别语言、框架、精确版本、包管理器、Unity 版本和子项目，并建立 `.ai/` 状态。
 - `official-standards-resolver`：根据真实版本查阅对应官方文档，生成项目专属规范；禁止用无版本依据的通用模板冒充官方标准。
 - `interruptible-task-control`：管理长期任务的启动、暂停、继续、调整和检查点；用户插入指令时保留已经完成的工作。
 - `context-recovery`：从 `.ai/` 状态和最新检查点恢复目标、决策、分支和下一步，不把旧聊天摘要当作唯一事实来源。
 - `bounded-context-memory`：把关键需求、决定、任务、证据和Git事实持久化，只向会话注入固定大小工作集；近期与里程碑checkpoint分别限额，旧冗余副本收敛到有界索引和哈希链，避免长期使用越来越重。
+- `ai-engineering-router`：唯一轻量自动入口，只检查有限工程标记，并按项目模式、架构和阶段选择最多两个原子 Skill。
+- `greenfield-project-planning`：从零开发先融合带稳定 ID 的需求、冲突、未知项、验收条件和技术决策 Checkpoint。
+- `brownfield-requirement-reconciliation`：为部分源码建立 `CAP-*` 能力基线，并把 `REQ-*` 对账为新增、修改、替换或移除。
 
 `ai-engineering-core` 提供保存和恢复工程状态的脚本。当前 Codex 插件 manifest 不注册已不受支持的 `hooks` 字段，相关脚本由 Skill 或外部编排显式调用。
 
-#### 插件二：`ai-engineering-web`（3 个 Skill）
+#### 插件二：`ai-engineering-web`（8 个 Skill）
 
 - `web-ui-design`：从需求、工作流、品牌语境、路由和技术栈动态识别页面；先定义项目专属设计系统、语义色彩、间距尺度、组件复用、视觉焦点、疏密节奏和签名元素，再补齐复杂页面的数据、命令、状态、降级、并发、发布和验收。明确禁止普通后台模板、Bootstrap 式默认视觉、重复卡片汤和单调等权布局。
 - `web-component-implementation`：只实现独立复审通过的设计；复用语义 Token 与现有组件，保留视觉层级、节奏和服务任务的微交互，缺少设计系统契约时阻断编码。
 - `web-quality-review`：只读审核设计系统、组件复用、依赖边界、TypeScript、响应式、视觉状态、反模板质量和视觉丰富度，不通过“边改边审”制造假通过。
+- `backend-technology-router`：从项目清单识别 Node/TypeScript、Python、.NET、JVM、Go、Rust、PHP、Ruby 的服务端框架、运行时、包管理器和版本证据。
+- `api-event-contract-design`：设计版本化 API、事件、错误模型、幂等和消费者兼容契约。
+- `backend-component-implementation`：在现有服务端技术与版本中实现有界功能，避免破坏公共行为。
+- `database-migration-governance`：治理迁移顺序、兼容窗口、回填、回滚和多实例发布。
+- `backend-quality-review`：独立审核契约、迁移、事务、并发、安全、性能和真实回归证据。
 
 #### 插件三：`ai-engineering-unity`（显示为“03 C/S客户端工程”，7 个 Skill）
 
@@ -164,7 +172,7 @@ quote → create → worker/provider → resource_transfer → result normalizat
 - `feature-acceptance-closure`：检查需求、代码、审核、测试、截图/日志、文档和状态闭环。
 - `change-ownership-merge`：检查分支流向、Conventional Commit、所有权、冲突、文件锁和合并门禁。
 - `multi-project-portfolio-manager`：隔离多个Git仓库的项目身份、状态、任务与分支。
-- `plugin-application-receipt`：显示本次实际应用的插件、Skill、触发原因和当前项目。
+- `plugin-application-receipt`：只用一行中文显示本次实际应用的插件和 Skill。
 
 该插件提供多会话和工作区状态管理脚本，但不通过 manifest 自动注册 Hook。完整架构、角色契约、状态模型与端到端示例见 [`MULTI_AGENT_ENGINEERING_SYSTEM_ZH.md`](MULTI_AGENT_ENGINEERING_SYSTEM_ZH.md)。
 
@@ -213,7 +221,7 @@ context-recovery → interruptible-task-control
 
 ### 3.5 安装范围
 
-第二组必须保持插件包结构完整。安装分两步：先把 5 个插件注册到个人 Marketplace，再逐个安装并启用。只运行 `install_personal.py` 会让插件变成“可安装”，不会自动变成“已启用”。
+第二组必须保持插件包结构完整。运行 `install_personal.py` 会复制并注册 5 个插件、写入桌面端启用配置、生成版本缓存、合并全局路由规则，并核验源码、安装目录和缓存哈希一致性。
 
 ---
 
@@ -324,4 +332,4 @@ context-recovery → interruptible-task-control
 - 任务重点是“长期工程怎么持续执行”——选第二组。
 - 任务重点是“完整重建一个已授权桌面软件”——选第三组。
 - 同时需要执行和独立验收——第二组执行，第一组复核。
-- 不要把第二组30个Skill拆散安装成普通平铺Skill；第三组的五个可发现Skill可以按阶段选择，但共享参考、脚本和模板不能从主资源包剥离。
+- 不要把第二组38个Skill拆散安装成普通平铺Skill；第三组的五个可发现Skill可以按阶段选择，但共享参考、脚本和模板不能从主资源包剥离。

@@ -20,6 +20,11 @@ PLUGIN_FOR = {
     "web-ui-design": "ai-engineering-web",
     "web-component-implementation": "ai-engineering-web",
     "web-quality-review": "ai-engineering-web",
+    "backend-technology-router": "ai-engineering-web",
+    "api-event-contract-design": "ai-engineering-web",
+    "backend-component-implementation": "ai-engineering-web",
+    "database-migration-governance": "ai-engineering-web",
+    "backend-quality-review": "ai-engineering-web",
     "cs-client-router": "ai-engineering-unity",
     "cs-ui-design": "ai-engineering-unity",
     "cs-component-implementation": "ai-engineering-unity",
@@ -51,7 +56,7 @@ BACKEND_TOKENS = ("nestjs", "express", "fastapi", "django", "flask", "spring boo
 CLIENT_TOKENS = ("unity", "wpf", "winui", "winforms", "avalonia", "maui", "qt", "qml", "electron", "tauri", "flutter", "android", "swiftui", "uikit", "appkit", "react native", "javafx", "swing", "lvgl")
 PLUGIN_DISPLAY = {
     "ai-engineering-core": "01 智能工程核心",
-    "ai-engineering-web": "02 浏览器端界面与前端工程",
+    "ai-engineering-web": "02 浏览器端与服务端工程",
     "ai-engineering-unity": "03 客户端工程",
     "ai-engineering-workspace": "04 工作区与多会话协作",
     "ai-engineering-quality": "05 质量、风险与发布",
@@ -129,6 +134,9 @@ def skill_display(skill: str) -> str:
 
 def route(root: Path, request: str) -> dict:
     root = root.resolve(); text = request.lower(); signals = project_signals(root); existing = signals["existing"]
+    plugin_engineering = any(x in text for x in ("插件", "skill", "marketplace", "codex扩展", "chatgpt桌面")) and any(
+        x in text for x in ("增强", "升级", "更新", "开发", "修改", "修复", "审核", "验证", "安装", "重新安装", "推送", "发布")
+    )
     explicit_greenfield = any(x in text for x in ("从0", "从零", "空项目", "空目录", "新项目", "greenfield", "从头开发", "初始化一个项目"))
     create_intent = any(x in text for x in ("开发一个", "创建一个", "新建一个", "搭建一个", "做一个系统", "做一套"))
     greenfield = (explicit_greenfield or create_intent) and not existing
@@ -140,7 +148,7 @@ def route(root: Path, request: str) -> dict:
     brownfield_intent = brownfield_words
     explicit_bs = any(x in text for x in ("b/s", "bs架构", "web", "网页", "前端", "浏览器", "后台页面", "saas", "网站", "官网", "响应式", "运营工作台", "vue", "react", "angular", "svelte"))
     explicit_unity = any(x in text for x in ("unity", "ugui", "prefab", "missing script", "guid"))
-    explicit_cs = explicit_unity or any(x in text for x in ("c/s", "cs架构", "桌面", "客户端", "wpf", "winui", "winforms", "avalonia", "maui", "qt", "qml", "electron", "tauri", "flutter", "android", "ios", "macos", "swiftui", "react native", "javafx", "swing", "lvgl", "嵌入式hmi"))
+    explicit_cs = not plugin_engineering and (explicit_unity or any(x in text for x in ("c/s", "cs架构", "桌面", "客户端", "wpf", "winui", "winforms", "avalonia", "maui", "qt", "qml", "electron", "tauri", "flutter", "android", "ios", "macos", "swiftui", "react native", "javafx", "swing", "lvgl", "嵌入式hmi")))
     explicit_backend = any(x in text for x in ("后端", "服务端", "服务器", "nodets", "node.ts", "nestjs", "express", "fastapi", "django", "spring", "asp.net", "laravel", "数据库", "migration", "service.ts", "api接口", "接口契约"))
     explicit_architecture = explicit_bs or explicit_cs or explicit_backend
     bs = explicit_bs or (not explicit_architecture and signals["bs"])
@@ -154,7 +162,7 @@ def route(root: Path, request: str) -> dict:
     if implementation and any(x in text for x in ("按已审核", "按已通过")): review = False
     test = any(x in text for x in ("测试", "回归", "验证"))
     release = any(x in text for x in ("发布前", "发布审核", "审核发布", "发布就绪", "准备发布", "能否发布", "上线", "release"))
-    merge = any(x in text for x in ("合并", "merge", "冲突", "pull request", " pr"))
+    merge = any(x in text for x in ("合并", "merge", "冲突", "pull request", " pr", "推送", "push"))
     recovery = any(x in text for x in ("新会话恢复", "恢复上一个任务", "压缩后核对", "锁定决策和下一步"))
     long_context = any(x in text for x in ("多会话", "长会话", "上下文压缩", "不会丢", "越来越重", "压缩前", "checkpoint数量", "恢复回执"))
     pause = any(x in text for x in ("可中断", "暂停", "继续执行", "恢复执行", "调整方向", "插入需求"))
@@ -177,13 +185,21 @@ def route(root: Path, request: str) -> dict:
     visual_review = review and "编码前" not in text and any(x in text for x in ("视觉回归", "硬编码样式", "bootstrap风格", "指标卡模板", "所有区域都做成卡片", "单调等权", "微交互"))
     unity_review = review and any(x in text for x in ("missing script", "guid", "arm64", "prefab", "scene", "packages"))
     cs_review = review and any(x in text for x in ("ipc", "生命周期", "api兼容", "打包证据", "swiftui客户端", "electron客户端"))
+    backend_contract = backend and any(x in text for x in ("api契约", "接口契约", "事件契约", "openapi", "protobuf", "graphql", "错误模型", "幂等"))
+    database_change = backend and any(x in text for x in ("数据库迁移", "migration", "schema变更", "表结构", "回滚脚本"))
     selected: list[tuple[str, str]] = []
 
     def add(skill: str, reason: str) -> None:
         if len(selected) < 2 and skill not in {x[0] for x in selected}:
             selected.append((skill, reason))
 
-    if greenfield:
+    if plugin_engineering:
+        mode = "existing" if (root / ".git").exists() else "unknown"
+        stage = "review" if review and not implementation else "development"
+        add("full-change-risk-review", "插件增强需要核对完整源码、清单、测试与安装契约")
+        if merge:
+            add("change-ownership-merge", "推送前需要核对分支、提交范围与质量证据")
+    elif greenfield:
         add("greenfield-project-planning", "空项目需要先融合自定义需求并锁定关键技术决策")
         mode, stage = "greenfield", "planning"
     elif brownfield_intent:
@@ -240,6 +256,7 @@ def route(root: Path, request: str) -> dict:
             if unity_review or unity: add("unity-quality-review", "当前请求是游戏引擎专项只读质量审核")
             elif cs_review or cs: add("cs-quality-review", "当前请求是客户端专项只读质量审核")
             elif bs and not backend: add("web-quality-review", "当前请求是浏览器端只读质量审核")
+            elif backend: add("backend-quality-review", "当前请求是服务端、契约与数据变更的独立审核")
             elif not unsafe_shortcut: add("full-change-risk-review", "当前请求是只读质量审核")
         elif cs and not unsafe_shortcut:
             add("cs-client-router", "先识别C/S客户端语言、框架、SDK和版本证据")
@@ -247,8 +264,10 @@ def route(root: Path, request: str) -> dict:
         elif bs and not unsafe_shortcut:
             add("web-ui-design" if design else "web-component-implementation", "按现有Web技术和设计系统处理当前阶段")
         elif backend:
-            if not signals["context_ready"]: add("project-bootstrap", "后端任务先建立真实语言、框架和版本证据")
-            add("workspace-task-router", "后端实现进入独立服务、数据与契约通道")
+            if not signals["context_ready"]: add("backend-technology-router", "后端任务先识别真实语言、框架、运行时和版本证据")
+            if database_change: add("database-migration-governance", "数据库变化需要迁移、兼容和回滚治理")
+            elif backend_contract: add("api-event-contract-design", "公共API或事件需要版本化契约和消费者兼容设计")
+            else: add("backend-component-implementation", "在现有服务端技术栈内实现并验证当前功能")
         elif multi:
             add("workspace-task-router", "任务跨模块或需要工作区编排")
     if recovery:
@@ -263,7 +282,7 @@ def route(root: Path, request: str) -> dict:
         add("plugin-application-receipt", "用户只要求展示本轮实际应用能力")
 
     kinds = sum(bool(x) for x in (bs, cs, backend))
-    architecture = "hybrid" if kinds > 1 else "cs" if cs else "bs" if bs else "backend" if backend else "unknown"
+    architecture = "tooling" if plugin_engineering else "hybrid" if kinds > 1 else "cs" if cs else "bs" if bs else "backend" if backend else "unknown"
     return {
         "schema_version": "1.0.0",
         "project_mode": mode,

@@ -220,6 +220,6 @@ Created → Planning → Development → Review → Testing → Merged → Relea
 
 ## 12. 全局自动应用与可见回执
 
-运行个人安装器后，它会默认安装启用五个插件，并把 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 的标记区块安全合并到 `~/.codex/AGENTS.md`。它只允许第二组自动路由，另外两组保持手动；首次实质动作前用中文名称显示插件、能力、触发原因、项目和执行模式，结束时显示实际使用项和证据位置。重复安装不会重复追加，原文件会备份，可用 `--no-merge-global-agents` 退出。
+运行个人安装器后，它会默认安装启用五个插件，并把 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 的标记区块安全合并到 `~/.codex/AGENTS.md`。它只允许“智能工程轻量路由”自动触发，其他入口保持手动；首次实质动作前只用一行中文显示实际使用的插件和 Skill，结束时不重复显示未变化的回执。重复安装不会重复追加，原文件会备份，可用 `--no-merge-global-agents` 退出。
 
 这只影响选择与透明度，不赋予额外外部写权限。push、merge、部署、生产数据写入仍需用户请求或既有明确授权。

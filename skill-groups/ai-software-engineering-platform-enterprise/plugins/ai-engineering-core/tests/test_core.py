@@ -52,7 +52,26 @@ class CoreTests(unittest.TestCase):
             root=Path(td);nested=root/"apps/api";nested.mkdir(parents=True);(nested/"package.json").write_text(json.dumps({"dependencies":{"express":"5.0.0"}}),encoding="utf-8")
             existing=route(root,"开发一个自定义服务");self.assertNotEqual("greenfield",existing["project_mode"])
             backend=route(root,"修改现有NodeTS后端核心服务");names=[x["skill"] for x in backend["selected"]]
-            self.assertIn("项目智能初始化",names);self.assertIn("任务分流与会话规划",names)
+            self.assertIn("服务端技术路由",names);self.assertIn("服务端功能实现",names)
+
+    def test_plugin_enhancement_is_not_misrouted_to_cs_desktop(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); (root / ".git").mkdir()
+            data = route(root, "增强 然后审核 推送仓库 本地chatgpt桌面端重新安装生效")
+            names = [item["skill"] for item in data["selected"]]
+            self.assertEqual("tooling", data["architecture"])
+            self.assertIn("完整变更风险评估", names)
+            self.assertIn("代码所有权与合并控制", names)
+            self.assertNotIn("客户端质量审核", names)
+
+    def test_backend_routes_to_atomic_backend_skills(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "package.json").write_text(json.dumps({"dependencies": {"fastify": "5.2.0"}}), encoding="utf-8")
+            data = route(root, "修改已有NodeTS服务端功能并保持接口兼容")
+            names = [item["skill"] for item in data["selected"]]
+            self.assertEqual(["服务端技术路由", "服务端功能实现"], names)
+            self.assertTrue(all(item["plugin"] == "02 浏览器端与服务端工程" for item in data["selected"]))
 
     def test_router_receipt_uses_chinese_names_without_consuming_functional_slot(self):
         with tempfile.TemporaryDirectory() as td:

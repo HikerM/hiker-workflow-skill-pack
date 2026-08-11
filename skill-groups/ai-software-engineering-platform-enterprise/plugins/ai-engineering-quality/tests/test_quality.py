@@ -50,6 +50,18 @@ class QualityTests(unittest.TestCase):
     def test_graph_incremental_health(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);repo(root);(root/"a.py").write_text("import b\n");(root/"b.py").write_text("x=1\n");db=root/"graph.db";meta=index(root,db,[]);self.assertGreaterEqual(meta["node_count"],2)
+    def test_graph_resolves_unity_guid_and_dotnet_project_reference(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);repo(root)
+            assets=root/"Assets";assets.mkdir();guid="0123456789abcdef0123456789abcdef"
+            (assets/"Shared.mat").write_text("Material\n",encoding="utf-8");(assets/"Shared.mat.meta").write_text(f"fileFormatVersion: 2\nguid: {guid}\n",encoding="utf-8")
+            (assets/"Panel.prefab").write_text(f"m_Material: {{fileID: 2100000, guid: {guid}, type: 2}}\n",encoding="utf-8")
+            app=root/"App";lib=root/"Lib";app.mkdir();lib.mkdir();(lib/"Lib.csproj").write_text("<Project />",encoding="utf-8");(app/"App.csproj").write_text('<Project><ItemGroup><ProjectReference Include="..\\Lib\\Lib.csproj" /></ItemGroup></Project>',encoding="utf-8")
+            db=root/"graph.db";index(root,db,[]);c=connect(db)
+            try:edges={(src,dst,rel) for src,dst,rel in c.execute("SELECT src,dst,relation FROM edges")}
+            finally:c.close()
+            self.assertIn(("Assets/Panel.prefab","Assets/Shared.mat","references_asset"),edges)
+            self.assertIn(("App/App.csproj","Lib/Lib.csproj","depends_on_project"),edges)
     def test_graph_and_test_plan_ignore_dependency_caches(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);repo(root);(root/"node_modules/pkg").mkdir(parents=True);(root/"node_modules/pkg/package.json").write_text(json.dumps({"scripts":{"test":"bad"}}));(root/"node_modules/pkg/x.ts").write_text("export const x=1")

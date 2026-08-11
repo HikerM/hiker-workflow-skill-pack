@@ -1,7 +1,7 @@
 {
   "name": "ai-engineering-web",
-  "version": "5.4.0+codex.20260811173000",
-  "description": "非模板化B/S设计系统、视觉丰富度、组件实现和前端质量审核",
+  "version": "5.5.0+codex.20260811193000",
+  "description": "非模板化浏览器端设计系统、服务端契约与实现、数据库迁移和全栈质量审核",
   "author": {
     "name": "AI Engineering Toolkit"
   },
@@ -14,9 +14,9 @@
   ],
   "skills": "./skills/",
   "interface": {
-    "displayName": "02 浏览器端界面与前端工程",
-    "shortDescription": "非模板化Web设计系统、视觉增强、实现和质量审核",
-    "longDescription": "从真实需求、品牌语境、工作流和技术栈建立项目专属设计系统、色彩、间距、组件复用、视觉焦点与节奏；阻断普通后台模板、Bootstrap式默认视觉、重复卡片汤和单调布局，再按现有框架实现和审核。",
+    "displayName": "02 浏览器端与服务端工程",
+    "shortDescription": "浏览器端视觉系统与多技术栈服务端工程",
+    "longDescription": "浏览器端从真实需求、品牌语境和工作流建立非模板化设计系统并按现有框架实现；服务端从真实清单识别技术与版本，治理API、事件、数据库迁移、功能实现和独立质量审核，可供B/S、C/S及混合项目共享。",
     "developerName": "AI Engineering Toolkit",
     "category": "Productivity",
     "capabilities": [
@@ -26,7 +26,8 @@
     "defaultPrompt": [
       "从当前需求和工作流动态识别页面，完成编码前UI设计收敛。",
       "按已通过设计实现当前Web页面并验证。",
-      "审核当前前端页面的组件复用、状态和响应式。"
+      "审核当前前端页面的组件复用、状态和响应式。",
+      "识别真实服务端技术与版本，按契约和迁移约束实现并审核。"
     ],
     "brandColor": "#0A7C86",
     "composerIcon": "./assets/icon.png",

@@ -240,6 +240,11 @@ def init_project(root: Path, args: argparse.Namespace) -> dict[str, Any]:
         "api_version": args.api_version,
         "pending_issues": existing.get("pending_issues", []),
         "risks": existing.get("risks", []),
+        "parallel_budget": existing.get("parallel_budget", {
+            "max_active_write_tasks": 2,
+            "max_total_active_tasks": 5,
+            "max_merge_debt": 2,
+        }),
         "created_at": existing.get("created_at", now()),
         "updated_at": now(),
     }
@@ -328,6 +333,17 @@ def transition(root: Path, args: argparse.Namespace) -> dict[str, Any]:
             raise RuntimeError("Planning -> Development requires an allowed file or module scope")
         if not contract.get("behavior_invariants") or not contract.get("required_tests"):
             raise RuntimeError("Planning -> Development requires behavior invariants and required tests")
+        project = load_project(root)
+        budget = project.get("parallel_budget", {})
+        other_tasks = [item for item in all_tasks(root) if item.get("task_id") != task.get("task_id")]
+        active_writes = [item for item in other_tasks if item.get("state") == "Development" and item.get("control_status") == "ACTIVE"]
+        max_writes = int(budget.get("max_active_write_tasks", 2))
+        if len(active_writes) >= max_writes:
+            raise RuntimeError(f"parallel write budget exceeded: {len(active_writes)}/{max_writes} active Development tasks")
+        merge_debt = [item for item in other_tasks if item.get("state") in {"Review", "Testing"}]
+        max_debt = int(budget.get("max_merge_debt", 2))
+        if len(merge_debt) >= max_debt:
+            raise RuntimeError(f"merge debt budget exceeded: {len(merge_debt)}/{max_debt} tasks await closure")
     if target == "Review":
         if not task.get("commits"):
             raise RuntimeError("Development -> Review requires at least one commit")
@@ -458,6 +474,12 @@ def validate(root: Path) -> dict[str, Any]:
     git = git_snapshot(root)
     active = [t for t in all_tasks(root) if t.get("state") == "Development" and t.get("control_status") == "ACTIVE"]
     if active and git["branch"] in {"main", "develop", "release"}: issues.append("active development task is on a protected branch")
+    budget = (read_json(state_file(root), {}) or {}).get("parallel_budget", {})
+    if len(active) > int(budget.get("max_active_write_tasks", 2)):
+        issues.append("active Development tasks exceed the parallel write budget")
+    merge_debt = [t for t in all_tasks(root) if t.get("state") in {"Review", "Testing"}]
+    if len(merge_debt) > int(budget.get("max_merge_debt", 2)):
+        issues.append("Review/Testing tasks exceed the merge debt budget")
     return {"ok": not missing and not issues, "schema_version": SCHEMA, "missing": missing, "issues": issues, "git": git, "task_count": len(all_tasks(root))}
 
 

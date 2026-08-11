@@ -116,6 +116,36 @@
       "project_detection": "consume-core-context",
       "may_modify_source": false
     },
+    "backend-technology-router": {
+      "plugin": "ai-engineering-web",
+      "mode": "router",
+      "project_detection": "consume-core-context",
+      "may_modify_source": false
+    },
+    "api-event-contract-design": {
+      "plugin": "ai-engineering-web",
+      "mode": "planning",
+      "project_detection": "consume-core-context",
+      "may_modify_source": false
+    },
+    "backend-component-implementation": {
+      "plugin": "ai-engineering-web",
+      "mode": "implementation",
+      "project_detection": "consume-core-context",
+      "may_modify_source": true
+    },
+    "database-migration-governance": {
+      "plugin": "ai-engineering-web",
+      "mode": "workflow",
+      "project_detection": "consume-core-context",
+      "may_modify_source": true
+    },
+    "backend-quality-review": {
+      "plugin": "ai-engineering-web",
+      "mode": "review",
+      "project_detection": "consume-core-context",
+      "may_modify_source": false
+    },
     "change-ownership-merge": {
       "plugin": "ai-engineering-workspace",
       "mode": "workflow",

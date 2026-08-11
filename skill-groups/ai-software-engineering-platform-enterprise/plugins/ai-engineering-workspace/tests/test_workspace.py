@@ -16,6 +16,7 @@ from git_workspace import cmd_create, cmd_list, cmd_pause, cmd_remove, validate_
 from governance_state import checkpoint, control, create_task, init_project, load_task, record, save_task, set_change_contract, transition, validate
 from merge_guard import conflict_probe, evaluate as merge_evaluate, flow_ok
 from task_router import route
+from task_reconciler import reconcile
 from workspacelib import common_dir, read_json, safe_branch, state_lock
 
 
@@ -170,6 +171,35 @@ class WorkspaceTests(unittest.TestCase):
             index = read_json(root / ".ai/governance/task-index.json", {})
             self.assertEqual(200, index.get("retained_closed_count")); self.assertEqual(5, index.get("compacted_closed_count"))
             self.assertTrue(index.get("compacted_hash_chain")); self.assertEqual(205, len(list((root / ".ai/tasks").glob("*.json"))))
+
+    def test_parallel_write_budget_blocks_a_third_development_task(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.repo(root)
+            self.governance(root, "KG-001", "feature/KG-001-a")
+            self.governance(root, "KG-002", "feature/KG-002-b")
+            init_project(root, ns(project_id="PROJECT-A", architecture="hybrid", version="1.0.0", database_version="001", api_version="v1"))
+            create_task(root, ns(task_id="KG-003", goal="第三个并行写任务", owner_agent="Planning Agent", branch="feature/KG-003-c", base_branch="develop", affected_files=["src/C.ts"]))
+            transition(root, ns(task_id="KG-003", to="Planning", agent_role="Planning Agent", commit_id=None))
+            set_change_contract(root, ns(task_id="KG-003", agent_role="Planning Agent", allowed_files=["src/C.ts"], allowed_modules=None, protected_modules=None, public_contract_changes=None, behavior_invariants=["已有行为不变"], characterization_tests=[], consumer_tests=[], required_tests=["回归测试"], consumers=[], max_blast_radius=20, warn_lines=None, block_lines=None, warn_growth=None, block_growth=None))
+            with self.assertRaisesRegex(RuntimeError, "parallel write budget exceeded"):
+                transition(root, ns(task_id="KG-003", to="Development", agent_role="Developer Agent", commit_id=None))
+
+    def test_task_reconciler_detects_missing_branch_and_orphan_worktree(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "repo"; root.mkdir(); self.repo(root)
+            init_project(root, ns(project_id="PROJECT-A", architecture="hybrid", version="1.0.0", database_version="001", api_version="v1"))
+            create_task(root, ns(task_id="KG-001", goal="待规划任务", owner_agent="Planning Agent", branch="feature/KG-001-missing", base_branch="develop", affected_files=[]))
+            transition(root, ns(task_id="KG-001", to="Planning", agent_role="Planning Agent", commit_id=None))
+            orphan = Path(td) / "orphan"
+            git(root, "worktree", "add", "-b", "feature/orphan", str(orphan), "develop")
+            from workspacelib import atomic_json
+            atomic_json(common_dir(root) / "ai-engineering/file-locks.json", {"schema_version":"1.0.0", "locks":[{"task_id":"KG-999", "path":"src/Old.ts"}]})
+            report = reconcile(root)
+            types = {item["type"] for item in report["findings"]}
+            self.assertIn("TASK_BRANCH_MISSING", types)
+            self.assertIn("ORPHAN_WORKTREE", types)
+            self.assertIn("STALE_FILE_LOCK", types)
+            self.assertFalse(report["ok"])
 
 
 if __name__ == "__main__": unittest.main()

@@ -17,6 +17,8 @@ python <plugin-root>/scripts/governance_state.py --root . contract-set --task-id
 
 Development 进入 Review 前必须生成与当前 Git HEAD、工作区指纹一致的架构守卫证据；之后代码发生任何变化都必须重跑。普通局部任务只需最小变更契约，不要求维护全量模块、依赖或运行拓扑配置。
 
+进入 Development 前还必须服从项目并行预算：默认最多两个活动写任务；当 Review/Testing 待收敛任务达到上限时，禁止继续开启写任务。恢复长期项目时先运行 `task_reconciler.py --root .`，用 Task/Branch/Worktree/文件锁对账结果识别孤儿工作区、丢失分支和合并债务。
+
 ```bash
 python <plugin-root>/scripts/governance_state.py --root . control --task-id KG-001 --action insert --new-task-id KG-002 --branch feature/KG-002-audit --instruction "插入审计日志需求"
 ```

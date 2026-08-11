@@ -27,17 +27,19 @@ def main()->int:
         plan=run([sys.executable,str(QUALITY/"test_plan.py"),"--root",str(root)],root);pd=json.loads(plan.stdout);cmds={x["command"] for x in pd["mandatory"]+pd["recommended"]};checks.append(("real-commands",{"pnpm lint","pnpm test","pnpm build"}.issubset(cmds)))
         # Personal marketplace installation is verified in an isolated HOME.
         fake_home=Path(td)/"home";fake_home.mkdir();(fake_home/".codex").mkdir();(fake_home/".codex/AGENTS.md").write_text("# Existing rules\n\n- keep me\n",encoding="utf-8");env=dict(os.environ);env["HOME"]=str(fake_home);env["USERPROFILE"]=str(fake_home)
-        inst=subprocess.run([sys.executable,str(ROOT/"install_personal.py"),"--no-activate-plugins"],cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        inst=subprocess.run([sys.executable,str(ROOT/"install_personal.py")],cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        install_result=json.loads(inst.stdout) if inst.returncode==0 else {}
         market=json.loads((fake_home/".agents/plugins/marketplace.json").read_text(encoding="utf-8")) if inst.returncode==0 else {}
-        cache_manifests=list((fake_home/".codex/plugins/cache/personal-ai-engineering-marketplace").glob("*/5.4.0+codex.*/.codex-plugin/plugin.json"))
-        checks.append(("personal-install",inst.returncode==0 and all(str(x.get("source",{}).get("path","")).startswith("./.codex/plugins/") for x in market.get("plugins",[])) and len(cache_manifests)==5))
+        cache_manifests=list((fake_home/".codex/plugins/cache/personal-ai-engineering-marketplace").glob("*/5.5.0+codex.*/.codex-plugin/plugin.json"))
+        checks.append(("personal-install",inst.returncode==0 and install_result.get("verification",{}).get("ok") is True and all(str(x.get("source",{}).get("path","")).startswith("./.codex/plugins/") for x in market.get("plugins",[])) and len(cache_manifests)==5))
         enabled=enable_plugins_in_config(fake_home,"personal-ai-engineering-marketplace","smoke");config_path=fake_home/".codex/config.toml";config=config_path.read_text(encoding="utf-8")
         enabled_again=enable_plugins_in_config(fake_home,"personal-ai-engineering-marketplace","smoke-2")
         expected_ids={f"{name}@personal-ai-engineering-marketplace" for name in ["ai-engineering-core","ai-engineering-web","ai-engineering-unity","ai-engineering-workspace","ai-engineering-quality"]}
         valid_sections=all(len(re.findall(rf'(?m)^\[plugins\."{re.escape(name)}"\]\r?\nenabled = true$',config))==1 for name in expected_ids)
-        checks.append(("config-activation-fallback",enabled["status"]=="updated" and enabled_again["status"]=="unchanged" and valid_sections))
-        agents=(fake_home/".codex/AGENTS.md").read_text(encoding="utf-8") if inst.returncode==0 else "";checks.append(("global-auto-application","keep me" in agents and agents.count("<!-- ai-engineering-global-governance start -->")==1 and "插件应用回执" in agents and "插件中文名称" in agents and "Skill 中文名称" in agents and "不得显示英文内部名称" in agents and "智能工程轻量路由" in agents and "第一组工作流技能" in agents and "ai-engineering-router" not in agents and "bounded-context-memory" not in agents))
-        inst2=subprocess.run([sys.executable,str(ROOT/"install_personal.py"),"--no-activate-plugins"],cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        checks.append(("config-activation-fallback",enabled["status"]=="unchanged" and enabled_again["status"]=="unchanged" and valid_sections))
+        agents=(fake_home/".codex/AGENTS.md").read_text(encoding="utf-8") if inst.returncode==0 else "";forbidden_group_terms=("第一组","第二组","第三组","组别")
+        checks.append(("global-auto-application","keep me" in agents and agents.count("<!-- ai-engineering-global-governance start -->")==1 and "已应用：插件中文名称｜实际加载的 Skill 中文名称" in agents and "智能工程轻量路由" in agents and not any(term in agents for term in forbidden_group_terms) and "ai-engineering-router" not in agents and "bounded-context-memory" not in agents))
+        inst2=subprocess.run([sys.executable,str(ROOT/"install_personal.py")],cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         agents2=(fake_home/".codex/AGENTS.md").read_text(encoding="utf-8") if inst2.returncode==0 else "";checks.append(("global-rules-idempotent",inst2.returncode==0 and agents2.count("<!-- ai-engineering-global-governance start -->")==1))
         uninstall=subprocess.run([sys.executable,str(ROOT/"uninstall_personal.py"),"--yes"],cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         after=(fake_home/".codex/AGENTS.md").read_text(encoding="utf-8") if uninstall.returncode==0 else "";checks.append(("global-rules-safe-uninstall",uninstall.returncode==0 and "keep me" in after and "ai-engineering-global-governance" not in after))

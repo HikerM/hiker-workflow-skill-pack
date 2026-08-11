@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -15,6 +16,7 @@ PLUGIN_NAMES = ["ai-engineering-core", "ai-engineering-web", "ai-engineering-uni
 GLOBAL_TEMPLATE = ROOT / "templates" / "GLOBAL_AGENTS_AI_ENGINEERING.md"
 BLOCK_START = "<!-- ai-engineering-global-governance start -->"
 BLOCK_END = "<!-- ai-engineering-global-governance end -->"
+COPY_IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", ".pytest_cache", ".DS_Store")
 
 
 def atomic_json(path: Path, data: dict) -> None:
@@ -44,6 +46,13 @@ def load(path: Path) -> dict:
     except Exception: return {}
 
 
+def tree_digest(path: Path) -> str:
+    digest = hashlib.sha256()
+    for file in sorted(item for item in path.rglob("*") if item.is_file() and "__pycache__" not in item.parts and item.suffix != ".pyc"):
+        digest.update(file.relative_to(path).as_posix().encode("utf-8")); digest.update(b"\0"); digest.update(file.read_bytes())
+    return digest.hexdigest()
+
+
 def plugin_display(name: str) -> str:
     manifest = load(ROOT / "plugins" / name / ".codex-plugin" / "plugin.json")
     return str(manifest.get("interface", {}).get("displayName") or "未命名工程插件")
@@ -61,7 +70,7 @@ def seed_plugin_cache(dest: Path, marketplace_name: str, installed: list[dict], 
         if target.exists():
             cached_backup = backup / "cache" / name / version; cached_backup.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(target, cached_backup, dirs_exist_ok=True); shutil.rmtree(target)
-        shutil.copytree(src, tmp); os.replace(tmp, target)
+        shutil.copytree(src, tmp, ignore=COPY_IGNORE); os.replace(tmp, target)
         seeded.append({"plugin": plugin_display(name), "version": version, "path": str(target)})
     return seeded
 
@@ -166,6 +175,26 @@ def activate_plugins(home: Path, marketplace_name: str, explicit_cli: str | None
     return {"status": "activated" if not failed else "partial-failure", "method": "cli", "cli": str(cli), "results": results, "failed": failed, "manual_commands": commands if failed else []}
 
 
+def verify_installation(home: Path, marketplace_name: str) -> dict:
+    dest = home / ".codex" / "plugins"; mismatches = []; plugins = []
+    config_text = (home / ".codex" / "config.toml").read_text(encoding="utf-8", errors="ignore") if (home / ".codex" / "config.toml").exists() else ""
+    for name in PLUGIN_NAMES:
+        source = ROOT / "plugins" / name; installed = dest / name
+        manifest = load(source / ".codex-plugin" / "plugin.json"); version = str(manifest.get("version") or "")
+        cached = dest / "cache" / marketplace_name / name / version
+        source_hash = tree_digest(source) if source.is_dir() else ""
+        installed_hash = tree_digest(installed) if installed.is_dir() else ""
+        cache_hash = tree_digest(cached) if cached.is_dir() else ""
+        enabled = bool(re.search(rf'(?ms)^\[plugins\."{re.escape(name + "@" + marketplace_name)}"\]\s*$.*?^enabled\s*=\s*true\s*$', config_text))
+        item = {"plugin": plugin_display(name), "version": version, "source_hash": source_hash, "installed_hash": installed_hash, "cache_hash": cache_hash, "enabled": enabled, "consistent": bool(source_hash and source_hash == installed_hash == cache_hash and enabled)}
+        if not item["consistent"]: mismatches.append(item["plugin"])
+        plugins.append(item)
+    agents = home / ".codex" / "AGENTS.md"
+    agents_ok = agents.is_file() and managed_block() in agents.read_text(encoding="utf-8", errors="ignore")
+    if not agents_ok: mismatches.append("全局自动应用规则")
+    return {"ok": not mismatches, "marketplace": marketplace_name, "plugins": plugins, "global_rules_consistent": agents_ok, "mismatches": mismatches}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="安装AI软件工程插件，并默认安全合并Codex全局自动应用规则。")
     parser.add_argument("--no-merge-global-agents", action="store_true", help="只安装插件，不修改 ~/.codex/AGENTS.md")
@@ -177,7 +206,7 @@ def main() -> int:
     for name in PLUGIN_NAMES:
         src = ROOT / "plugins" / name; target = dest / name
         if target.exists(): backup.mkdir(parents=True, exist_ok=True); shutil.copytree(target, backup / name, dirs_exist_ok=True); shutil.rmtree(target)
-        tmp = dest / (name + ".installing"); shutil.rmtree(tmp, ignore_errors=True); shutil.copytree(src, tmp); os.replace(tmp, target); installed.append({"id": name, "name": plugin_display(name), "path": str(target)})
+        tmp = dest / (name + ".installing"); shutil.rmtree(tmp, ignore_errors=True); shutil.copytree(src, tmp, ignore=COPY_IGNORE); os.replace(tmp, target); installed.append({"id": name, "name": plugin_display(name), "path": str(target)})
     current = load(market); plugins = [item for item in current.get("plugins", []) if item.get("name") not in PLUGIN_NAMES]
     plugins += [{"name": item["id"], "source": {"source": "local", "path": f"./.codex/plugins/{item['id']}"}, "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}, "category": "Productivity"} for item in installed]
     merged = {"name": current.get("name", "personal-ai-engineering-marketplace"), "interface": current.get("interface", {"displayName": "个人插件"}), "plugins": plugins}
@@ -187,9 +216,12 @@ def main() -> int:
     cache = seed_plugin_cache(dest, str(merged["name"]), installed, backup)
     global_agents = {"status": "skipped", "path": str(home / ".codex" / "AGENTS.md"), "backup": None} if args.no_merge_global_agents else merge_global_agents(home, stamp)
     activation = activate_plugins(home, str(merged["name"]), args.codex_cli, args.no_activate_plugins, stamp)
-    ok = activation["status"] != "partial-failure"
+    verification = verify_installation(home, str(merged["name"])) if not args.no_activate_plugins and not args.no_merge_global_agents else {"ok": True, "skipped": True}
+    install_state = {"schema_version": "1.0.0", "installed_at": stamp, "marketplace": str(merged["name"]), "plugins": [{"plugin": item["plugin"], "version": item["version"]} for item in cache], "verification": verification, "new_task_required": True}
+    atomic_json(home / ".codex" / "plugin-install-state.json", install_state)
+    ok = activation["status"] != "partial-failure" and verification.get("ok", False)
     next_step = "新建任务即可使用；若插件列表仍显示缓存版本，再重启桌面端。" if activation["status"] == "activated" else "按manual_commands安装启用插件并新建任务；若列表未刷新，再重启桌面端。"
-    print(json.dumps({"ok": ok, "installed": installed, "cache": cache, "marketplace": str(market), "marketplace_backup": str(marketplace_backup) if marketplace_backup else None, "plugin_backup": str(backup) if backup.exists() else None, "global_agents": global_agents, "plugin_activation": activation, "next_step": next_step}, ensure_ascii=False, indent=2)); return 0 if ok else 2
+    print(json.dumps({"ok": ok, "installed": installed, "cache": cache, "marketplace": str(market), "marketplace_backup": str(marketplace_backup) if marketplace_backup else None, "plugin_backup": str(backup) if backup.exists() else None, "global_agents": global_agents, "plugin_activation": activation, "verification": verification, "install_state": str(home / ".codex" / "plugin-install-state.json"), "next_step": next_step}, ensure_ascii=False, indent=2)); return 0 if ok else 2
 
 
 if __name__ == "__main__": raise SystemExit(main())

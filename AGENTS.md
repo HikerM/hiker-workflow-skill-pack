@@ -3,7 +3,7 @@
 <!-- hiker-workflow-pack start -->
 
 - 默认中文回答；代码、命令、文件路径、API、包名和框架名保持原文。
-- 普通软件工程任务允许由第二组 `ai-engineering-router` 自动路由。第一组 `hiker-workflow-router` 和第三组 `desktop-app-reconstruction-zh` 只有用户明确点名或手动选择时才使用；不得自动触发或同时预加载三组。
+- 普通软件工程任务只允许由「01 智能工程核心」中的「智能工程轻量路由」自动分流；其他工作流入口只有用户明确点名或手动选择时才使用。不得同时预加载多个入口。
 - 修改前确认仓库根、Git 分支/状态、用户边界与现有改动；结论必须区分已运行证据、静态审计和未验证项。
 - API、数据库、队列、Provider、计费、Unity Scene/Prefab/meta 等高冲突边界按所选原子 Skill 门禁处理。
 - 未经明确授权不得 push、merge、发布、部署、修改生产数据、强制覆盖冲突或直接修改 main。

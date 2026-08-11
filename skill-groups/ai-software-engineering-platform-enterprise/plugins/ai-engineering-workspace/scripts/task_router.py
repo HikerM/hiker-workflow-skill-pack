@@ -75,7 +75,9 @@ def route(text: str, tech_stack: dict | None = None) -> dict:
         ]
         implementation += ["cs-client"]
     if bs or cs or backend:
-        lanes.append(lane("backend-service", "Developer Agent", ["approved plan", "data and API contracts", "detected backend stack and version"], ["server implementation", "backend tests", "compatibility evidence"], "separate-worktree", ["planning"]))
+        backend_lane = lane("backend-service", "Developer Agent", ["approved plan", "data and API contracts", "detected backend stack and version"], ["server implementation", "backend tests", "compatibility evidence"], "separate-worktree", ["planning"])
+        backend_lane["skill_sequence"] = ["服务端技术路由", "接口与事件契约设计或数据库迁移治理", "服务端功能实现", "服务端质量审核"]
+        lanes.append(backend_lane)
         implementation.append("backend-service")
         lanes.append(lane("contract-data", "Planning Agent", ["frontend/client needs", "backend capabilities"], ["versioned API contract", "database impact", "compatibility rules"], "serial-contract-owner", ["planning"]))
         for item in lanes:
@@ -93,7 +95,7 @@ def route(text: str, tech_stack: dict | None = None) -> dict:
     ]
     return {
         "schema_version": "2.1.0", "request": text, "architecture": architecture, "client_families": client_families or (["unspecified"] if cs else []), "lanes": lanes,
-        "policy": {"control_plane": "Master Agent", "parallel_write": "separate Git worktree plus file locks", "same_file_write": "serial", "protected_branches": ["main", "develop", "release"], "human_controls": ["pause", "adjust", "insert", "resume"], "context_isolation": "project_id plus repository root"},
+        "policy": {"control_plane": "Master Agent", "parallel_write": "default maximum two active write tasks; separate Git worktree plus file locks", "same_file_write": "serial", "protected_branches": ["main", "develop", "release"], "human_controls": ["pause", "adjust", "insert", "resume"], "context_isolation": "project_id plus repository root"},
     }
 
 

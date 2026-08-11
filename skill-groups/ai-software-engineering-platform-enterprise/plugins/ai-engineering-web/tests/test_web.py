@@ -5,6 +5,7 @@ PLUGIN=Path(__file__).resolve().parents[1]; sys.path.insert(0,str(PLUGIN/"script
 from component_registry import build
 from web_audit import audit
 from weblib import glob_match
+from backend_guard import audit as backend_audit, detect as backend_detect
 
 class WebTests(unittest.TestCase):
     def test_node_modules_is_not_scanned(self):
@@ -35,4 +36,13 @@ class WebTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td); (root/"src/theme").mkdir(parents=True); (root/"src/theme/tokens.css").write_text(":root{--space-2:8px;--color-action:#0369a1}")
             data=audit(root); self.assertEqual(["src/theme/tokens.css"],data["design_system_evidence"]["token_files"])
+    def test_backend_guard_detects_stack_contract_and_migration(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);(root/"server").mkdir();(root/"server/package.json").write_text(json.dumps({"engines":{"node":">=20"},"packageManager":"pnpm@9","dependencies":{"@nestjs/core":"11.0.0"}}))
+            (root/"server/openapi.yaml").write_text("openapi: 3.1.0\n");(root/"server/migrations").mkdir();(root/"server/migrations/001.sql").write_text("create table x(id int);\n")
+            data=backend_detect(root);self.assertEqual("NestJS",data["stacks"][0]["framework"]);self.assertIn("server/openapi.yaml",data["contracts"]);self.assertIn("server/migrations/001.sql",data["migrations"])
+            reviewed=backend_audit(root);self.assertEqual("PASS_WITH_WARNINGS",reviewed["result"]);self.assertTrue(any("回滚" in x for x in reviewed["warnings"]))
+    def test_backend_guard_does_not_guess_without_manifest(self):
+        with tempfile.TemporaryDirectory() as td:
+            data=backend_audit(Path(td));self.assertEqual("BLOCKED",data["result"]);self.assertTrue(data["blockers"])
 if __name__=="__main__": unittest.main()

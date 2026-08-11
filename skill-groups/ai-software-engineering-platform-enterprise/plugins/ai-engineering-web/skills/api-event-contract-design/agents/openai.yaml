@@ -1,0 +1,6 @@
+interface:
+  display_name: "接口与事件契约设计"
+  short_description: "设计版本化接口、事件与消费者兼容契约"
+  default_prompt: "基于现有服务端和消费者设计版本化接口或事件契约。"
+policy:
+  allow_implicit_invocation: false

@@ -18,7 +18,7 @@
 
 源码：`../.agents/skills/`
 
-## 第二组：AI 软件工程平台 Enterprise（30 个）
+## 第二组：AI 软件工程平台 Enterprise（38 个）
 
 ### `ai-engineering-core`
 
@@ -29,6 +29,9 @@
 | `interruptible-task-control` | 管理长期任务启动、暂停、继续和检查点 |
 | `context-recovery` | 从 `.ai/` 状态恢复目标、决策、分支和下一步 |
 | `bounded-context-memory` | 用固定大小工作集、分级检查点和哈希账本支持多会话恢复，避免上下文持续增重 |
+| `ai-engineering-router` | 唯一轻量自动入口，按项目模式、架构和阶段最多加载两个原子 Skill |
+| `greenfield-project-planning` | 从零项目先融合稳定需求、冲突、未知项、验收条件和技术 Checkpoint |
+| `brownfield-requirement-reconciliation` | 为部分源码建立能力基线并对账新增、修改、替换或移除需求 |
 
 ### `ai-engineering-web`
 
@@ -37,6 +40,11 @@
 | `web-ui-design` | 动态设计非模板化 Web UI，建立设计系统、间距、色彩、组件复用、视觉焦点与节奏，并补齐真实数据/API 和验收契约 |
 | `web-component-implementation` | 复用语义 Token 与组件实现有辨识度的页面，保留视觉层级和微交互 |
 | `web-quality-review` | 只读审核设计系统、视觉丰富度、反模板、组件复用、样式和响应式 |
+| `backend-technology-router` | 从工程清单识别服务端语言、框架、运行时、包管理器和版本证据 |
+| `api-event-contract-design` | 设计版本化 API、事件、错误、幂等和消费者兼容契约 |
+| `backend-component-implementation` | 在真实服务端技术栈中实现有界功能并保留公共行为 |
+| `database-migration-governance` | 治理迁移顺序、兼容窗口、数据回填、回滚和多实例发布 |
+| `backend-quality-review` | 独立审核服务端契约、迁移、并发、安全、性能和回归证据 |
 
 ### `ai-engineering-unity`
 
@@ -63,7 +71,7 @@
 | `feature-acceptance-closure` | 验证需求、代码、测试、证据、文档和状态闭环 |
 | `change-ownership-merge` | 检查流向、提交、所有权、冲突、锁和门禁 |
 | `multi-project-portfolio-manager` | 隔离多个Git仓库的项目身份与上下文 |
-| `plugin-application-receipt` | 展示本次实际应用的插件、Skill、原因和项目 |
+| `plugin-application-receipt` | 用一行中文展示本次实际应用的插件和 Skill |
 
 ### `ai-engineering-quality`
 

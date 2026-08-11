@@ -1,0 +1,6 @@
+interface:
+  display_name: "服务端质量审核"
+  short_description: "独立审核服务端、契约、迁移与运行风险"
+  default_prompt: "独立审核当前服务端变更和可验证证据。"
+policy:
+  allow_implicit_invocation: false

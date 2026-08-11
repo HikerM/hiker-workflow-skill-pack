@@ -3,4 +3,4 @@ interface:
   short_description: "审核分支流向、提交、冲突、锁和合并门禁"
   default_prompt: "使用 $change-ownership-merge 审核当前任务分支是否具备安全合并条件。"
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false

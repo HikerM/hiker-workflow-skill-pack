@@ -1,6 +1,6 @@
 ---
 name: nodets-execution-pipeline-guardrails
-description: Guard Hiker NodeTs AI comic/drama execution pipeline changes. Use when working on quote -> create -> result unified chain, canonical intent, provider adapters, resource_transfer, result normalization, billing reservation/settlement/release, worker queues, polling/callbacks, assets/storage/preview_url, seed/DB parity, or preventing frontend bypass of the unified execution chain.
+description: Guard Hiker NodeTs AI comic/drama execution pipeline changes. Use when working on the quote/create/result unified chain, canonical intent, provider adapters, resource_transfer, result normalization, billing reservation/settlement/release, worker queues, polling/callbacks, assets/storage/preview_url, seed/DB parity, or preventing frontend bypass of the unified execution chain.
 ---
 
 # NodeTs Execution Pipeline Guardrails

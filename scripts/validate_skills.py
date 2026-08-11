@@ -119,6 +119,14 @@ def validate_skill(skill_dir: Path):
     for section in REQUIRED_SECTIONS:
         if not has_section(text, section):
             errors.append(f"{skill_dir.name}: missing section ## {section}")
+    agent_file = skill_dir / "agents" / "openai.yaml"
+    if not agent_file.is_file():
+        errors.append(f"{skill_dir.name}: missing agents/openai.yaml")
+    else:
+        agent_text = read_text(agent_file)
+        expected = "true" if skill_dir.name == "hiker-workflow-router" else "false"
+        if f"allow_implicit_invocation: {expected}" not in agent_text:
+            errors.append(f"{skill_dir.name}: fast-routing policy requires allow_implicit_invocation: {expected}")
     return errors
 
 

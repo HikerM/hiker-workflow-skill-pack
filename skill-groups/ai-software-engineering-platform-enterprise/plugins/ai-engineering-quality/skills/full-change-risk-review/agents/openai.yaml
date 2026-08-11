@@ -2,3 +2,5 @@ interface:
   display_name: "完整变更风险评估"
   short_description: "完整评估变更风险并触发所有受影响设计范围的独立就绪复审"
   default_prompt: "Use $full-change-risk-review to assess the complete change set and decide whether design readiness must be reviewed again."
+policy:
+  allow_implicit_invocation: false

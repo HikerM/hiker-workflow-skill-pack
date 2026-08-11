@@ -1,0 +1,6 @@
+interface:
+  display_name: "契约边界审计"
+  short_description: "按需审计API与数据契约"
+  default_prompt: "使用 $contract-boundary-audit 审计当前契约边界。"
+policy:
+  allow_implicit_invocation: false

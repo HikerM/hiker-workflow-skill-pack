@@ -15,3 +15,7 @@ core-13,true,bounded-context-memory,"这个大型项目要跨很多会话执行�
 core-14,true,bounded-context-memory,"压缩前保存当前任务并限制checkpoint数量，给我恢复回执"
 core-15,false,bounded-context-memory,"解释什么是上下文窗口"
 core-16,false,bounded-context-memory,"只改一个拼写错误，不需要长期状态"
+core-17,true,ai-engineering-router,"从0开始开发一个自定义B/S和C/S系统，先帮我融合需求再选技术"
+core-18,true,greenfield-project-planning,"空目录开始做产品，把新增需求增量融合并保留冲突历史"
+core-19,true,ai-engineering-router,"审核现有WPF客户端并识别真实.NET和框架版本"
+core-20,false,ai-engineering-router,"把这段中文翻译成英文"

@@ -1,0 +1,7 @@
+interface:
+  display_name: "AI工程轻量路由"
+  short_description: "只加载当前任务需要的最多两个原子Skill"
+  default_prompt: "使用 $ai-engineering-router 识别项目模式与阶段，只加载最小原子Skill并展示应用回执。"
+policy:
+  allow_implicit_invocation: true
+

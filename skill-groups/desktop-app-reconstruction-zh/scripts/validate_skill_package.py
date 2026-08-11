@@ -286,6 +286,10 @@ def validate_root(root: Path, *, run_self_test: bool = False) -> dict[str, Any]:
                 issues.append(f"原子Skill缺少描述或正文：{name}")
         except (OSError, UnicodeDecodeError, ValueError) as exc:
             issues.append(f"原子Skill无效 {name}：{exc}")
+        atomic_metadata, atomic_meta_issues, _ = validate_openai_yaml(skill_dir)
+        issues.extend(f"原子Skill {name}：{msg}" for msg in atomic_meta_issues)
+        if atomic_metadata.get("policy", {}).get("allow_implicit_invocation") is not False:
+            issues.append(f"原子Skill {name} 必须关闭隐式调用，由顶层路由懒加载")
 
     skill_path = root / "SKILL.md"
     skill_text = ""
@@ -342,6 +346,8 @@ def validate_root(root: Path, *, run_self_test: bool = False) -> dict[str, Any]:
     metadata, metadata_issues, metadata_warnings = validate_openai_yaml(root)
     issues.extend(metadata_issues); warnings.extend(metadata_warnings)
     details["agent_metadata"] = metadata
+    if metadata.get("policy", {}).get("allow_implicit_invocation") is not True:
+        issues.append("顶层桌面重建路由必须开启隐式调用")
 
     ref_issues, ref_warnings = validate_references(root, skill_text)
     issues.extend(ref_issues); warnings.extend(ref_warnings)

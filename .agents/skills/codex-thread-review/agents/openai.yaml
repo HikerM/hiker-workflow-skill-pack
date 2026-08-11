@@ -1,0 +1,6 @@
+interface:
+  display_name: "Codex结果复核"
+  short_description: "按需复核Codex任务结果"
+  default_prompt: "使用 $codex-thread-review 复核当前Codex结果。"
+policy:
+  allow_implicit_invocation: false

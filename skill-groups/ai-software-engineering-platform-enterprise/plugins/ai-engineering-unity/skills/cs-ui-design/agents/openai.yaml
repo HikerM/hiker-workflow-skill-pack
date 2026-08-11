@@ -3,4 +3,4 @@ interface:
   short_description: "多技术栈客户端设计系统与交互契约"
   default_prompt: "使用 $cs-ui-design 按当前客户端技术栈设计非单调、可实现、可验收的界面。"
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false

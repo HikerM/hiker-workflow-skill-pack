@@ -3,4 +3,4 @@ interface:
   short_description: "复用Token与组件实现有辨识度的非模板化Web页面"
   default_prompt: "使用 $web-component-implementation 按已审核设计实现非模板化 Web 页面并保留视觉层级与节奏。"
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false

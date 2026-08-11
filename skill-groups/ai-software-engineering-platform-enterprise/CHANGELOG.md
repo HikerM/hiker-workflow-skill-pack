@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 5.3.0
+
+- 新增唯一隐式入口 `ai-engineering-router`，路由阶段只检查有限工程标记并返回最多两个需要读取的原子Skill。
+- 新增 `greenfield-project-planning` 与 `requirements_fusion.py`：稳定 Requirement ID、revision history、冲突、未知项、验收活动切片和技术决策Checkpoint。
+- 其余31个原子Skill全部关闭隐式调用但保留手动可见；验证器强制该性能策略，防止版本回退。
+- 全局AGENTS模板改为短路由契约，不再预列举全部原子Skill。
+- Enterprise Skill数量由30个增至32个。
+
 ## 5.2.0
 
 - 新增 `bounded-context-memory`，明确01号负责有界持久记忆，04号负责多会话Task/Agent/Worktree/合并交接。

@@ -28,7 +28,7 @@ def main()->int:
         inst=subprocess.run([sys.executable,str(ROOT/"install_personal.py"),"--no-activate-plugins"],cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         market=json.loads((fake_home/".agents/plugins/marketplace.json").read_text(encoding="utf-8")) if inst.returncode==0 else {}
         checks.append(("personal-install",inst.returncode==0 and all(str(x.get("source",{}).get("path","")).startswith("./.codex/plugins/") for x in market.get("plugins",[]))))
-        agents=(fake_home/".codex/AGENTS.md").read_text(encoding="utf-8") if inst.returncode==0 else "";checks.append(("global-auto-application","keep me" in agents and agents.count("<!-- ai-engineering-global-governance start -->")==1 and "插件应用回执" in agents and "bounded-context-memory" in agents))
+        agents=(fake_home/".codex/AGENTS.md").read_text(encoding="utf-8") if inst.returncode==0 else "";checks.append(("global-auto-application","keep me" in agents and agents.count("<!-- ai-engineering-global-governance start -->")==1 and "插件应用回执" in agents and "ai-engineering-router" in agents and "bounded-context-memory" not in agents))
         inst2=subprocess.run([sys.executable,str(ROOT/"install_personal.py"),"--no-activate-plugins"],cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         agents2=(fake_home/".codex/AGENTS.md").read_text(encoding="utf-8") if inst2.returncode==0 else "";checks.append(("global-rules-idempotent",inst2.returncode==0 and agents2.count("<!-- ai-engineering-global-governance start -->")==1))
         uninstall=subprocess.run([sys.executable,str(ROOT/"uninstall_personal.py"),"--yes"],cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)

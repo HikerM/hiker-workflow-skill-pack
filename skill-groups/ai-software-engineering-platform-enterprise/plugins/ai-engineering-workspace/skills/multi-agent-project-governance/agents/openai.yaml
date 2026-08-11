@@ -3,4 +3,4 @@ interface:
   short_description: "长期管理大型B/S、C/S与混合软件工程"
   default_prompt: "使用 $multi-agent-project-governance 接管当前大型软件工程并建立可中断、可审计的多Agent控制平面。"
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false

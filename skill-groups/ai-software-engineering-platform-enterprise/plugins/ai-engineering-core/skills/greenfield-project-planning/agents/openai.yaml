@@ -1,0 +1,7 @@
+interface:
+  display_name: "0→1需求融合与选型"
+  short_description: "用需求账本和决策门禁启动自定义项目"
+  default_prompt: "使用 $greenfield-project-planning 增量融合需求，比较技术候选并在关键选择处建立Checkpoint。"
+policy:
+  allow_implicit_invocation: false
+

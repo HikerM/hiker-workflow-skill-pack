@@ -3,4 +3,4 @@ interface:
   short_description: "轻量识别客户端技术栈并按阶段启用能力"
   default_prompt: "使用 $cs-client-router 识别当前C/S客户端技术栈，只路由本阶段需要的Skill。"
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false

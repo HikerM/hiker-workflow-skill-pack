@@ -1,13 +1,13 @@
 ---
 name: project-bootstrap
-description: 首次接管或技术栈发生变化时，从锁文件、工程文件和工具链证据识别B/S及Unity、Qt、.NET桌面、Electron/Tauri、Flutter、Android、Apple原生、React Native、Java桌面、嵌入式HMI等C/S项目的真实语言、运行时、框架、SDK、构建工具、版本、包管理器和子项目，并建立统一.ai状态。不得写死技术版本或用于普通页面修改。
+description: 接管已有代码仓库或技术栈发生变化时，从锁文件、工程文件和工具链证据识别B/S及Unity、Qt、.NET桌面、Electron/Tauri、Flutter、Android、Apple原生、React Native、Java桌面、嵌入式HMI等C/S项目的真实语言、运行时、框架、SDK、构建工具、版本、包管理器和子项目，并建立统一.ai状态。空项目必须先使用greenfield-project-planning，不得写死技术版本。
 ---
 
 # 项目智能初始化
 
 ## 使用条件
 
-- 新项目首次使用本套件；
+- 已有代码项目首次使用本套件；
 - 旧项目首次接管；
 - Monorepo 增加或删除子项目；
 - 框架、语言或主要版本发生变化。
@@ -24,6 +24,7 @@ description: 首次接管或技术栈发生变化时，从锁文件、工程文�
    - 未能确定的版本与原因；
    - 需要在线核验的官方文档清单。
 4. 不修改业务源码，不自动升级依赖，不替换框架。
+5. 若没有任何工程证据且用户要从零开发，停止本 Skill，转入 `greenfield-project-planning`；不得把 `unknown` 当成选择默认脚手架的许可。
 
 ## 命令示例
 

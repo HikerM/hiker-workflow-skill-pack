@@ -3,4 +3,4 @@ interface:
   short_description: "跨会话保存工程事实并限制工作集大小"
   default_prompt: "使用 $bounded-context-memory 保存当前工程事实、收敛检查点并输出可恢复的有界记忆回执。"
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false

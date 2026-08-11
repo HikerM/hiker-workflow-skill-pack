@@ -2,3 +2,5 @@ interface:
   display_name: "设计就绪独立复审"
   short_description: "独立审核设计系统、视觉质量与实现就绪度"
   default_prompt: "使用 $design-readiness-review 独立判断当前设计系统、视觉质量与完整契约是否达到编码条件。"
+policy:
+  allow_implicit_invocation: false

@@ -3,4 +3,4 @@ interface:
   short_description: "独立差分、性能、交付和发布门禁"
   default_prompt: "使用 $desktop-reconstruction-verification-release 执行当前验证或发布门禁。"
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false

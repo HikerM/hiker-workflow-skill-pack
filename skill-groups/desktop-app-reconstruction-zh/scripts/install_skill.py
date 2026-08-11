@@ -68,6 +68,19 @@ def target_root(args: argparse.Namespace) -> Path:
     return (repo_root / ".agents" / "skills").resolve()
 
 
+def reserve_backup(destination_root: Path, name: str) -> Path:
+    """Keep backups outside the discoverable skills directory."""
+    backup_root = destination_root.parent / "skills-backup" / name
+    backup_root.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    target = backup_root / stamp
+    counter = 1
+    while target.exists():
+        target = backup_root / f"{stamp}-{counter}"
+        counter += 1
+    return target
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="安装中文桌面软件等价重建 Skill")
     parser.add_argument("--source", default=None, help="Skill 源目录；默认脚本父目录的父目录")
@@ -119,12 +132,7 @@ def main() -> int:
                     if args.no_backup:
                         shutil.rmtree(destination)
                     else:
-                        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-                        backup = destination_root / f"{SKILL_NAME}.backup-{stamp}"
-                        counter = 1
-                        while backup.exists():
-                            backup = destination_root / f"{SKILL_NAME}.backup-{stamp}-{counter}"
-                            counter += 1
+                        backup = reserve_backup(destination_root, SKILL_NAME)
                         destination.rename(backup)
                 staging.rename(destination)
                 shutil.rmtree(staging_parent, ignore_errors=True)
@@ -139,15 +147,10 @@ def main() -> int:
                     atomic_staging = destination_root / f".skill-install-{atomic_name}-{uuid.uuid4().hex[:8]}"
                     shutil.copytree(atomic_source, atomic_staging, symlinks=False, ignore=ignore_copy)
                     if atomic_destination.exists():
-                        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-                        atomic_backup = destination_root / f"{atomic_name}.backup-{stamp}"
                         if args.no_backup:
                             shutil.rmtree(atomic_destination)
                         else:
-                            counter = 1
-                            while atomic_backup.exists():
-                                atomic_backup = destination_root / f"{atomic_name}.backup-{stamp}-{counter}"
-                                counter += 1
+                            atomic_backup = reserve_backup(destination_root, atomic_name)
                             atomic_destination.rename(atomic_backup)
                     atomic_staging.rename(atomic_destination)
                     installed_skills.append(atomic_name)

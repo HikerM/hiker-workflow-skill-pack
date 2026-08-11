@@ -5,7 +5,7 @@ description: 面向已获授权的Windows、macOS或Linux桌面软件等价重�
 
 # 桌面软件等价重建路由
 
-版本：1.2.0
+版本：1.3.0
 
 ## 边界
 

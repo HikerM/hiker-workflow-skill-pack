@@ -1,12 +1,12 @@
 # 桌面软件等价重建 Skill：安装与使用
 
-版本：1.2.0
+版本：1.3.0
 语言：简体中文  
 适用：ChatGPT 桌面端独立 Skill、Codex 用户级 Skill、Codex 项目级 Skill
 
-> 1.2.0 采用“轻量总路由 + 4 个阶段原子 Skill”。安装器会安装五个可发现 Skill，但单次任务只启用当前门禁对应的一个阶段能力；共享脚本、参考和模板仍由主包统一维护。
+> 1.3.0 采用“唯一隐式轻量总路由 + 4 个手动可见原子 Skill”。单次任务只由总路由懒加载当前门禁对应的一个阶段能力；备份保存在不可发现的 `skills-backup`，不会重复进入选择候选。
 
-## 一、v1.2.0 解决什么问题
+## 一、v1.3.0 解决什么问题
 
 本 Skill 用于在已获授权的范围内，根据桌面软件的截图、录屏、可运行程序、样例数据、接口资料或既有源码，建立证据驱动的独立重建工程。它不把“做出几个相似页面”当作完成，而是强制处理三类核心问题：
 
@@ -33,7 +33,7 @@ G0 授权与范围
 独立 Skills 可在 ChatGPT 桌面端使用。不同账号、版本和工作区看到的管理入口可能不同，因此按当前客户端实际界面操作：
 
 1. 打开 ChatGPT 桌面端的 Skills 管理或创建入口；
-2. 若界面提供“从电脑导入／上传 Skill”，选择整个 `desktop-app-reconstruction-zh-v1.2.0.zip`，不要只上传 `SKILL.md`；
+2. 若界面提供“从电脑导入／上传 Skill”，选择整个 `desktop-app-reconstruction-zh-v1.3.0.zip`，不要只上传 `SKILL.md`；
 3. 若当前客户端未显示本地导入入口，使用下方 Codex 用户级或项目级安装方式；
 4. 安装或启用后，在新会话输入 `@`，选择 **桌面软件等价重建**；
 5. 出现脚本或权限审查时，先查看本包的 `scripts/README.md`、安装脚本及权限范围，再决定是否启用。
@@ -107,15 +107,15 @@ desktop-app-reconstruction-zh/
 
 ## 四、从 v1.0.0 升级
 
-主路由内部名称仍为 `desktop-app-reconstruction-zh`，因此 v1.2.0 可以覆盖旧版。安装脚本默认备份旧Skill，并安装4个阶段原子Skill。
+主路由内部名称仍为 `desktop-app-reconstruction-zh`，因此 v1.3.0 可以覆盖旧版。安装脚本默认把旧版备份到 `.agents/skills-backup/`，并安装4个阶段原子Skill。
 
 旧的重建项目不会被自动改写。处理旧项目时：
 
 1. 先备份旧项目；
-2. 使用 v1.2.0 初始化一个新项目骨架；
+2. 使用 v1.3.0 初始化一个新项目骨架；
 3. 迁移原证据、规格、源码和测试；
 4. 补齐新库存、精确版本锁、覆盖矩阵、追踪矩阵和交付物清单；
-5. 运行 v1.2.0 门禁，未通过前不要沿用旧版“完成”结论。
+5. 运行 v1.3.0 门禁，未通过前不要沿用旧版“完成”结论。
 
 详细映射见 `MIGRATION_v1.0_to_v1.1.md`。
 
@@ -303,7 +303,7 @@ python scripts/validate_skill_package.py . --self-test
 ZIP 自检：
 
 ```bash
-python scripts/validate_skill_package.py desktop-app-reconstruction-zh-v1.2.0.zip --self-test
+python scripts/validate_skill_package.py desktop-app-reconstruction-zh-v1.3.0.zip --self-test
 ```
 
 独立回归自测：

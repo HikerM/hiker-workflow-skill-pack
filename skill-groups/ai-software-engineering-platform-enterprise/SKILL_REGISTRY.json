@@ -2,6 +2,18 @@
   "schema_version": "1.0.0",
   "rule": "core detects once; domain skills consume .ai/context; reviewers do not modify source",
   "skills": {
+    "ai-engineering-router": {
+      "plugin": "ai-engineering-core",
+      "mode": "router",
+      "project_detection": "bounded-marker-check",
+      "may_modify_source": false
+    },
+    "greenfield-project-planning": {
+      "plugin": "ai-engineering-core",
+      "mode": "planning",
+      "project_detection": "greenfield-owner",
+      "may_modify_source": false
+    },
     "bounded-context-memory": {
       "plugin": "ai-engineering-core",
       "mode": "workflow",

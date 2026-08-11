@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0
+
+- 三组改为仅三个顶层路由可隐式触发，43个原子Skill保留手动可见并由路由懒加载，降低发送消息时的候选选择开销。
+- Enterprise 5.3 新增 `ai-engineering-router` 与 `greenfield-project-planning`，从零项目先融合稳定需求ID、冲突、验收和技术决策Checkpoint。
+- 需求完整历史落盘、聊天只加载有界活动切片，新增需求增量合并而非覆盖旧约束。
+- 桌面重建安装备份移至不可发现的 `.agents/skills-backup`，避免备份目录被当成重复Skill。
+- 全局规则压缩为三个入口和关键安全边界，不再列举大量原子Skill。
+
 ## 0.7.0
 
 - Added `bounded-context-memory` to plugin 01 and coordinated it with plugin 04 for durable multi-session handoff without loading full chat history.

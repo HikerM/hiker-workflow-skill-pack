@@ -2,4 +2,4 @@ interface:
   display_name: "Unity组件与页面实现"
   short_description: "实现Prefab、Renderer和页面组件"
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false

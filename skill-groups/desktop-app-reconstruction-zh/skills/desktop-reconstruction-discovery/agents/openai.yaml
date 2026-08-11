@@ -3,4 +3,4 @@ interface:
   short_description: "按门禁盘点证据、界面、功能和追踪链"
   default_prompt: "使用 $desktop-reconstruction-discovery 只处理当前发现门禁并更新证据与状态。"
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false

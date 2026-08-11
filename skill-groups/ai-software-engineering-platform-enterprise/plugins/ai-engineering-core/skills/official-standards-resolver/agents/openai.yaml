@@ -2,4 +2,4 @@ interface:
   display_name: "官方规范解析"
   short_description: "根据语言、框架和版本生成规范来源清单"
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false

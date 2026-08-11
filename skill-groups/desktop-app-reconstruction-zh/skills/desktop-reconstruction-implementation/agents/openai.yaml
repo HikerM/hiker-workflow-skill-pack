@@ -3,4 +3,4 @@ interface:
   short_description: "按锁定规格和技术栈实现可验收任务"
   default_prompt: "使用 $desktop-reconstruction-implementation 实现当前已批准的一个桌面重建任务。"
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false

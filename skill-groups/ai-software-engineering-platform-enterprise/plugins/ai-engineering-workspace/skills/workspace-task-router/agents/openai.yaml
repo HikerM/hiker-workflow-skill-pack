@@ -3,4 +3,4 @@ interface:
   short_description: "按B/S与C/S前后端拆分多Agent执行通道"
   default_prompt: "使用 $workspace-task-router 将当前需求拆成带依赖、角色和执行模式的工程通道。"
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false

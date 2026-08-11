@@ -3,4 +3,4 @@ interface:
   short_description: "审核设计系统、视觉丰富度、反模板与前端质量"
   default_prompt: "使用 $web-quality-review 只读审核当前 Web 实现的设计系统、视觉效果、组件复用与反模板质量。"
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false

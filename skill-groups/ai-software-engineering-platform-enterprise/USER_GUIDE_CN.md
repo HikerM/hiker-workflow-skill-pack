@@ -1,10 +1,24 @@
 # 中文使用手册
 
-## 一、初始化
+## 一、轻量路由与初始化
 
 ```text
-@项目智能初始化
+@AI工程轻量路由
 ```
+
+入口只识别项目模式、架构和当前阶段，然后加载最多两个原子Skill。无需把五个插件或全部原子Skill同时选中。
+
+从空目录开始时先进入 `@0→1需求融合与选型`，生成：
+
+```text
+.ai/requirements/ledger.json
+.ai/context/greenfield.json
+REQUIREMENTS.md
+```
+
+新增需求按 `REQ-001` 等稳定ID增量合并；旧版本进入revision history，冲突和未知项必须显式保留。平台、架构、部署、数据、安全或核心技术栈在一个人工Checkpoint确认后再开始正式脚手架。
+
+已有代码仓库才进入 `@项目智能初始化`，生成：
 
 生成：
 
@@ -19,7 +33,7 @@
 .ai/quality/policy.json
 ```
 
-大型或多Agent项目继续运行 `@项目状态与上下文管理`，生成 `PROJECT_STATE.md`、`CURRENT_CONTEXT.md`、`CHANGELOG.md`、`ARCHITECTURE.md` 和 `.ai/governance/project-state.json`。
+大型或多Agent项目由路由按需加载 `@项目状态与上下文管理`，生成 `PROJECT_STATE.md`、`CURRENT_CONTEXT.md`、`CHANGELOG.md`、`ARCHITECTURE.md` 和 `.ai/governance/project-state.json`。
 
 ## 二、开始一个长期任务
 

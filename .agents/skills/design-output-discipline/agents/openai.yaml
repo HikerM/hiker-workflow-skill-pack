@@ -1,0 +1,6 @@
+interface:
+  display_name: "设计交付纪律"
+  short_description: "按需守护视觉文件交付"
+  default_prompt: "使用 $design-output-discipline 处理当前设计交付物。"
+policy:
+  allow_implicit_invocation: false

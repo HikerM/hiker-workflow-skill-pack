@@ -3,4 +3,4 @@ interface:
   short_description: "候选技术、POC和精确版本锁定"
   default_prompt: "使用 $desktop-reconstruction-technical-design 完成当前桌面重建项目的G5-T技术门禁。"
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false

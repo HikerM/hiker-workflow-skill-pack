@@ -156,14 +156,14 @@ foreach ($skill in $SelectedSkills) {
     $Installed.Add($skill)
 }
 
-$AgentsBlock = Get-Content -Raw -LiteralPath $SourceAgentsFile
+$AgentsBlock = Get-Content -Raw -Encoding UTF8 -LiteralPath $SourceAgentsFile
 if ($MergeAgents) {
     $Start = "<!-- hiker-workflow-pack start -->"
     $End = "<!-- hiker-workflow-pack end -->"
     $BlockOnly = [regex]::Match($AgentsBlock, "(?s)<!-- hiker-workflow-pack start -->.*?<!-- hiker-workflow-pack end -->").Value
     if (-not $BlockOnly) { throw "Could not find Hiker AGENTS block in source AGENTS.md" }
     if (Test-Path -LiteralPath $TargetAgentsFile) {
-        $ExistingAgents = Get-Content -Raw -LiteralPath $TargetAgentsFile
+        $ExistingAgents = Get-Content -Raw -Encoding UTF8 -LiteralPath $TargetAgentsFile
         if ($ExistingAgents.Contains($Start) -and $ExistingAgents.Contains($End)) {
             $UpdatedAgents = [regex]::Replace($ExistingAgents, "(?s)<!-- hiker-workflow-pack start -->.*?<!-- hiker-workflow-pack end -->", $BlockOnly)
         } else {

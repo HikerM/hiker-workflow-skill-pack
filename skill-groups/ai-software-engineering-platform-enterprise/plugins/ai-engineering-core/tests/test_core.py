@@ -16,9 +16,36 @@ from detect_project import detect
 from runtime_control import classify
 from statectl import checkpoint, update_active
 from corelib import atomic_write_json
+from requirements_fusion import init as init_requirements, merge as merge_requirements, validate as validate_requirements
+from suite_router import route
 
 
 class CoreTests(unittest.TestCase):
+    def test_greenfield_router_prefers_requirements_before_scaffold(self):
+        with tempfile.TemporaryDirectory() as td:
+            data = route(Path(td), "从0开始开发一个自定义B/S和C/S教学系统")
+            self.assertEqual("greenfield", data["project_mode"])
+            self.assertEqual("greenfield-project-planning", data["selected"][0]["skill"])
+            self.assertLessEqual(len(data["load"]), 2)
+            common = route(Path(td), "帮我开发一个学生管理系统")
+            self.assertEqual("greenfield-project-planning", common["selected"][0]["skill"])
+
+    def test_router_lazily_loads_cs_version_router(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); (root / "App.csproj").write_text("<Project />", encoding="utf-8")
+            data = route(root, "实现这个WPF客户端页面，识别现有框架和版本")
+            self.assertEqual("cs", data["architecture"])
+            self.assertEqual(["cs-client-router", "cs-component-implementation"], [x["skill"] for x in data["selected"]])
+
+    def test_requirements_merge_preserves_revision_and_conflicts(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); init_requirements(root, "APP", "自定义业务系统")
+            first = merge_requirements(root, [{"id":"REQ-001","statement":"支持离线使用","priority":"must","acceptance":["断网可打开核心数据"]}])
+            second = merge_requirements(root, [{"id":"REQ-001","statement":"支持离线使用并在联网后同步","priority":"must","acceptance":["断网可用","联网自动同步"],"conflicts_with":["REQ-002"]}])
+            self.assertTrue(first["ok"]); self.assertEqual(["REQ-001"], second["updated"]); self.assertEqual(1, second["conflicts"])
+            ledger = json.loads((root / ".ai/requirements/ledger.json").read_text(encoding="utf-8"))
+            self.assertEqual(1, len(ledger["requirements"][0]["history"]))
+            self.assertTrue(validate_requirements(root)["ok"]); self.assertIn("REQ-001", (root / "REQUIREMENTS.md").read_text(encoding="utf-8"))
     def test_ignored_dependency_manifest_not_detected(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);(root/"node_modules/dependency").mkdir(parents=True);(root/"node_modules/dependency/package.json").write_text(json.dumps({"name":"dependency","dependencies":{"react":"19"}}))

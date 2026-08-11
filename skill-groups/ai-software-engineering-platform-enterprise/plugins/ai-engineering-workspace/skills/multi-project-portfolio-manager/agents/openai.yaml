@@ -3,4 +3,4 @@ interface:
   short_description: "注册、切换并校验多个Git项目上下文"
   default_prompt: "使用 $multi-project-portfolio-manager 校验当前仓库身份并阻止跨项目上下文污染。"
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false

@@ -1,4 +1,4 @@
-# AI Software Engineering Platform Enterprise 5.2（有界多会话记忆与大型工程多Agent治理版）
+# AI Software Engineering Platform Enterprise 5.3（轻量路由、0→1需求融合与大型工程治理版）
 
 这是面向 ChatGPT Work / Codex 桌面端的大型软件工程插件套件。它不再把所有能力堆进一个超长 Skill，而是拆成 5 个可独立启用的中文插件：
 
@@ -8,13 +8,15 @@
 4. **工作区与多会话协作**：七角色控制平面、项目/任务状态、Context Snapshot、多项目隔离、文件锁、Worktree、验收闭环和Git合并治理。
 5. **质量、风险与发布**：独立设计就绪复审、完整本地变更集、设计变化影响、SQLite 增量图谱、回归测试计划和发布证据。
 
-当前套件包含 5 个插件、30 个 Skill。设计收敛采用问题驱动循环；大型工程由 Master、Planning、Developer、Review、Test、Merge、Document 七类职责契约贯穿需求到发布。
+当前套件包含 5 个插件、32 个 Skill。只有 `ai-engineering-router` 可隐式触发，其余31个原子Skill手动可见并按需懒加载。0→1项目先建立稳定需求ID、冲突/未知账本和技术决策Checkpoint；大型工程继续由 Master、Planning、Developer、Review、Test、Merge、Document 七类职责契约贯穿需求到发布。
 
 个人安装器默认完成插件复制、个人Marketplace注册、五插件CLI安装启用，以及 `~/.codex/AGENTS.md` 全局自动应用/回执区块的安全合并。原规则会保留并备份，重复安装保持幂等；CLI不可用时输出手动命令。
 
 ## 关键约束
 
 - **一次识别，多次复用**：领域插件读取 `.ai/context/`，不得重复全仓库技术栈分析。
+- **唯一隐式入口**：只由 `ai-engineering-router` 参与自动选择，原子Skill按需读取且每轮最多两个。
+- **0→1先融合再编码**：稳定 Requirement ID、revision history、冲突/未知和技术决策Checkpoint防止自定义需求被固定模板吞掉。
 - **广覆盖不等于全量加载**：C/S使用小型入口路由，单次只加载当前技术族和设计/实现/审核中的一个阶段。
 - **持续执行但可随时中断**：用户说“暂停、调整、继续、回滚、查看状态”时，核心 Skill 与状态脚本更新运行状态，不要求每一步审批。
 - **上下文压缩不作为唯一记忆系统**：01号用固定大小工作集、分级checkpoint、压缩账本和哈希链恢复工程事实；04号维护Task ID、项目状态和会话交接。原始聊天不会无限累积，关键事实必须先落入正式状态。

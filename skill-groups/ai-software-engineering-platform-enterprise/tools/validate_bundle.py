@@ -38,6 +38,10 @@ def main()->int:
             if dirname in skill_names:errors.append(f"重复Skill名称 {dirname}: {skill_names[dirname]} / {p.name}")
             skill_names[dirname]=p.name
             if not (s.parent/"agents/openai.yaml").is_file():errors.append(f"{p.name}/{dirname}: 缺少agents/openai.yaml")
+            else:
+                agent_text=(s.parent/"agents/openai.yaml").read_text(encoding="utf-8")
+                expected="true" if dirname=="ai-engineering-router" else "false"
+                if f"allow_implicit_invocation: {expected}" not in agent_text:errors.append(f"{p.name}/{dirname}: 轻量路由策略要求allow_implicit_invocation: {expected}")
         ev=p/"evals/prompts.csv"
         if not ev.is_file():errors.append(f"{p.name}: 缺少evals/prompts.csv")
         else:

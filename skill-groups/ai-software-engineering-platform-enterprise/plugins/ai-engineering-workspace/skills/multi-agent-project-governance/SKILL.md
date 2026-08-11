@@ -20,11 +20,11 @@ description: 面向大型B/S、C/S、Unity和NodeTS工程建立Master/Planning/D
 
 1. 确认当前 Git 根目录与 `project_id`，不得引用其他项目状态。
 2. 只读取有界启动事实：`PROJECT_STATE.md`、`CURRENT_CONTEXT.md`、当前 Task 与 Git branch/status；仅在架构、发布或历史核验阶段读取 `ARCHITECTURE.md`、`CHANGELOG.md` 和必要提交记录。
-3. 大型项目或恢复长期任务时，运行 `task_reconciler.py` 对账 Task、Branch、Worktree、文件锁、并行写任务和待合并债务；它默认只读，只在需要证据时使用 `--write-report`。
+3. 大型项目或恢复长期任务时，先运行 `task_reconciler.py --mode quick`；它只解析 Git 元数据。只有发现异常、准备创建、合并或发布时才使用 `standard/deep`，不得在普通消息中扫描全部工作目录源码。
 4. 未初始化时使用 `$project-state-manager` 初始化；需求使用 `$task-lifecycle-manager` 建立 Task ID。
 5. 用 `$workspace-task-router` 生成 B/S 或 C/S 的前后端通道与依赖。
 6. 写代码前用 `$worktree-task-manager` 隔离分支，并用 `$file-lock-manager` 锁定高风险文件。
-7. Review、Testing、文档和 `$feature-acceptance-closure` 通过后，才允许 `$change-ownership-merge`。
+7. Review、Testing、文档和 `$feature-acceptance-closure` 通过后，才允许 `$change-ownership-merge`；合并后的任务进入待清理状态，使用「工作目录安全收敛」关闭 Worktree 后才能完成。
 8. Master Agent 决定是否进入发布门禁；用户可以随时暂停、调整、插入或恢复，所有动作先生成 checkpoint。
 
 默认并行预算是最多两个活动写任务、最多两个处于 Review/Testing 的待收敛任务。达到预算后先审核、测试和合并现有任务，不继续制造分支、Worktree 与上下文债务；可在项目状态中显式调小，扩大预算必须由用户或 Master Agent Checkpoint 确认。

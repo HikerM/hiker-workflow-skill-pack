@@ -5,7 +5,7 @@ description: 创建和推进带Task ID的工程任务状态机，记录目标、
 
 # 任务生命周期
 
-状态只能按 `Created → Planning → Development → Review → Testing → Merged → Released` 推进。角色负责状态：Planning、Developer、Review、Test、Merge、Master；禁止 Developer 自审、自测后直接合并。
+状态只能按 `Created → Planning → Development → Review → Testing → MergedPendingCleanup → Merged → Released` 推进。合并后必须安全关闭任务 Worktree 才能进入 Merged；角色负责状态：Planning、Developer、Review、Test、Merge、Master，禁止 Developer 自审、自测后直接合并。
 
 ```bash
 python <plugin-root>/scripts/governance_state.py --root . task-create --task-id KG-001 --goal "统一账户登录" --owner-agent "Planning Agent" --branch feature/KG-001-login --affected-files src/auth.ts tests/auth.test.ts

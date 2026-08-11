@@ -1,6 +1,6 @@
 # Skill 索引
 
-仓库包含三组，共 44 个 Skill。每组都有轻量入口，单次只选择当前意图、技术栈和阶段所需的原子能力。
+仓库包含三组，共 53 个 Skill。每组都有轻量入口，单次只选择当前意图、技术栈和阶段所需的原子能力。
 
 ## 第一组：Hiker 工作流守护组（9 个）
 
@@ -18,7 +18,7 @@
 
 源码：`../.agents/skills/`
 
-## 第二组：AI 软件工程平台 Enterprise（38 个）
+## 第二组：AI 软件工程平台 Enterprise（39 个）
 
 ### `ai-engineering-core`
 
@@ -67,6 +67,7 @@
 | `task-lifecycle-manager` | 管理 Task ID、Created→Released 和人工控制 |
 | `workspace-task-router` | 按B/S与C/S前后端、契约、审核、测试和发布拆分任务 |
 | `worktree-task-manager` | 按分支治理安全创建、管理和清理 Worktree |
+| `worktree-safe-convergence` | 只读接管、分类并以两阶段确认安全收敛历史 Worktree |
 | `file-lock-manager` | 保护Unity资产和NodeTS共享核心文件 |
 | `feature-acceptance-closure` | 验证需求、代码、测试、证据、文档和状态闭环 |
 | `change-ownership-merge` | 检查流向、提交、所有权、冲突、锁和门禁 |

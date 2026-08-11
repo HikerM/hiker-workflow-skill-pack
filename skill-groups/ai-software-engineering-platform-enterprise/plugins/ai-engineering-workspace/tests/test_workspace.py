@@ -12,7 +12,7 @@ sys.path.insert(0, str(PLUGIN / "scripts"))
 
 from closure_gate import evaluate as closure_evaluate
 from file_lock import acquire, check, release
-from git_workspace import cmd_create, cmd_list, cmd_pause, cmd_remove, validate_branch_policy
+from git_workspace import cmd_adopt, cmd_close, cmd_create, cmd_inventory, cmd_list, cmd_pause, cmd_plan_close, validate_branch_policy
 from governance_state import checkpoint, control, create_task, init_project, load_task, record, save_task, set_change_contract, transition, validate
 from merge_guard import conflict_probe, evaluate as merge_evaluate, flow_ok
 from task_router import route
@@ -92,12 +92,52 @@ class WorkspaceTests(unittest.TestCase):
 
     def test_worktree_policy_and_lifecycle(self):
         with tempfile.TemporaryDirectory() as td:
-            root = Path(td) / "repo"; root.mkdir(); self.repo(root)
+            root = Path(td) / "repo"; root.mkdir(); self.repo(root); self.governance(root)
             with self.assertRaises(RuntimeError): validate_branch_policy(root, "main", "main", "Developer Agent")
             args = ns(task_id="KG-001", base="develop", branch="feature/KG-001-login", path=str(Path(td) / "wt"), agent_role="Developer Agent")
             created = cmd_create(root, args); self.assertTrue(Path(created["path"]).exists()); self.assertTrue(cmd_list(root)["worktrees"])
             cmd_pause(root, ns(task_id="KG-001"), "PAUSED")
-            remove = ns(task_id="KG-001", target="develop", force=False); self.assertTrue(cmd_remove(root, remove)["ok"])
+            plan = cmd_plan_close(root, ns(path=created["path"], target="develop")); self.assertTrue(plan["plan"]["ready"])
+            closed = cmd_close(root, ns(token=plan["plan"]["token"])); self.assertTrue(closed["ok"]); self.assertFalse(Path(created["path"]).exists())
+
+    def test_inventory_adopts_legacy_worktree_without_scanning_source(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "repo"; root.mkdir(); self.repo(root)
+            legacy = Path(td) / "legacy"
+            git(root, "worktree", "add", "-b", "feature/legacy", str(legacy), "develop")
+            quick = cmd_inventory(root, ns(mode="quick", target=None))
+            self.assertEqual(2, quick["summary"]["total"]); self.assertEqual(1, quick["summary"]["unmanaged"])
+            adopted = cmd_adopt(root, ns(worktree_id="WT-001", path=str(legacy), task_id=None))
+            self.assertEqual("ADOPTED", adopted["adopted"]["status"])
+            refreshed = cmd_inventory(root, ns(mode="quick", target=None))
+            self.assertEqual(0, refreshed["summary"]["unmanaged"])
+
+    def test_create_blocks_nested_worktree_and_uninitialized_governance(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "repo"; root.mkdir(); self.repo(root)
+            args = ns(task_id="KG-001", base="develop", branch="feature/KG-001-login", path=str(Path(td) / "wt"), agent_role="Developer Agent")
+            with self.assertRaisesRegex(RuntimeError, "governance is not initialized"):
+                cmd_create(root, args)
+            self.governance(root)
+            nested = root / "nested-wt"
+            git(root, "worktree", "add", "-b", "feature/nested", str(nested), "develop")
+            with self.assertRaisesRegex(RuntimeError, "nested worktree"):
+                cmd_create(root, args)
+
+    def test_merged_state_waits_for_task_worktree_cleanup(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "repo"; root.mkdir(); self.repo(root); self.governance(root)
+            task = load_task(root, "KG-001")
+            task["state"] = "Testing"; task["tests"] = {"status": "PASS", "records": [{"value": "ok"}]}; task["closure"]["merge"] = "PASS"
+            save_task(root, task)
+            worktree = Path(td) / "task-wt"
+            git(root, "worktree", "add", "-b", "feature/KG-001-login", str(worktree), "develop")
+            transition(root, ns(task_id="KG-001", to="MergedPendingCleanup", agent_role="Merge Agent", commit_id="abc123"))
+            with self.assertRaisesRegex(RuntimeError, "worktree to be closed"):
+                transition(root, ns(task_id="KG-001", to="Merged", agent_role="Merge Agent", commit_id=None))
+            git(root, "worktree", "remove", str(worktree))
+            merged = transition(root, ns(task_id="KG-001", to="Merged", agent_role="Merge Agent", commit_id=None))
+            self.assertEqual("Merged", merged["state"])
 
     def test_feature_closed_loop_and_merge_gate(self):
         with tempfile.TemporaryDirectory() as td:
@@ -209,6 +249,9 @@ class WorkspaceTests(unittest.TestCase):
             self.assertIn("ORPHAN_WORKTREE", types)
             self.assertIn("STALE_FILE_LOCK", types)
             self.assertFalse(report["ok"])
+            create_report = reconcile(root, phase="create")
+            orphan_finding = next(item for item in create_report["findings"] if item["type"] == "ORPHAN_WORKTREE")
+            self.assertEqual("BLOCK", orphan_finding["severity"])
 
 
 if __name__ == "__main__": unittest.main()

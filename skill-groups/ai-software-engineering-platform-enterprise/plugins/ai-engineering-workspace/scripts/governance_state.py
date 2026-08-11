@@ -9,17 +9,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from workspacelib import atomic_json, read_json, repo_root, run, safe_id, state_lock, worktree_fingerprint
+from workspacelib import atomic_json, load_state, read_json, repo_root, run, safe_id, state_lock, worktree_fingerprint
 from bounded_context import bounded_bullets, crop, ensure_policy, limit_text, retain_checkpoints
 
 SCHEMA = "2.0.0"
-TASK_STATES = ["Created", "Planning", "Development", "Review", "Testing", "Merged", "Released"]
+TASK_STATES = ["Created", "Planning", "Development", "Review", "Testing", "MergedPendingCleanup", "Merged", "Released"]
 TRANSITIONS = {
     "Created": {"Planning"},
     "Planning": {"Development"},
     "Development": {"Review"},
     "Review": {"Development", "Testing"},
-    "Testing": {"Development", "Merged"},
+    "Testing": {"Development", "MergedPendingCleanup"},
+    "MergedPendingCleanup": {"Merged"},
     "Merged": {"Released"},
     "Released": set(),
 }
@@ -28,6 +29,7 @@ ROLE_TARGETS = {
     "Development": {"Master Agent", "Planning Agent", "Developer Agent", "Review Agent", "Test Agent"},
     "Review": {"Master Agent", "Developer Agent"},
     "Testing": {"Master Agent", "Review Agent", "Test Agent"},
+    "MergedPendingCleanup": {"Master Agent", "Merge Agent"},
     "Merged": {"Master Agent", "Merge Agent"},
     "Released": {"Master Agent", "Merge Agent"},
 }
@@ -352,19 +354,26 @@ def transition(root: Path, args: argparse.Namespace) -> dict[str, Any]:
         if not task.get("commits"):
             raise RuntimeError("Development -> Review requires at least one commit")
         evidence = read_json(root / ".ai" / "evidence" / "architecture-guard" / f"{safe_id(str(task['task_id']))}.json", {}) or {}
-        current = git_snapshot(root)
+        snapshot = git_snapshot(root)
         if evidence.get("result") not in {"PASS", "PASS_WITH_WARNINGS"}:
             raise RuntimeError("Development -> Review requires architecture guard evidence")
-        if evidence.get("head") != current.get("head") or evidence.get("worktree_fingerprint") != worktree_fingerprint(root):
+        if evidence.get("head") != snapshot.get("head") or evidence.get("worktree_fingerprint") != worktree_fingerprint(root):
             raise RuntimeError("architecture guard evidence is stale; rerun it for the current change set")
     if target == "Testing" and task.get("review", {}).get("status") != "PASS":
         raise RuntimeError("Review -> Testing requires Review Agent PASS evidence")
-    if target == "Merged":
+    if target == "MergedPendingCleanup":
         if task.get("tests", {}).get("status") != "PASS" or task.get("closure", {}).get("merge") != "PASS":
-            raise RuntimeError("Testing -> Merged requires tests PASS and merge closure PASS")
+            raise RuntimeError("Testing -> MergedPendingCleanup requires tests PASS and merge closure PASS")
         if not args.commit_id:
-            raise RuntimeError("Merged transition requires merge commit id")
+            raise RuntimeError("MergedPendingCleanup transition requires merge commit id")
         task["merge_commit"] = args.commit_id
+    if target == "Merged":
+        from worktree_inventory import inventory
+        remaining = [item for item in inventory(root, "quick")["entries"] if not item.get("primary") and item.get("branch") == task.get("branch")]
+        runtime = load_state(root)
+        registered = [item for key, item in runtime.get("worktrees", {}).items() if key == task.get("task_id") or item.get("task_id") == task.get("task_id")]
+        if remaining or registered:
+            raise RuntimeError("MergedPendingCleanup -> Merged requires the task worktree to be closed")
     if target == "Released" and task.get("release", {}).get("status") != "PASS":
         raise RuntimeError("Merged -> Released requires release evidence PASS")
     task["state"] = target

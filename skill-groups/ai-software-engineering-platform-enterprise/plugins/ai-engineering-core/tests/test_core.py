@@ -54,6 +54,27 @@ class CoreTests(unittest.TestCase):
             backend=route(root,"修改现有NodeTS后端核心服务");names=[x["skill"] for x in backend["selected"]]
             self.assertIn("服务端技术路由",names);self.assertIn("服务端功能实现",names)
 
+    def test_router_ignores_nested_worktree_manifests_and_blocks_source_conflict(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "repo"; root.mkdir()
+            subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, stdout=subprocess.PIPE)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
+            (root / "package.json").write_text(json.dumps({"dependencies": {"vue": "3.5.0"}}), encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=root, check=True); subprocess.run(["git", "commit", "-m", "init"], cwd=root, check=True, stdout=subprocess.PIPE)
+            nested = root / "old-worktree"
+            subprocess.run(["git", "worktree", "add", "-b", "feature/old", str(nested)], cwd=root, check=True, stdout=subprocess.PIPE)
+            (nested / "legacy" ).mkdir(); (nested / "legacy/package.json").write_text(json.dumps({"dependencies": {"express": "5"}}), encoding="utf-8")
+            data = route(root, "修改当前前端页面")
+            self.assertEqual("多工作目录任务管理", data["selected"][0]["skill"])
+            self.assertEqual(1, data["source_identity"]["nested_worktree_count"])
+            self.assertTrue(all("old-worktree" not in path for path in data["project_evidence"]))
+
+    def test_worktree_pileup_routes_to_safe_convergence(self):
+        with tempfile.TemporaryDirectory() as td:
+            data = route(Path(td), "清理长期堆积的历史 Worktree")
+            self.assertEqual("工作目录安全收敛", data["selected"][0]["skill"])
+
     def test_plugin_enhancement_is_not_misrouted_to_cs_desktop(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); (root / ".git").mkdir()

@@ -8,6 +8,8 @@ from collections import deque
 from functools import lru_cache
 from pathlib import Path
 
+from source_identity import context_fresh, identify
+
 
 PLUGIN_FOR = {
     "greenfield-project-planning": "ai-engineering-core",
@@ -47,6 +49,7 @@ PLUGIN_FOR = {
     "project-state-manager": "ai-engineering-workspace",
     "task-lifecycle-manager": "ai-engineering-workspace",
     "worktree-task-manager": "ai-engineering-workspace",
+    "worktree-safe-convergence": "ai-engineering-workspace",
 }
 
 PROJECT_MARKERS = ("package.json", "pyproject.toml", "requirements.txt", "Cargo.toml", "go.mod", "pom.xml", "build.gradle", "build.gradle.kts", "composer.json", "Gemfile", "CMakeLists.txt", "Packages/manifest.json")
@@ -65,6 +68,9 @@ PLUGIN_DISPLAY = {
 
 def bounded_marker_paths(root: Path, max_depth: int = 3, max_dirs: int = 160) -> list[Path]:
     """Find only shallow project manifests; never turn routing into a repository scan."""
+    identity = identify(root)
+    if identity["is_git"]:
+        return [Path(path) for path in identity["trusted_markers"]]
     root = root.resolve(); found: list[Path] = []; queue = deque([(root, 0)]); visited = 0
     while queue and visited < max_dirs:
         current, depth = queue.popleft(); visited += 1
@@ -73,15 +79,17 @@ def bounded_marker_paths(root: Path, max_depth: int = 3, max_dirs: int = 160) ->
             if path.is_file(): found.append(path)
         found.extend(sorted(current.glob("*.sln"))[:4]); found.extend(sorted(current.glob("*.csproj"))[:8])
         if depth >= max_depth: continue
-        try: children = [p for p in current.iterdir() if p.is_dir() and p.name not in IGNORED_DIRS]
+        try: children = [p for p in current.iterdir() if p.is_dir() and p.name not in IGNORED_DIRS and not (p / ".git").exists()]
         except OSError: children = []
         queue.extend((child, depth + 1) for child in sorted(children)[:64])
     return list(dict.fromkeys(found))
 
 
 def project_signals(root: Path) -> dict:
+    identity = identify(root)
     context = root / ".ai" / "context" / "tech-stack.json"; sources: list[str] = []; evidence_parts: list[str] = []
-    if context.is_file():
+    context_ready = context_fresh(context, identity.get("branch") or "", identity.get("head") or "") if identity["is_git"] else context.is_file()
+    if context_ready:
         try: evidence_parts.append(json.dumps(json.loads(context.read_text(encoding="utf-8")), ensure_ascii=False).lower()); sources.append(str(context))
         except (OSError, json.JSONDecodeError): pass
     markers = bounded_marker_paths(root)
@@ -109,13 +117,15 @@ def project_signals(root: Path) -> dict:
     web_from_packages = bool(package_dependencies & web_packages) or ("react" in package_dependencies and not react_native)
     backend = backend or any(dep == token or dep.startswith(token) for dep in package_dependencies for token in ("@nestjs/", "express", "fastify", "koa", "@hapi/", "hapi", "fastapi", "django", "flask", "spring-boot", "laravel", "rails"))
     return {
-        "existing": bool(markers or context.is_file()),
+        "existing": bool(markers or context_ready),
         "bs": web_from_packages or any(token in evidence for token in FRONTEND_TOKENS if token != "react") and not react_native,
         "backend": backend or any(token in evidence for token in BACKEND_TOKENS),
         "cs": cs or react_native or any(token in evidence for token in CLIENT_TOKENS),
         "unity": unity or "unity" in evidence,
-        "context_ready": context.is_file(),
+        "context_ready": context_ready,
         "sources": sources[:12],
+        "identity": identity,
+        "source_conflicts": bool(identity.get("nested_worktrees")),
     }
 
 
@@ -187,7 +197,8 @@ def route(root: Path, request: str) -> dict:
     bootstrap = any(x in text for x in ("首次接管", "识别真实技术", "识别技术栈", "技术栈和版本", "初始化 .ai", "初始化.ai", "建立项目上下文"))
     standards = any(x in text for x in ("官方规范", "官方文档", "编码规范", "标准解析"))
     graph = any(x in text for x in ("知识图谱", "工程图谱", "依赖图", "影响图谱", "两跳", "节点分析影响"))
-    worktree = any(x in text for x in ("worktree", "工作树", "多工作目录"))
+    worktree = any(x in text for x in ("worktree", "工作树", "多工作目录", "工作目录"))
+    worktree_cleanup = worktree and any(x in text for x in ("堆积", "孤儿", "历史", "清理", "关闭", "收敛", "整理", "接管", "过期"))
     file_lock = any(x in text for x in ("文件锁", "锁定文件", "锁冲突", "prefab锁", "migration锁"))
     task_state = any(x in text for x in ("项目状态", "project_state", "current_context", "状态文档"))
     lifecycle = any(x in text for x in ("任务生命周期", "task id", "task状态", "任务状态流转")) or bool(re.search(r"创建\s*[A-Z]{1,8}-\d{3,}", request, re.I))
@@ -226,7 +237,10 @@ def route(root: Path, request: str) -> dict:
     else:
         mode = "existing" if existing else "unknown"
         stage = "release" if release else "review" if review else "testing" if test else "design" if design else "development"
-        if bootstrap:
+        if signals["source_conflicts"]:
+            stage = "governance"
+            add("worktree-task-manager", "检测到嵌套工作目录，必须先确认唯一源码身份")
+        elif bootstrap:
             add("project-bootstrap", "需要从工程证据识别真实技术与版本")
         elif standards:
             add("official-standards-resolver", "需要按已识别的真实版本解析官方规范")
@@ -238,6 +252,8 @@ def route(root: Path, request: str) -> dict:
             add("interruptible-task-control", "控制指令必须先保存检查点")
         elif portfolio:
             add("multi-project-portfolio-manager", "多个仓库必须保持项目身份与上下文隔离")
+        elif worktree_cleanup:
+            add("worktree-safe-convergence", "历史或堆积工作目录需要只读接管、证据分类和两阶段安全收敛")
         elif worktree:
             add("worktree-task-manager", "并行写任务需要受治理的独立工作目录")
         elif file_lock:
@@ -308,6 +324,7 @@ def route(root: Path, request: str) -> dict:
     confidence = "low" if not selected else "medium" if ambiguous_hybrid or (kinds > 1 and not plugin_engineering) else "high"
     questions = []
     if not selected: questions.append("当前请求未命中软件工程执行阶段；不自动加载原子Skill")
+    elif signals["source_conflicts"]: questions.append("当前仓库包含嵌套工作目录；清点并移出规范仓库后再执行源码修改")
     elif ambiguous_hybrid: questions.append("工程包含多个技术通道；执行前需在任务契约中确认本次前端、客户端和服务端范围")
     return {
         "schema_version": "1.0.0",
@@ -319,6 +336,14 @@ def route(root: Path, request: str) -> dict:
         "max_loaded_skills": 2,
         "confidence": confidence,
         "project_evidence": signals["sources"],
+        "source_identity": {
+            "repo_root": signals["identity"].get("repo_root"),
+            "worktree_root": signals["identity"].get("worktree_root"),
+            "branch": signals["identity"].get("branch"),
+            "head": signals["identity"].get("head"),
+            "trusted_manifest_count": len(signals["identity"].get("trusted_markers", [])),
+            "nested_worktree_count": len(signals["identity"].get("nested_worktrees", [])),
+        },
         "receipt_required": bool(selected),
         "questions": questions,
     }

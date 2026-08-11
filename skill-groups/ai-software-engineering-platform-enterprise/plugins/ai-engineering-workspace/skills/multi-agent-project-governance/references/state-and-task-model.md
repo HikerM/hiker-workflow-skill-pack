@@ -11,7 +11,7 @@
 
 `.ai/tasks/<TASK-ID>.json` 包含目标、状态、控制状态、负责人角色、分支、影响文件、Commit、审核、测试、证据、文档、风险、闭环和发布信息。
 
-合法状态：`Created → Planning → Development → Review → Testing → Merged → Released`。暂停/恢复是控制状态，不倒退或跳过生命周期。方向调整必须写 checkpoint 和 decision；插入需求必须创建新 Task ID 并声明依赖，不能偷偷扩大旧任务。
+合法状态：`Created → Planning → Development → Review → Testing → MergedPendingCleanup → Merged → Released`。合并提交完成但 Worktree 尚未关闭时停留在 `MergedPendingCleanup`；暂停/恢复是控制状态，不倒退或跳过生命周期。方向调整必须写 checkpoint 和 decision；插入需求必须创建新 Task ID 并声明依赖，不能偷偷扩大旧任务。
 
 ## 上下文恢复
 

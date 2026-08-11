@@ -124,7 +124,7 @@ quote → create → worker/provider → resource_transfer → result normalizat
 
 核心原则是“核心插件只探测一次，其他插件消费统一 `.ai/` 上下文”。这样 Web、Unity、质量和工作区模块不会重复猜测技术栈。
 
-### 3.2 五个插件和 38 个 Skill
+### 3.2 五个插件和 39 个 Skill
 
 #### 插件一：`ai-engineering-core`（8 个 Skill）
 
@@ -161,13 +161,14 @@ quote → create → worker/provider → resource_transfer → result normalizat
 - `unity-component-implementation`：实现 Prefab、VisualElement、Renderer 或页面组件，遵守资源生命周期和现有数据层。
 - `unity-quality-review`：只读审核代码、Prefab、Scene、`.meta`/GUID、多分辨率、GC、资源和平台兼容性。
 
-#### 插件四：`ai-engineering-workspace`（10 个 Skill）
+#### 插件四：`ai-engineering-workspace`（11 个 Skill）
 
 - `multi-agent-project-governance`：Master总控入口，协调Planning、Developer、Review、Test、Merge和Document角色。
 - `project-state-manager`：维护PROJECT_STATE、CURRENT_CONTEXT、CHANGELOG、ARCHITECTURE及机器状态。
 - `task-lifecycle-manager`：管理Task ID、Created到Released状态机和暂停/调整/恢复。
 - `workspace-task-router`：B/S拆分浏览器前端与服务端，C/S拆分客户端与服务端，并建立契约数据通道。
 - `worktree-task-manager`：按main/release/develop和feature/bugfix/hotfix规则管理Worktree。
+- `worktree-safe-convergence`：清点、接管、分类并以两阶段确认安全关闭历史Worktree。
 - `file-lock-manager`：保护Unity Scene/Prefab/ProjectSettings/meta与NodeTS Service/migration/API Contract。
 - `feature-acceptance-closure`：检查需求、代码、审核、测试、截图/日志、文档和状态闭环。
 - `change-ownership-merge`：检查分支流向、Conventional Commit、所有权、冲突、文件锁和合并门禁。

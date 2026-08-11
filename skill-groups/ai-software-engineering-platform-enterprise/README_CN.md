@@ -1,20 +1,21 @@
-# AI Software Engineering Platform Enterprise 5.0（大型工程多Agent治理版）
+# AI Software Engineering Platform Enterprise 5.1（通用C/S与大型工程多Agent治理版）
 
 这是面向 ChatGPT Work / Codex 桌面端的大型软件工程插件套件。它不再把所有能力堆进一个超长 Skill，而是拆成 5 个可独立启用的中文插件：
 
 1. **AI工程核心**：项目识别、真实版本检测、项目专属规范、任务状态、压缩保护和恢复。
 2. **B/S界面与前端工程**：非模板化设计系统、语义色彩与间距、视觉焦点与节奏、复杂度分级、组件化实现和只读质量审核。
-3. **Unity C/S工程**：Unity UI、Prefab、Renderer、资源、多分辨率和平台兼容。
+3. **C/S客户端工程**：通过轻量路由按需支持Unity、Qt、.NET桌面、Electron/Tauri、Flutter、Android、Apple原生、React Native、Java桌面和嵌入式HMI；保留Unity Prefab/Scene/meta专项能力。
 4. **工作区与多会话协作**：七角色控制平面、项目/任务状态、Context Snapshot、多项目隔离、文件锁、Worktree、验收闭环和Git合并治理。
 5. **质量、风险与发布**：独立设计就绪复审、完整本地变更集、设计变化影响、SQLite 增量图谱、回归测试计划和发布证据。
 
-当前套件包含 5 个插件、25 个 Skill。设计收敛采用问题驱动循环；大型工程由 Master、Planning、Developer、Review、Test、Merge、Document 七类职责契约贯穿需求到发布。
+当前套件包含 5 个插件、29 个 Skill。设计收敛采用问题驱动循环；大型工程由 Master、Planning、Developer、Review、Test、Merge、Document 七类职责契约贯穿需求到发布。
 
 个人安装器默认完成插件复制、个人Marketplace注册、五插件CLI安装启用，以及 `~/.codex/AGENTS.md` 全局自动应用/回执区块的安全合并。原规则会保留并备份，重复安装保持幂等；CLI不可用时输出手动命令。
 
 ## 关键约束
 
 - **一次识别，多次复用**：领域插件读取 `.ai/context/`，不得重复全仓库技术栈分析。
+- **广覆盖不等于全量加载**：C/S使用小型入口路由，单次只加载当前技术族和设计/实现/审核中的一个阶段。
 - **持续执行但可随时中断**：用户说“暂停、调整、继续、回滚、查看状态”时，核心 Skill 与状态脚本更新运行状态，不要求每一步审批。
 - **上下文压缩不作为唯一记忆系统**：状态脚本可保存检查点并恢复精简上下文；当前 manifest 不自动注册已不受支持的 `hooks` 字段。
 - **一个 Git 仓库，多 Worktree**：并行写任务使用独立 Worktree；只读探索优先使用 Subagent。
@@ -27,7 +28,7 @@
 ## 推荐启用组合
 
 - Web 项目：核心 + B/S + 工作区 + 质量
-- Unity 项目：核心 + Unity + 工作区 + 质量
-- Web + Unity 混合项目：全部 5 个
+- C/S 项目：核心 + C/S客户端工程 + 工作区 + 质量；后端通过独立通道协作
+- Web + C/S 混合项目：全部 5 个
 
 详见 `INSTALL_CN.md`、`USER_GUIDE_CN.md` 和 `docs/`。

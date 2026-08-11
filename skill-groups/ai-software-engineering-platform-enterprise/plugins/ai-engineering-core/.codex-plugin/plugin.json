@@ -1,6 +1,6 @@
 {
   "name": "ai-engineering-core",
-  "version": "5.0.0",
+  "version": "5.1.0",
   "description": "项目识别、动态规范、可中断状态与上下文恢复",
   "author": {
     "name": "AI Engineering Toolkit"
@@ -16,7 +16,7 @@
   "interface": {
     "displayName": "01 AI工程核心",
     "shortDescription": "项目识别、动态规范、可中断状态与上下文恢复",
-    "longDescription": "识别真实语言、框架和版本，建立统一 .ai 状态协议，并通过可显式调用的状态脚本保存、恢复和校验长期任务上下文。",
+    "longDescription": "从锁文件、工程文件和工具链证据识别B/S与C/S真实语言、框架和版本，建立统一.ai状态，并保存、恢复和校验长期任务上下文。",
     "developerName": "AI Engineering Toolkit",
     "category": "Productivity",
     "capabilities": [

@@ -1,0 +1,6 @@
+interface:
+  display_name: "C/S组件实现"
+  short_description: "在现有客户端框架中实现并验证组件"
+  default_prompt: "使用 $cs-component-implementation 按审核通过的设计在当前C/S框架中实现功能。"
+policy:
+  allow_implicit_invocation: true

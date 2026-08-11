@@ -5,6 +5,14 @@ description: 将大型需求按B/S浏览器前端与服务端、C/S客户端与�
 
 # 工作区任务路由
 
+## 轻量入口原则
+
+- 先从用户请求和 `.ai/context/tech-stack.json` 路由，不为路由重复扫描全仓。
+- 单次只启用当前阶段、当前技术族和当前风险所需的最小 Skill 集；不同时预加载设计、实现、审核、测试、合并和发布全部能力。
+- B/S只加载Web当前阶段能力；C/S先调用 `cs-client-router`，再只加载命中的客户端技术族能力；后端与契约保持独立通道。
+- 简单、单文件、低风险任务可由当前会话顺序完成，不强制创建多Agent、Worktree、图谱或完整项目治理。
+- 输出实际启用、未启用及原因，防止把“已安装”误报为“已应用”。
+
 先读取 `PROJECT_STATE.md`、`CURRENT_CONTEXT.md`、`CHANGELOG.md`、`ARCHITECTURE.md` 和 Git 状态，再运行：
 
 ```bash

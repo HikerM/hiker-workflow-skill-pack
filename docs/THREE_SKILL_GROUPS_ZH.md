@@ -107,7 +107,7 @@ quote → create → worker/provider → resource_transfer → result normalizat
 
 ---
 
-## 三、第二组：AI Software Engineering Platform Enterprise 5.0
+## 三、第二组：AI Software Engineering Platform Enterprise 5.1
 
 ### 3.1 设计目标
 
@@ -122,7 +122,7 @@ quote → create → worker/provider → resource_transfer → result normalizat
 
 核心原则是“核心插件只探测一次，其他插件消费统一 `.ai/` 上下文”。这样 Web、Unity、质量和工作区模块不会重复猜测技术栈。
 
-### 3.2 五个插件和 25 个 Skill
+### 3.2 五个插件和 29 个 Skill
 
 #### 插件一：`ai-engineering-core`（4 个 Skill）
 
@@ -139,7 +139,12 @@ quote → create → worker/provider → resource_transfer → result normalizat
 - `web-component-implementation`：只实现独立复审通过的设计；复用语义 Token 与现有组件，保留视觉层级、节奏和服务任务的微交互，缺少设计系统契约时阻断编码。
 - `web-quality-review`：只读审核设计系统、组件复用、依赖边界、TypeScript、响应式、视觉状态、反模板质量和视觉丰富度，不通过“边改边审”制造假通过。
 
-#### 插件三：`ai-engineering-unity`（3 个 Skill）
+#### 插件三：`ai-engineering-unity`（显示为“03 C/S客户端工程”，7 个 Skill）
+
+- `cs-client-router`：从统一项目状态轻量识别 Unity、Qt、.NET桌面、Electron/Tauri、Flutter、Android、Apple原生、React Native、Java桌面和嵌入式HMI；同时报告语言、运行时、框架、SDK、构建工具的版本证据和缺口。
+- `cs-ui-design`：为非Unity客户端建立设计系统、色彩、间距、组件复用、窗口/设备生命周期、离线和API契约。
+- `cs-component-implementation`：在当前项目真实框架和版本中实现，不写死技术路线或擅自迁移。
+- `cs-quality-review`：独立只读审核客户端视觉、组件、线程、生命周期、资源、API、平台、性能、安装和更新证据。
 
 - `unity-ui-design`：根据 Unity 版本、UGUI/UI Toolkit 和现有导航设计 UI、Prefab 层级、Anchor、页面生命周期和交互状态。
 - `unity-component-implementation`：实现 Prefab、VisualElement、Renderer 或页面组件，遵守资源生命周期和现有数据层。
@@ -171,9 +176,10 @@ quote → create → worker/provider → resource_transfer → result normalizat
 ### 3.3 推荐工作流
 
 ```text
-project-bootstrap
+project-bootstrap（识别真实技术与版本）
   → official-standards-resolver
-  → Web 或 Unity 设计
+  → Web 或 C/S轻量路由
+  → 当前技术族的设计
   → design-readiness-review
   → 定向整改与相关回归（若有 P0/P1）
   → Web 或 Unity 实现
@@ -198,7 +204,7 @@ context-recovery → interruptible-task-control
 
 ### 3.4 适用与不适用
 
-适用：长期工程、跨模块需求、Web/Unity 实现、多个 Codex 会话、Worktree 并行、完整变更风险和发布门禁。
+适用：长期工程、跨模块需求、Web及各类C/S客户端实现、多个Codex会话、Worktree并行、完整变更风险和发布门禁。
 
 不适用：只修改一行文本、非 Git 临时目录、未确认仓库根目录的批量写入，或希望插件自动强制合并/部署的场景。
 
@@ -208,11 +214,19 @@ context-recovery → interruptible-task-control
 
 ---
 
-## 四、第三组：Desktop App Reconstruction ZH 1.1
+## 四、第三组：Desktop App Reconstruction ZH 1.2
 
 ### 4.1 设计目标
 
-这一组只有 `desktop-app-reconstruction-zh` 一个大型 Skill。它把桌面软件的可观察外部行为转成可追踪、可实现、可测试和可交付的独立重建规格。
+这一组包含一个轻量总路由和四个阶段原子 Skill。总路由只判断当前门禁，不再把完整发现、选型、实现和发布指令一次装入会话：
+
+- `desktop-app-reconstruction-zh`：轻量总路由与授权边界；
+- `desktop-reconstruction-discovery`：G0–G4证据、库存、规格和覆盖追踪；
+- `desktop-reconstruction-technical-design`：G5-T候选技术、POC、官方版本与精确锁定；
+- `desktop-reconstruction-implementation`：G6独立实现；
+- `desktop-reconstruction-verification-release`：G7–G9差分、性能、交付和发布门禁。
+
+共享参考、脚本、证据协议和模板仍属于第三组，安装时不会混入前两组。单次任务只启用当前门禁的一个原子 Skill。
 
 它支持四种模式：
 
@@ -307,4 +321,4 @@ context-recovery → interruptible-task-control
 - 任务重点是“长期工程怎么持续执行”——选第二组。
 - 任务重点是“完整重建一个已授权桌面软件”——选第三组。
 - 同时需要执行和独立验收——第二组执行，第一组复核。
-- 不要把第二组 25 个 Skill 拆散安装成普通平铺 Skill；不要把第三组的参考文件和脚本从主 Skill 中剥离。
+- 不要把第二组29个Skill拆散安装成普通平铺Skill；第三组的五个可发现Skill可以按阶段选择，但共享参考、脚本和模板不能从主资源包剥离。

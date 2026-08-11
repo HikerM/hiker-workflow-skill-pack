@@ -39,6 +39,18 @@ class CoreTests(unittest.TestCase):
             root=Path(td);(root/"pyproject.toml").write_text('[project]\nname="demo"\nrequires-python=">=3.10"\ndependencies=["FastAPI>=0.100"]\n',encoding="utf-8")
             data=detect(root);project=data["projects"][0];self.assertEqual("python",project["kind"]);self.assertEqual(">=3.10",project["languages"][0]["version"]);self.assertIn("FastAPI",project["frameworks"])
 
+    def test_detect_general_cs_frameworks(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)
+            (root/"desktop").mkdir();(root/"desktop/App.csproj").write_text('<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0-windows</TargetFramework><UseWPF>true</UseWPF></PropertyGroup></Project>',encoding="utf-8")
+            (root/"qt").mkdir();(root/"qt/CMakeLists.txt").write_text('cmake_minimum_required(VERSION 3.24)\nfind_package(Qt6 6.7 REQUIRED COMPONENTS Quick)\nqt_add_executable(app main.cpp)\n',encoding="utf-8")
+            (root/"mobile").mkdir();(root/"mobile/package.json").write_text(json.dumps({"name":"mobile","dependencies":{"react-native":"0.80.0"}}),encoding="utf-8")
+            projects=detect(root)["projects"]
+            names={f["name"] for p in projects for f in p.get("frameworks",[]) if isinstance(f,dict)}
+            self.assertTrue({"WPF","Qt","React Native"}.issubset(names))
+            versions={f["name"]:f.get("version") for p in projects for f in p.get("frameworks",[]) if isinstance(f,dict)}
+            self.assertEqual("net8.0-windows",versions["WPF"]);self.assertEqual("6.7",versions["Qt"]);self.assertEqual("0.80.0",versions["React Native"])
+
     def test_bootstrap_idempotent(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); (root / "package.json").write_text('{"name":"x"}')

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -163,12 +164,21 @@ def main():
     args = parser.parse_args()
     root = Path(args.root).resolve()
     errors = []
+    package_mode = any((root / rel).exists() for rel in PACKAGE_FILES)
 
     skills_root = root / ".agents" / "skills"
     if not skills_root.exists():
         errors.append("missing .agents/skills")
     else:
         skill_dirs = sorted([p for p in skills_root.iterdir() if p.is_dir()])
+        if not package_mode:
+            marker = root / ".agents" / "hiker-workflow-pack.installed.json"
+            try:
+                managed = set(json.loads(read_text(marker)).get("skills", [])) if marker.is_file() else set()
+            except (OSError, json.JSONDecodeError):
+                managed = set()
+            if managed:
+                skill_dirs = [p for p in skill_dirs if p.name in managed]
         if not skill_dirs:
             errors.append("no skill directories found")
         names = []
@@ -179,12 +189,13 @@ def main():
         for name in duplicates:
             errors.append(f"duplicate skill name: {name}")
 
-    package_mode = any((root / rel).exists() for rel in PACKAGE_FILES)
     if package_mode:
         errors.extend(validate_package_files(root))
 
-    errors.extend(validate_agents(root))
-    errors.extend(validate_no_temp(root))
+    if package_mode:
+        errors.extend(validate_agents(root))
+    # 仓库源码模式检查整个包；安装目标模式只检查本组skills，避免递归用户主目录、缓存和其他项目。
+    errors.extend(validate_no_temp(root if package_mode else skills_root))
 
     if errors:
         print("VALIDATION FAILED")

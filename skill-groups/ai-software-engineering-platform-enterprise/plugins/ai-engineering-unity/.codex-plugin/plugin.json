@@ -1,7 +1,7 @@
 {
   "name": "ai-engineering-unity",
-  "version": "5.0.0",
-  "description": "Unity UI、Prefab、页面实现和跨平台审核",
+  "version": "5.1.0",
+  "description": "通用C/S客户端路由、设计、实现与审核，含Unity专项能力",
   "author": {
     "name": "AI Engineering Toolkit"
   },
@@ -14,9 +14,9 @@
   ],
   "skills": "./skills/",
   "interface": {
-    "displayName": "03 Unity C/S工程",
-    "shortDescription": "Unity UI、Prefab、页面实现和跨平台审核",
-    "longDescription": "自动读取 Unity 版本、Packages、UI 技术栈和目标平台，完成 UGUI/UI Toolkit 设计、Prefab 组件化、页面实现及性能兼容审核。",
+    "displayName": "03 C/S客户端工程",
+    "shortDescription": "多技术栈C/S客户端工程与Unity专项能力",
+    "longDescription": "以轻量路由按需支持Unity、Qt、.NET桌面、Electron/Tauri、Flutter、Android、Apple原生、React Native、Java桌面和嵌入式HMI；覆盖设计系统、组件实现、客户端生命周期、API契约和独立质量审核。",
     "developerName": "AI Engineering Toolkit",
     "category": "Productivity",
     "capabilities": [
@@ -24,8 +24,8 @@
       "Write"
     ],
     "defaultPrompt": [
-      "按当前Unity工程架构设计并实现页面。",
-      "审核Unity页面、多分辨率、资源和性能风险。"
+      "识别当前C/S客户端技术栈，只启用当前阶段所需能力。",
+      "按现有客户端框架设计、实现或审核界面，并与后端API契约保持一致。"
     ],
     "brandColor": "#32363F",
     "composerIcon": "./assets/icon.png",

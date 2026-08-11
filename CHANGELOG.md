@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+
+- Expanded plugin 03 from Unity-only coverage to a general C/S client layer for Unity, Qt, .NET desktop, Electron/Tauri, Flutter, Android, Apple native, React Native, Java desktop, and embedded HMI.
+- Added evidence-based C/S language, runtime, framework, SDK, build-tool, and version detection; missing exact versions remain explicit gaps instead of hard-coded defaults.
+- Added four C/S atomic Skills and preserved all three Unity-specific Skills, increasing Enterprise to 29 Skills.
+- Applied lightweight routing and lazy phase loading across all three repository groups; the desktop reconstruction group now has one router plus four atomic phase Skills.
+- Added cross-group routing receipts and performance budgets so installed capabilities are not all loaded into one conversation.
+
 ## 0.5.1
 
 - Made the Enterprise personal installer automatically merge the managed global Codex governance block while preserving and backing up existing `~/.codex/AGENTS.md` content.

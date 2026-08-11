@@ -1,11 +1,11 @@
 ---
 name: hiker-workflow-router
-description: Route Hiker engineering, review, testing, contract, Unity, design, and architecture requests to the shortest matching workflow skill. Use when a user asks for Hiker workflow handling, Codex thread review, P2.x phase review, evidence-first testing, contract boundary audit, NodeTs execution pipeline checks, Unity/Codex guardrails, design output discipline, or agent architecture consulting.
+description: 作为Hiker工作流守护组的轻量入口，把工程复核、阶段验收、证据测试、契约、NodeTs链路、Unity安全、设计交付或架构咨询请求路由到最短匹配的一个原子Skill。用于不确定应选哪个Hiker Skill时；简单任务不启用重流程，也不预加载其他Skill内容。
 ---
 
 # Hiker Workflow Router
 
-version: 0.2.0
+version: 0.3.0
 owner: Hiker
 
 ## Use When
@@ -39,6 +39,14 @@ Pick the smallest sufficient workflow skill, state the routing decision briefly,
 2. If more than one skill applies, choose the narrowest one first and mention any secondary checks.
 3. For ambiguous complex work, ask one concise clarification only if the missing fact changes safety or scope.
 
+## Performance Budget
+
+- Classify from the user request and directly supplied artifacts first; do not scan the repository merely to choose a skill.
+- Activate one primary atomic skill. Add a secondary skill only when a concrete unresolved gate requires it.
+- Do not load the instructions, references, logs, or source scope of unselected skills.
+- Prefer changed files and direct evidence over full-history or full-repository analysis unless the selected gate requires broader evidence.
+- Routing itself must not run builds, tests, service calls, database actions, push, merge, or deployment.
+
 ## Evidence Rules
 
 Routing evidence is the user's words plus available artifacts. Do not invent project facts. Say when the decision is based only on current context.
@@ -49,6 +57,7 @@ Routing evidence is the user's words plus available artifacts. Do not invent pro
 路由：
 使用 skill：
 原因：
+未启用：
 接下来执行：
 ```
 

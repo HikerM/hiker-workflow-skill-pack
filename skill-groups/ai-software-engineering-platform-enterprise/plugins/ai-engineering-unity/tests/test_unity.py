@@ -4,6 +4,7 @@ from pathlib import Path
 PLUGIN=Path(__file__).resolve().parents[1];sys.path.insert(0,str(PLUGIN/"scripts"))
 from unity_audit import audit
 from unity_registry import build
+from client_stack import classify
 
 class UnityTests(unittest.TestCase):
     def make_project(self,root:Path):
@@ -26,4 +27,20 @@ class UnityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);self.make_project(root);(root/"Assets/UI/X.prefab").write_text("m_Script: {fileID: 0}");(root/"Assets/UI/X.prefab.meta").write_text("guid: aaa")
             data=audit(root);self.assertIn("missing-script",{f["rule"] for f in data["findings"]})
+    def test_client_stack_routes_supported_families_without_repository_scan(self):
+        cases={
+            "unity":"Unity", "qt":"Qt", "dotnet-desktop":"WPF", "electron-tauri":"Tauri",
+            "flutter":"Flutter", "android":"Jetpack Compose", "apple-native":"SwiftUI",
+            "react-native":"React Native", "java-desktop":"JavaFX", "embedded-hmi":"LVGL",
+        }
+        for expected,framework in cases.items():
+            with self.subTest(framework=framework):
+                data=classify({"projects":[{"frameworks":[{"name":framework}]}]})
+                self.assertEqual(expected,data["family"])
+                self.assertEqual("load-one-phase-and-one-family-only",data["performance_policy"])
+    def test_client_stack_unknown_is_explicit(self):
+        data=classify({"projects":[]});self.assertEqual("unknown",data["family"]);self.assertTrue(data["uncertainties"])
+    def test_client_stack_reports_version_evidence_and_gaps(self):
+        data=classify({"projects":[{"manifest":"App.csproj","languages":[{"name":"C#","version":None}],"frameworks":[{"name":"WPF","version":"net8.0-windows","evidence":"TargetFramework"}]}]})
+        self.assertEqual("dotnet-desktop",data["family"]);self.assertEqual("net8.0-windows",next(x for x in data["technologies"] if x["name"]=="WPF")["version"]);self.assertIn("C#",data["version_gaps"])
 if __name__=="__main__":unittest.main()

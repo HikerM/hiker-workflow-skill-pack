@@ -50,6 +50,12 @@ REQUIRED_SCRIPTS = {
     "scripts/self_test.py",
     "scripts/install_skill.py",
 }
+REQUIRED_ATOMIC_SKILLS = {
+    "desktop-reconstruction-discovery",
+    "desktop-reconstruction-technical-design",
+    "desktop-reconstruction-implementation",
+    "desktop-reconstruction-verification-release",
+}
 REQUIRED_ROOT_ENTRIES = {
     "SKILL.md",
     "VERSION",
@@ -265,6 +271,22 @@ def validate_root(root: Path, *, run_self_test: bool = False) -> dict[str, Any]:
         if not (root / rel).exists():
             issues.append(f"缺少 {rel}")
 
+    for name in sorted(REQUIRED_ATOMIC_SKILLS):
+        skill_dir = root / "skills" / name
+        skill_file = skill_dir / "SKILL.md"
+        agent_file = skill_dir / "agents" / "openai.yaml"
+        if not skill_file.is_file() or not agent_file.is_file():
+            issues.append(f"缺少原子Skill结构：{name}")
+            continue
+        try:
+            atomic_front, atomic_body = parse_frontmatter(safe_text(skill_file))
+            if atomic_front.get("name") != name:
+                issues.append(f"原子Skill名称不一致：{name}")
+            if not atomic_front.get("description") or not atomic_body.strip():
+                issues.append(f"原子Skill缺少描述或正文：{name}")
+        except (OSError, UnicodeDecodeError, ValueError) as exc:
+            issues.append(f"原子Skill无效 {name}：{exc}")
+
     skill_path = root / "SKILL.md"
     skill_text = ""
     front: dict[str, str] = {}
@@ -416,6 +438,7 @@ def validate_root(root: Path, *, run_self_test: bool = False) -> dict[str, Any]:
         "python_compile_errors": compile_errors,
         "tree_sha256": sha256_path(root),
         "self_test": self_test_result,
+        "atomic_skill_count": len(REQUIRED_ATOMIC_SKILLS),
     })
     gate = "PASS" if not issues else "FAIL"
     return {"gate": gate, **details, "issues": issues, "warnings": sorted(set(warnings))}

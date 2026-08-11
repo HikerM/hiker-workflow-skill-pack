@@ -1,0 +1,6 @@
+interface:
+  display_name: "C/S质量审核"
+  short_description: "独立审核客户端视觉、生命周期与平台质量"
+  default_prompt: "使用 $cs-quality-review 独立只读审核当前C/S客户端变更和证据。"
+policy:
+  allow_implicit_invocation: true

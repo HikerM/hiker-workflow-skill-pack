@@ -26,7 +26,20 @@ def lane(name: str, role: str, inputs: list[str], outputs: list[str], mode: str,
 def route(text: str) -> dict:
     low = text.lower()
     bs = any(x in low for x in ["b/s", "bs架构", "web", "vue", "react", "浏览器", "前端页面", "saas", "cms"])
-    cs = any(x in low for x in ["c/s", "cs架构", "unity", "桌面", "客户端", "winforms", "wpf", "qt"])
+    client_markers = {
+        "unity": ["unity", "ugui", "ui toolkit"],
+        "qt": ["qt", "qml", "pyside", "pyqt"],
+        "dotnet-desktop": ["winforms", "wpf", "winui", "avalonia", "maui"],
+        "electron-tauri": ["electron", "tauri"],
+        "flutter": ["flutter"],
+        "android": ["android", "compose"],
+        "apple-native": ["ios", "macos", "swiftui", "uikit", "appkit"],
+        "react-native": ["react native", "react-native"],
+        "java-desktop": ["javafx", "swing"],
+        "embedded-hmi": ["lvgl", "hmi", "嵌入式界面"],
+    }
+    client_families = [family for family, markers in client_markers.items() if any(x in low for x in markers)]
+    cs = any(x in low for x in ["c/s", "cs架构", "桌面", "客户端", "移动端"]) or bool(client_families)
     if not bs and not cs:
         bs = any(x in low for x in ["前端", "后台", "门户"])
         cs = "客户端" in low
@@ -43,7 +56,7 @@ def route(text: str) -> dict:
         implementation += ["bs-frontend", "bs-backend"]
     if cs:
         lanes += [
-            lane("cs-client", "Developer Agent", ["approved plan", "client UI and lifecycle contracts", "API contracts"], ["desktop or Unity client", "client tests"], "separate-worktree", ["planning"]),
+            lane("cs-client", "Developer Agent", ["approved plan", "client family receipt", "client UI and lifecycle contracts", "versioned API contracts"], ["client implementation in existing framework", "client tests"], "separate-worktree", ["planning"]),
             lane("cs-backend", "Developer Agent", ["approved plan", "data and API contracts"], ["server implementation", "backend tests"], "separate-worktree", ["planning"]),
         ]
         implementation += ["cs-client", "cs-backend"]
@@ -63,7 +76,7 @@ def route(text: str) -> dict:
         lane("release-control", "Master Agent", ["merged task", "release evidence", "risk and rollback plan"], ["release decision", "Released state or rollback"], "human-controlled", ["merge"]),
     ]
     return {
-        "schema_version": "2.0.0", "request": text, "architecture": architecture, "lanes": lanes,
+        "schema_version": "2.1.0", "request": text, "architecture": architecture, "client_families": client_families or (["unspecified"] if cs else []), "lanes": lanes,
         "policy": {"control_plane": "Master Agent", "parallel_write": "separate Git worktree plus file locks", "same_file_write": "serial", "protected_branches": ["main", "develop", "release"], "human_controls": ["pause", "adjust", "insert", "resume"], "context_isolation": "project_id plus repository root"},
     }
 

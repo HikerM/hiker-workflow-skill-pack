@@ -17,6 +17,12 @@ from typing import Any
 from common import write_json
 
 SKILL_NAME = "desktop-app-reconstruction-zh"
+ATOMIC_SKILLS = [
+    "desktop-reconstruction-discovery",
+    "desktop-reconstruction-technical-design",
+    "desktop-reconstruction-implementation",
+    "desktop-reconstruction-verification-release",
+]
 IGNORE_NAMES = {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".DS_Store"}
 
 
@@ -126,10 +132,30 @@ def main() -> int:
                 result["installed_validation"] = installed_check
                 if installed_check.get("gate") != "PASS":
                     raise RuntimeError("安装后校验失败")
+                installed_skills = [SKILL_NAME]
+                for atomic_name in ATOMIC_SKILLS:
+                    atomic_source = source / "skills" / atomic_name
+                    atomic_destination = destination_root / atomic_name
+                    atomic_staging = destination_root / f".skill-install-{atomic_name}-{uuid.uuid4().hex[:8]}"
+                    shutil.copytree(atomic_source, atomic_staging, symlinks=False, ignore=ignore_copy)
+                    if atomic_destination.exists():
+                        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+                        atomic_backup = destination_root / f"{atomic_name}.backup-{stamp}"
+                        if args.no_backup:
+                            shutil.rmtree(atomic_destination)
+                        else:
+                            counter = 1
+                            while atomic_backup.exists():
+                                atomic_backup = destination_root / f"{atomic_name}.backup-{stamp}-{counter}"
+                                counter += 1
+                            atomic_destination.rename(atomic_backup)
+                    atomic_staging.rename(atomic_destination)
+                    installed_skills.append(atomic_name)
                 result.update({
                     "gate": "PASS",
                     "message": "安装完成",
                     "backup": str(backup) if backup else "",
+                    "installed_skills": installed_skills,
                 })
             except Exception as exc:
                 if staging_parent.exists():

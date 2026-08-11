@@ -35,7 +35,7 @@ def owners(root: Path, items: list[dict]) -> list[dict]:
 
 
 def conflict_probe(root: Path, target: str, source: str) -> dict:
-    base = run(["git", "merge-base", target, source], root).stdout.strip(); result = run(["git", "merge-tree", base, target, source], root, check=False); text = result.stdout + "\n" + result.stderr; markers = [line for line in text.splitlines() if "<<<<<<<" in line or "changed in both" in line or "CONFLICT" in line]
+    base = (run(["git", "merge-base", target, source], root).stdout or "").strip(); result = run(["git", "merge-tree", base, target, source], root, check=False); text = (result.stdout or "") + "\n" + (result.stderr or ""); markers = [line for line in text.splitlines() if "<<<<<<<" in line or "changed in both" in line or "CONFLICT" in line]
     return {"merge_base": base, "potential_conflict": bool(markers), "markers": markers[:50], "command_returncode": result.returncode}
 
 

@@ -1,29 +1,32 @@
-# Enterprise 5.0 本地验证报告
+# Enterprise 5.1 本地验证报告
 
-生成版本：5.0.0
+生成版本：5.1.0
 
 ## 确定性验证
 
 - 插件清单：5 个
-- Skill 数量：由验证器从插件目录动态统计为 25 个
-- 本次修改的13个Skill（Workspace 10个、Core 2个、Quality 1个）：`quick_validate.py` 全部通过
+- Skill 数量：由验证器从插件目录动态统计为29个
+- 新增4个C/S原子Skill及第三组4个阶段原子Skill：`quick_validate.py` 全部通过
 - 5 个插件：官方 `validate_plugin.py` 全部通过
 - 插件结构与图标：通过
 - Manifest：已移除当前规范不接受的 `hooks` 字段；状态与事件脚本保留为显式调用工具
 - Python 编译：通过
 - Eval 基础样例：每个插件至少 10 条并包含负向样例
 - 单元测试：通过
-- 单元测试明细：Core 7、Quality 11、Unity 4、Web 6、Workspace 7，共 35/35 通过
+- 单元测试明细：Core 8、Quality 11、C/S与Unity 7、Web 6、Workspace 8，共40/40通过
 - Python 3.10 兼容：`tomllib` 缺失时回退 `tomli`，无依赖时安全降级；`pyproject.toml` 探测测试通过
 - UI 反模板静态信号：Bootstrap、重复卡片、硬编码间距、装饰效果与 Token 证据测试通过
 - 集成 Smoke：通过
 - 完整本地变更集：已验证暂存、未暂存、未跟踪同时存在
 - Git Worktree：已验证受保护分支、正确基线、任务绑定、创建、暂停和安全移除
-- 多Agent治理：已验证B/S与C/S前后端路由、PROJECT_STATE/CURRENT_CONTEXT、Task状态机、暂停/恢复/插入、Unity与migration锁冲突、功能闭环和合并门禁
+- 多Agent治理：已验证B/S前后端及Qt、.NET、Flutter、Tauri等C/S客户端/服务端/契约路由、PROJECT_STATE/CURRENT_CONTEXT、Task状态机、暂停/恢复/插入、Unity与migration锁冲突、功能闭环和合并门禁
+- C/S技术版本：已验证WPF从TargetFramework、Qt从CMake、React Native从依赖清单获取版本；客户端收据同时输出技术、版本、证据与version_gaps，缺失版本不会被写死。
+- 运行性能：三组均使用轻量入口；单次只选择一个主组、当前技术族和当前阶段，不默认重扫全仓、加载全部参考、建立图谱或运行全量测试。
 - 上下文保护脚本：已验证任务初始化、PreCompact协议检查点和恢复输出；新版项目状态与任务checkpoint优先于聊天摘要
 - 图谱限流：已验证节点上限
 - 测试命令发现：已验证读取项目真实 package scripts
-- 本机重新安装：5 个插件均通过个人 Marketplace 安装并显示为 `installed: true, enabled: true`，版本为 `5.0.0+codex.<cachebuster>`
+- 本机重新安装：5个插件均通过个人Marketplace安装并显示为 `installed: true, enabled: true`，版本为 `5.1.0+codex.20260811061430`；03号显示名为“03 C/S客户端工程”。
+- 三组本机安装：第一组9个用户级Skill已安装；第三组1个总路由与4个原子Skill已安装并通过安装后校验。
 - 全局自动应用：已把带标记治理区块合并到 `C:\Users\Administrator\.codex\AGENTS.md`，要求任务开始/结束展示实际插件与Skill回执
 - 分发安装器：已在隔离用户目录验证保留原AGENTS规则、默认写入自动应用/回执、重复安装不重复、退出参数生效、卸载只删除托管区块。
 - 插件自动启用：已在隔离用户目录通过显式桌面Codex CLI验证5/5插件自动安装成功；无可执行CLI时输出 `manual-required` 和手动命令。
@@ -41,7 +44,7 @@
 {
   "ok": true,
   "plugin_count": 5,
-  "skill_count": 25,
+  "skill_count": 29,
   "errors": [],
   "warnings": []
 }

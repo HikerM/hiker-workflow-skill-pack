@@ -1,6 +1,6 @@
 # Skill 索引
 
-仓库包含三组，共 35 个 Skill。
+仓库包含三组，共 43 个 Skill。每组都有轻量入口，单次只选择当前意图、技术栈和阶段所需的原子能力。
 
 ## 第一组：Hiker 工作流守护组（9 个）
 
@@ -18,7 +18,7 @@
 
 源码：`../.agents/skills/`
 
-## 第二组：AI 软件工程平台 Enterprise（25 个）
+## 第二组：AI 软件工程平台 Enterprise（29 个）
 
 ### `ai-engineering-core`
 
@@ -41,6 +41,10 @@
 
 | Skill | 作用 |
 |---|---|
+| `cs-client-router` | 从统一项目状态识别C/S技术族和版本证据，只选择当前阶段能力 |
+| `cs-ui-design` | 为多技术栈客户端建立设计系统、组件、生命周期、离线和API契约 |
+| `cs-component-implementation` | 在现有客户端框架中实现并验证，不擅自迁移技术栈 |
+| `cs-quality-review` | 独立只读审核客户端视觉、线程、生命周期、API、平台和发布质量 |
 | `unity-ui-design` | 按真实 Unity/UI 技术栈设计页面和 Prefab 层级 |
 | `unity-component-implementation` | 实现 Prefab、VisualElement、Renderer 或页面组件 |
 | `unity-quality-review` | 只读审核 Scene、Prefab、GUID、资源、GC 和平台兼容 |
@@ -72,11 +76,15 @@
 
 源码：`../skill-groups/ai-software-engineering-platform-enterprise/`
 
-## 第三组：桌面软件等价重建（1 个）
+## 第三组：桌面软件等价重建（5 个）
 
 | Skill | 作用 |
 |---|---|
-| `desktop-app-reconstruction-zh` | 已授权桌面软件的证据盘点、技术指纹、完整库存、技术选型、实现、差分测试、性能、打包和交付门禁 |
+| `desktop-app-reconstruction-zh` | 轻量识别当前门禁并只路由一个阶段原子Skill |
+| `desktop-reconstruction-discovery` | G0–G4授权、证据、界面、功能、数据和追踪规格 |
+| `desktop-reconstruction-technical-design` | G5-T候选技术、POC、官方版本核验和精确锁定 |
+| `desktop-reconstruction-implementation` | G6按规格、任务和测试编号实现真实软件 |
+| `desktop-reconstruction-verification-release` | G7–G9独立差分、性能、交付和发布门禁 |
 
 源码：`../skill-groups/desktop-app-reconstruction-zh/`
 

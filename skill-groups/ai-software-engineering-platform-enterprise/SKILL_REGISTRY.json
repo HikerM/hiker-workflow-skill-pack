@@ -98,6 +98,30 @@
       "project_detection": "consume-core-context",
       "may_modify_source": false
     },
+    "cs-client-router": {
+      "plugin": "ai-engineering-unity",
+      "mode": "workflow",
+      "project_detection": "consume-core-context",
+      "may_modify_source": false
+    },
+    "cs-ui-design": {
+      "plugin": "ai-engineering-unity",
+      "mode": "workflow",
+      "project_detection": "consume-core-context",
+      "may_modify_source": false
+    },
+    "cs-component-implementation": {
+      "plugin": "ai-engineering-unity",
+      "mode": "implementation",
+      "project_detection": "consume-core-context",
+      "may_modify_source": true
+    },
+    "cs-quality-review": {
+      "plugin": "ai-engineering-unity",
+      "mode": "review",
+      "project_detection": "consume-core-context",
+      "may_modify_source": false
+    },
     "feature-acceptance-closure": {
       "plugin": "ai-engineering-workspace",
       "mode": "review",

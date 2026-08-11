@@ -3,7 +3,7 @@ import contextlib,fnmatch,json,os,re,subprocess,tempfile,time
 from pathlib import Path
 from typing import Any,Iterator
 
-def run(cmd:list[str],cwd:Path,check:bool=True)->subprocess.CompletedProcess[str]:return subprocess.run(cmd,cwd=str(cwd),text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=check)
+def run(cmd:list[str],cwd:Path,check:bool=True)->subprocess.CompletedProcess[str]:return subprocess.run(cmd,cwd=str(cwd),text=True,encoding="utf-8",errors="replace",stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=check)
 def repo_root(path:Path)->Path:return Path(run(["git","rev-parse","--show-toplevel"],path).stdout.strip()).resolve()
 def common_dir(path:Path)->Path:
     root=repo_root(path);raw=run(["git","rev-parse","--git-common-dir"],root).stdout.strip();p=Path(raw);return (root/p).resolve() if not p.is_absolute() else p.resolve()

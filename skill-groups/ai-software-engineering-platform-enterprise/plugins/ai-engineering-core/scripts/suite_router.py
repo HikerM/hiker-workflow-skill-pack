@@ -42,6 +42,7 @@ PLUGIN_FOR = {
     "release-readiness-review": "ai-engineering-quality",
     "design-readiness-review": "ai-engineering-quality",
     "knowledge-graph-maintenance": "ai-engineering-quality",
+    "interaction-conflict-governance": "ai-engineering-quality",
     "feature-acceptance-closure": "ai-engineering-workspace",
     "file-lock-manager": "ai-engineering-workspace",
     "multi-project-portfolio-manager": "ai-engineering-workspace",
@@ -211,6 +212,11 @@ def route(root: Path, request: str) -> dict:
     full_risk = review and any(x in text for x in ("暂存", "未跟踪", "feature分支", "相对main", "迁移和权限", "全部修改", "受影响设计层", "重跑设计复审", "prefab、scene", "packages变更"))
     regression = not unsafe_shortcut and any(x in text for x in ("最低回归范围", "风险报告生成", "真实scripts", "测试命令", "项目实际命令"))
     visual_review = review and "编码前" not in text and any(x in text for x in ("视觉回归", "硬编码样式", "bootstrap风格", "指标卡模板", "所有区域都做成卡片", "单调等权", "微交互"))
+    interaction_conflict = any(x in text for x in (
+        "交互冲突", "状态冲突", "隐藏交互", "隐藏状态", "交互状态机", "浮层冲突",
+        "下拉冲突", "下拉框冲突", "弹窗冲突", "抽屉冲突", "快捷键冲突",
+        "请求乱序", "重复提交", "焦点冲突", "菜单冲突",
+    ))
     unity_review = review and any(x in text for x in ("missing script", "guid", "arm64", "prefab", "scene", "packages"))
     cs_review = review and any(x in text for x in ("ipc", "生命周期", "api兼容", "打包证据", "swiftui客户端", "electron客户端"))
     backend_contract = backend and any(x in text for x in ("api契约", "接口契约", "事件契约", "openapi", "protobuf", "graphql", "错误模型", "幂等"))
@@ -266,6 +272,8 @@ def route(root: Path, request: str) -> dict:
             add("feature-acceptance-closure", "需要执行功能、测试、证据、文档和状态闭环")
         elif graph:
             add("knowledge-graph-maintenance", "大型工程需要增量关系图谱与影响查询")
+        elif interaction_conflict:
+            add("interaction-conflict-governance", "当前任务需要按模块检查隐藏状态、浮层、焦点、并发和交互冲突")
         elif project_governance:
             add("multi-agent-project-governance", "长期大型工程需要项目状态、任务、角色、Git与验收治理")
             add("workspace-task-router", "跨技术栈工作需要拆成独立且可合并的执行通道")
@@ -313,7 +321,7 @@ def route(root: Path, request: str) -> dict:
         add("bounded-context-memory", "长期多会话只注入有界工作集")
     elif pause:
         add("interruptible-task-control", "控制指令必须先保存检查点")
-    if multi and len(selected) < 2:
+    if multi and not interaction_conflict and len(selected) < 2:
         add("multi-agent-project-governance", "大型工程需要任务、Git与Agent治理")
     if receipt and not selected:
         add("plugin-application-receipt", "用户只要求展示本轮实际应用能力")

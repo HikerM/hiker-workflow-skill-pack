@@ -1,5 +1,5 @@
-dc52ab69275278a1de6ae2e4c26746cf7d80eac46c34b76a6a84918f84c8a99a  dist/ai-engineering-core-5.6.0.zip
-7be1fbf08af27ab4633b611e85d3adf9b83d92401ab8ef2ba255a06b99ec6ad0  dist/ai-engineering-quality-5.6.0.zip
-91a52697e4d94c103ac16fd44cdadb2bf468e18ec4b9793053a0151bc4f64225  dist/ai-engineering-unity-5.6.0.zip
-a3085bd89d9561570c8a9aece780d8245e92704c8ba53e390cfef214aae35158  dist/ai-engineering-web-5.6.0.zip
-885b8cd0ed8b4e616afa05c0076da8bdc51211ebf6d0824d0e9690f4160d6f81  dist/ai-engineering-workspace-5.6.0.zip
+a7cb0de0045b689c20a0c0b6095868b870a595d94272363c182662dc95442c8d  dist/ai-engineering-core-5.7.0.zip
+025d3727d921ce2fa7e8c7d5c7c197c12ced78b187590d1535ae58d21bcc04d6  dist/ai-engineering-quality-5.7.0.zip
+e71a9f420f47ce584985ff6adb79fc57779c2ae688ab141d6af5ea23c3149595  dist/ai-engineering-unity-5.7.0.zip
+14050edaeb62b84962076af875c08a178a53058d1dee8cf3204548602af61c43  dist/ai-engineering-web-5.7.0.zip
+60aeccf2f964c96f15bea1a77d151208b7a9df6842b8e43e36b254d6d67ed02f  dist/ai-engineering-workspace-5.7.0.zip

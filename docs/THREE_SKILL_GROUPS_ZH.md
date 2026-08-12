@@ -109,7 +109,7 @@ quote → create → worker/provider → resource_transfer → result normalizat
 
 ---
 
-## 三、智能软件工程平台 5.6
+## 三、智能软件工程平台 5.7
 
 ### 3.1 设计目标
 
@@ -124,7 +124,7 @@ quote → create → worker/provider → resource_transfer → result normalizat
 
 核心原则是“核心插件只探测一次，其他插件消费统一 `.ai/` 上下文”。这样 Web、Unity、质量和工作区模块不会重复猜测技术栈。
 
-### 3.2 五个插件和 39 个 Skill
+### 3.2 五个插件和 40 个 Skill
 
 #### 插件一：`ai-engineering-core`（8 个 Skill）
 
@@ -177,11 +177,14 @@ quote → create → worker/provider → resource_transfer → result normalizat
 
 该插件提供多会话和工作区状态管理脚本，但不通过 manifest 自动注册 Hook。完整架构、角色契约、状态模型与端到端示例见 [`MULTI_AGENT_ENGINEERING_SYSTEM_ZH.md`](MULTI_AGENT_ENGINEERING_SYSTEM_ZH.md)。
 
-#### 插件五：`ai-engineering-quality`（5 个 Skill）
+#### 插件五：`ai-engineering-quality`（6 个 Skill）
 
 - `design-readiness-review`：独立、只读构建“需求→工作流→页面→设计系统/Token→组件→数据→API/事件→权限→测试→证据”追踪链；缺少间距、色彩、组件复用或视觉丰富度契约，以及明显模板化、卡片化、单调化的新增 UI 均按 P1 阻断，只有 P0/P1 清零才允许进入编码。
 - `full-change-risk-review`：覆盖完整变更集；当需求、架构、数据、API、UI 或测试设计变化时执行增量影响分析，检查跨层同步并判断是否必须重新进行设计就绪复审。
 - `knowledge-graph-maintenance`：增量维护文件级关系图谱，用限深影响分析控制大型仓库扫描成本。
+- `interaction-conflict-governance`：只读取当前模块的有界交互契约，检查隐藏表面、状态可达性、浮层/焦点/快捷键、异步乱序与重复提交；无契约时立即返回不适用，不递归扫描源码。
+
+UI任务不会无条件叠加该Skill。设计、实现或修改任务首先进入对应平台的主阶段能力；当主阶段识别到隐藏表面、异步乱序、重复写入、多层浮层、焦点/快捷键、导航离开或跨模块状态风险时，才升级到“交互状态与冲突治理”。如果用户明确要求检查这些冲突，则轻量路由可直接选择它。静态页面和普通局部交互不会触发额外加载。
 - `regression-test-planner`：根据变更风险和项目真实脚本生成最低必要回归范围。
 - `release-readiness-review`：结合风险、构建、测试、迁移、回滚和发布证据审核版本是否可发布。
 
@@ -333,4 +336,4 @@ context-recovery → interruptible-task-control
 - 任务重点是“长期工程怎么持续执行”——选第二组。
 - 任务重点是“完整重建一个已授权桌面软件”——选第三组。
 - 同时需要执行和独立验收——第二组执行，第一组复核。
-- 不要把智能软件工程平台的39个Skill拆散安装成普通平铺Skill；桌面软件等价重建的五个可发现Skill可以按阶段选择，但共享参考、脚本和模板不能从主资源包剥离。
+- 不要把智能软件工程平台的40个Skill拆散安装成普通平铺Skill；桌面软件等价重建的五个可发现Skill可以按阶段选择，但共享参考、脚本和模板不能从主资源包剥离。

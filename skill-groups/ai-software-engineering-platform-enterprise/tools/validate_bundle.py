@@ -68,8 +68,13 @@ def main()->int:
             text=text_file.read_text(encoding="utf-8",errors="ignore")
             pollution_pattern="|".join(("学"+"员", "学"+"生", r"\bStu"+"dent\b"))
             if re.search(pollution_pattern,text,re.I):errors.append(f"业务域样例污染 {text_file.relative_to(ROOT)}")
+    registry=json.loads((ROOT/"SKILL_REGISTRY.json").read_text(encoding="utf-8"));registry_names=set((registry.get("skills") or {}).keys())
+    if registry_names!=set(skill_names):errors.append(f"Skill登记与目录不一致: 缺少{sorted(set(skill_names)-registry_names)} 多余{sorted(registry_names-set(skill_names))}")
     market=json.loads((ROOT/".agents/plugins/marketplace.json").read_text(encoding="utf-8"));names={x.get("name") for x in market.get("plugins",[])}
     if names!={p.name for p in plugins}:errors.append("Marketplace插件清单与plugins目录不一致")
+    expected_archives={f"{p.name}-{str(json.loads((p/'.codex-plugin/plugin.json').read_text(encoding='utf-8'))['version']).split('+',1)[0]}.zip" for p in plugins}
+    actual_archives={p.name for p in (ROOT/'dist').glob('*.zip')}
+    if actual_archives!=expected_archives:errors.append(f"发布包目录必须只保留当前版本: 缺少{sorted(expected_archives-actual_archives)} 多余{sorted(actual_archives-expected_archives)}")
     governance_skill=(ROOT/"plugins/ai-engineering-workspace/skills/multi-agent-project-governance/SKILL.md").read_text(encoding="utf-8")
     for required in ["辅助 Skill 时，不加载", "单轮通常读取零到一份", "最多读取两份", "禁止预读全部四份"]:
         if required not in governance_skill:errors.append(f"多智能体总控缺少懒加载约束: {required}")

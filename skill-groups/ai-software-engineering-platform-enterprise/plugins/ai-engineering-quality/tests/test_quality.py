@@ -9,12 +9,28 @@ from qualitylib import glob_match,worktree_fingerprint
 from risk_review import review
 from release_review import review as release_review
 from test_plan import plan
+from interaction_guard import evaluate as interaction_evaluate, run as interaction_run
 
 def git(root,*args,check=True):return subprocess.run(["git",*args],cwd=root,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=check)
 def repo(root:Path):
     git(root,"init","-b","main");git(root,"config","user.email","test@example.com");git(root,"config","user.name","Test");(root/"README.md").write_text("init\n");git(root,"add",".");git(root,"commit","-m","init")
 
 class QualityTests(unittest.TestCase):
+    def test_interaction_guard_is_zero_config_and_bounded(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);data=interaction_run(root,None,"review");self.assertEqual("NOT_APPLICABLE",data["status"])
+            interactions=[]
+            for i in range(500):
+                interactions.append({"id":f"INT-MODULE-{i}","owner":"module","scope":f"module-{i}","surface":"button","initial_state":"idle","states":["idle","done"],"transitions":[{"event":"activate","from":"idle","to":"done"}],"evidence":["test"]})
+            started=__import__("time").perf_counter();result=interaction_evaluate({"interactions":interactions},"review");elapsed=(__import__("time").perf_counter()-started)*1000
+            self.assertEqual("PASS",result["status"]);self.assertLess(elapsed,100)
+    def test_interaction_guard_detects_hidden_state_and_runtime_conflicts(self):
+        contract={"interactions":[
+            {"id":"INT-SEARCH-SELECT","owner":"search","scope":"page","surface":"combobox","initial_state":"closed","states":["closed","open","loading","loaded","ghost"],"transitions":[{"event":"open","from":"closed","to":"open"},{"event":"search","from":"open","to":"loading","async":True},{"event":"loaded","from":"loading","to":"loaded"}],"overlay":{"kind":"combobox","group":"page","priority_token":999},"shortcuts":[{"keys":"Ctrl+K","scope":"page"}]},
+            {"id":"INT-ACTION","owner":"action","scope":"page","surface":"button","initial_state":"idle","states":["idle","saving"],"transitions":[{"event":"save","from":"idle","to":"saving","async":True,"destructive":True,"policy":"latest-wins","cancel_on":[]}],"shortcuts":[{"keys":"Ctrl+K","scope":"page"}],"evidence":["test"]}
+        ]}
+        result=interaction_evaluate(contract,"review");codes={x["code"] for x in result["errors"]}
+        self.assertEqual("BLOCKED",result["status"]);self.assertTrue({"MISSING_ASYNC_POLICY","UNSAFE_DESTRUCTIVE_ACTION","UNREACHABLE_STATE","RAW_OVERLAY_PRIORITY","SHORTCUT_CONFLICT","HIDDEN_SURFACE_EVIDENCE"}<=codes)
     def test_all_local_includes_staged_unstaged_untracked(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);repo(root);(root/"staged.sql").write_text("create table x(id int);\n");git(root,"add","staged.sql");(root/"README.md").write_text("changed\n");(root/"new.py").write_text("print('x')\n")

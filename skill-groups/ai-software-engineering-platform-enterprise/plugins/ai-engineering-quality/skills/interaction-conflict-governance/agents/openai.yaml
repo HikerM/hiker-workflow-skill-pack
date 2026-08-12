@@ -1,0 +1,6 @@
+interface:
+  display_name: "交互状态与冲突治理"
+  short_description: "按模块检查隐藏状态、浮层、并发与交互冲突"
+  default_prompt: "使用 $interaction-conflict-governance 检查当前模块的交互状态、隐藏表面和并发冲突。"
+policy:
+  allow_implicit_invocation: false

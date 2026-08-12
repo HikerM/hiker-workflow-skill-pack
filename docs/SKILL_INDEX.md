@@ -1,6 +1,6 @@
 # Skill 索引
 
-仓库包含三组，共 53 个 Skill。每组都有轻量入口，单次只选择当前意图、技术栈和阶段所需的原子能力。
+仓库包含三组，共 54 个 Skill。每组都有轻量入口，单次只选择当前意图、技术栈和阶段所需的原子能力。
 
 ## 第一组：Hiker 工作流守护组（9 个）
 
@@ -18,7 +18,7 @@
 
 源码：`../.agents/skills/`
 
-## 第二组：AI 软件工程平台 Enterprise（39 个）
+## 第二组：AI 软件工程平台 Enterprise（40 个）
 
 ### `ai-engineering-core`
 
@@ -81,6 +81,7 @@
 | `design-readiness-review` | 独立只读审核需求、设计系统、视觉质量到证据的语义追踪链，仅在 P0/P1 清零时允许进入编码 |
 | `full-change-risk-review` | 审核完整变更集，并判断设计变化的增量影响、跨层同步和重新复审范围 |
 | `knowledge-graph-maintenance` | 增量维护文件级关系图谱和限深影响分析 |
+| `interaction-conflict-governance` | 按模块检查隐藏表面、状态机、浮层、焦点、快捷键、请求乱序和重复提交，不扫描全仓 |
 | `regression-test-planner` | 根据风险和真实脚本生成最低必要回归范围 |
 | `release-readiness-review` | 综合风险、构建、测试、迁移和回滚审核发布状态 |
 

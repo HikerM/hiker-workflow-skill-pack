@@ -68,6 +68,12 @@
       "project_detection": "consume-core-context",
       "may_modify_source": false
     },
+    "interaction-conflict-governance": {
+      "plugin": "ai-engineering-quality",
+      "mode": "review",
+      "project_detection": "consume-core-context",
+      "may_modify_source": false
+    },
     "regression-test-planner": {
       "plugin": "ai-engineering-quality",
       "mode": "workflow",
@@ -225,6 +231,12 @@
       "may_modify_source": false
     },
     "worktree-task-manager": {
+      "plugin": "ai-engineering-workspace",
+      "mode": "workflow",
+      "project_detection": "consume-core-context",
+      "may_modify_source": false
+    },
+    "worktree-safe-convergence": {
       "plugin": "ai-engineering-workspace",
       "mode": "workflow",
       "project_detection": "consume-core-context",

@@ -19,6 +19,7 @@ python3 <plugin-root>/scripts/unity_audit.py --root . --output .ai/quality/unity
 - `.meta` 缺失、重复 GUID、Missing Script 和序列化风险；
 - Scene/Prefab/Addressables/原生库变更；
 - 遮挡、重叠、裁切、滚动、字体和弹窗；
+- 下拉、选择器、模态层、Tooltip 和焦点导航是否实际展开验证；父子关闭、页面销毁、输入作用域、异步乱序和重复操作是否安全；高风险时执行 `interaction-conflict-governance` 的当前模块检查；
 - FPS、GC Alloc、内存、DrawCall、加载和释放；
 - Windows、macOS、Linux x64/ARM64 的实际证据。
 

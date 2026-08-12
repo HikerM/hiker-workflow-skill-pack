@@ -22,6 +22,11 @@ from suite_router import route
 
 
 class CoreTests(unittest.TestCase):
+    def test_router_lazily_selects_interaction_conflict_governance(self):
+        with tempfile.TemporaryDirectory() as td:
+            data=route(Path(td),"检查大型项目的下拉框、弹窗、快捷键和请求乱序交互冲突")
+            self.assertEqual(["交互状态与冲突治理"],[x["skill"] for x in data["selected"]])
+            self.assertLessEqual(len(data["load"]),2)
     def test_greenfield_router_prefers_requirements_before_scaffold(self):
         with tempfile.TemporaryDirectory() as td:
             data = route(Path(td), "从0开始开发一个自定义B/S和C/S教学系统")

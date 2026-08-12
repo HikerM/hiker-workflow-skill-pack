@@ -166,6 +166,83 @@ def validate_package_files(root: Path):
     return errors
 
 
+def validate_public_document_facts(root: Path):
+    """Bind public entry documents to the manifests instead of hand-maintained numbers."""
+    errors = []
+    enterprise_root = root / "skill-groups" / "ai-software-engineering-platform-enterprise"
+    plugins_root = enterprise_root / "plugins"
+    desktop_root = root / "skill-groups" / "desktop-app-reconstruction-zh"
+    try:
+        repository_version = read_text(root / "VERSION").strip()
+        desktop_version = read_text(desktop_root / "VERSION").strip()
+        plugin_dirs = sorted(p for p in plugins_root.iterdir() if p.is_dir())
+        plugin_versions = set()
+        enterprise_skill_count = 0
+        for plugin_dir in plugin_dirs:
+            manifest = json.loads(read_text(plugin_dir / ".codex-plugin" / "plugin.json"))
+            plugin_versions.add(str(manifest["version"]).split("+", 1)[0])
+            enterprise_skill_count += len(list((plugin_dir / "skills").glob("*/SKILL.md")))
+        if len(plugin_versions) != 1:
+            return [f"public docs: enterprise plugin base versions differ: {sorted(plugin_versions)}"]
+        enterprise_version = next(iter(plugin_versions))
+        hiker_skill_count = len(
+            [p for p in (root / ".agents" / "skills").iterdir() if p.is_dir() and (p / "SKILL.md").is_file()]
+        )
+        desktop_skill_count = len(list(desktop_root.rglob("SKILL.md")))
+    except (OSError, KeyError, json.JSONDecodeError) as exc:
+        return [f"public docs: cannot derive repository facts: {exc}"]
+
+    plugin_count = len(plugin_dirs)
+    total_skill_count = hiker_skill_count + enterprise_skill_count + desktop_skill_count
+    metadata = (
+        f"<!-- repository-facts: repo={repository_version}; engineering={enterprise_version}; "
+        f"plugins={plugin_count}; engineering-skills={enterprise_skill_count}; "
+        f"hiker-skills={hiker_skill_count}; desktop={desktop_version}; "
+        f"desktop-skills={desktop_skill_count}; total-skills={total_skill_count} -->"
+    )
+    required = {
+        "README.md": [
+            metadata,
+            f"> 仓库版本：`{repository_version}`",
+            f"> 当前规模：共 `{total_skill_count}` 个 Skill",
+            f"## 智能软件工程平台 {enterprise_version}",
+            f"| 智能软件工程平台 | {enterprise_version} | {plugin_count} 个插件、{enterprise_skill_count} 个原子 Skill |",
+            f"## Hiker 工作流守护包 {repository_version}",
+            f"## 桌面软件等价重建 {desktop_version}",
+            f"# 智能软件工程平台：{plugin_count} 个插件、{enterprise_skill_count} 个原子 Skill",
+        ],
+        "skill-groups/README.md": [
+            f"智能软件工程平台 {'.'.join(enterprise_version.split('.')[:2])}，{plugin_count} 个插件、{enterprise_skill_count} 个 Skill",
+            f"桌面软件等价重建，1 个轻量路由和{desktop_skill_count - 1}个阶段原子Skill",
+        ],
+        "docs/INSTALLATION.md": [
+            f"## 智能软件工程平台 {'.'.join(enterprise_version.split('.')[:2])}",
+            f"包含{plugin_count}个插件和{enterprise_skill_count}个Skill",
+            f"## 桌面软件等价重建 {'.'.join(desktop_version.split('.')[:2])}",
+        ],
+        "docs/THREE_SKILL_GROUPS_ZH.md": [
+            f"## 三、智能软件工程平台 {'.'.join(enterprise_version.split('.')[:2])}",
+            f"## 3.2 五个插件和 {enterprise_skill_count} 个 Skill",
+            f"## 四、桌面软件等价重建 {'.'.join(desktop_version.split('.')[:2])}",
+        ],
+        "docs/SKILL_INDEX.md": [
+            f"仓库包含三组，共 {total_skill_count} 个 Skill",
+            f"## 第二组：AI 软件工程平台 Enterprise（{enterprise_skill_count} 个）",
+        ],
+    }
+    for rel, tokens in required.items():
+        path = root / rel
+        try:
+            text = read_text(path)
+        except OSError as exc:
+            errors.append(f"public docs: cannot read {rel}: {exc}")
+            continue
+        for token in tokens:
+            if token not in text:
+                errors.append(f"{rel}: public fact missing or stale: {token}")
+    return errors
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", required=True)
@@ -199,6 +276,7 @@ def main():
 
     if package_mode:
         errors.extend(validate_package_files(root))
+        errors.extend(validate_public_document_facts(root))
 
     if package_mode:
         errors.extend(validate_agents(root))

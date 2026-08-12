@@ -109,7 +109,7 @@ quote → create → worker/provider → resource_transfer → result normalizat
 
 ---
 
-## 三、第二组：AI Software Engineering Platform Enterprise 5.5
+## 三、智能软件工程平台 5.6
 
 ### 3.1 设计目标
 
@@ -226,7 +226,7 @@ context-recovery → interruptible-task-control
 
 ---
 
-## 四、第三组：Desktop App Reconstruction ZH 1.2
+## 四、桌面软件等价重建 1.3
 
 ### 4.1 设计目标
 
@@ -333,4 +333,4 @@ context-recovery → interruptible-task-control
 - 任务重点是“长期工程怎么持续执行”——选第二组。
 - 任务重点是“完整重建一个已授权桌面软件”——选第三组。
 - 同时需要执行和独立验收——第二组执行，第一组复核。
-- 不要把第二组38个Skill拆散安装成普通平铺Skill；第三组的五个可发现Skill可以按阶段选择，但共享参考、脚本和模板不能从主资源包剥离。
+- 不要把智能软件工程平台的39个Skill拆散安装成普通平铺Skill；桌面软件等价重建的五个可发现Skill可以按阶段选择，但共享参考、脚本和模板不能从主资源包剥离。

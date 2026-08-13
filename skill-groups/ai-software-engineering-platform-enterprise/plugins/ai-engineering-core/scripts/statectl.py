@@ -8,6 +8,7 @@ from pathlib import Path
 
 from corelib import ai_root, atomic_write_json, atomic_write_text, ensure_schema, git_info, read_json, sha256_file, utc_now
 from context_memory import bounded_items, crop, enforce_checkpoint_retention, ensure_memory_policy, limit_text, memory_status
+from suite_router import PLUGIN_DISPLAY, PLUGIN_FOR, skill_display
 
 
 def task_path(root: Path) -> Path: return ai_root(root) / "runtime" / "task.json"
@@ -24,18 +25,36 @@ def save_task(root: Path, task: dict) -> None:
     task["updated_at"] = utc_now(); atomic_write_json(task_path(root), task)
 
 
-def record_routing(root: Path, stage: str, active_skills: list[str], deferred_skills: list[str], route_fingerprint: str = "") -> dict:
+def _application_receipt(loaded_skills: list[str]) -> str:
+    reverse = {skill_display(internal): internal for internal in PLUGIN_FOR}
+    items = []
+    for display_name in loaded_skills:
+        internal = reverse.get(display_name)
+        if not internal:
+            raise ValueError(f"unknown loaded skill display name: {display_name}")
+        items.append(f"{PLUGIN_DISPLAY[PLUGIN_FOR[internal]]}｜{display_name}")
+    return "已应用：" + "；".join(items) if items else ""
+
+
+def record_routing(root: Path, stage: str, active_skills: list[str], deferred_skills: list[str], route_fingerprint: str = "", loaded_skills: list[str] | None = None) -> dict:
     active = list(dict.fromkeys(item.strip() for item in active_skills if item.strip()))
     deferred = [item for item in dict.fromkeys(item.strip() for item in deferred_skills if item.strip()) if item not in active]
+    loaded = list(dict.fromkeys(item.strip() for item in (loaded_skills or []) if item.strip()))
     if len(active) > 2:
         raise ValueError("active atomic skills cannot exceed 2; router is excluded from this limit")
+    if loaded and loaded != active:
+        raise ValueError("loader telemetry must exactly match active atomic skills and preserve order")
     previous = read_json(routing_path(root), {})
     basis = {"stage": stage or "unknown", "active_atomic_skills": active, "deferred_atomic_skills": deferred}
     fingerprint = route_fingerprint or __import__("hashlib").sha256(json.dumps(basis, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:16]
     changed = fingerprint != previous.get("route_fingerprint")
     data = {
         "schema_version": "1.0.0", "route_revision": int(previous.get("route_revision", 0)) + (1 if changed else 0),
-        **basis, "router_counts_toward_limit": False, "max_loaded_atomic_skills": 2,
+        **basis, "loaded_atomic_skills": loaded, "router_counts_toward_limit": False, "max_loaded_atomic_skills": 2,
+        "phase_transition": bool(previous and previous.get("stage") != basis["stage"]),
+        "previous_stage": previous.get("stage") if previous else None,
+        "application_receipt": _application_receipt(loaded),
+        "receipt_source": "skill-loader-telemetry" if loaded else "route-declaration-only",
         "route_fingerprint": fingerprint, "updated_at": utc_now(),
     }
     atomic_write_json(routing_path(root), data)
@@ -123,7 +142,7 @@ def main() -> int:
     sub.add_parser("complete")
     sub.add_parser("validate")
     sub.add_parser("memory-status")
-    p = sub.add_parser("route-record"); p.add_argument("--stage", required=True); p.add_argument("--active-skill", action="append", default=[]); p.add_argument("--deferred-skill", action="append", default=[]); p.add_argument("--route-fingerprint", default="")
+    p = sub.add_parser("route-record"); p.add_argument("--stage", required=True); p.add_argument("--active-skill", action="append", default=[]); p.add_argument("--loaded-skill", action="append", default=[]); p.add_argument("--deferred-skill", action="append", default=[]); p.add_argument("--route-fingerprint", default="")
     p = sub.add_parser("lock-decision"); p.add_argument("--id", required=True); p.add_argument("--content", required=True); p.add_argument("--reason", required=True)
     args = ap.parse_args(); root = Path(args.root).resolve()
     ok, version = ensure_schema(root)
@@ -148,7 +167,7 @@ def main() -> int:
     elif args.cmd == "memory-status":
         print(json.dumps({"ok": True, "memory": memory_status(root)}, ensure_ascii=False, indent=2)); return 0
     elif args.cmd == "route-record":
-        try: routing = record_routing(root, args.stage, args.active_skill, args.deferred_skill, args.route_fingerprint)
+        try: routing = record_routing(root, args.stage, args.active_skill, args.deferred_skill, args.route_fingerprint, args.loaded_skill)
         except ValueError as exc: raise SystemExit(f"ROUTE_STATE_ERROR: {exc}")
         update_active(root, task); print(json.dumps({"ok": True, "routing": routing}, ensure_ascii=False, indent=2)); return 0
     elif args.cmd == "lock-decision":

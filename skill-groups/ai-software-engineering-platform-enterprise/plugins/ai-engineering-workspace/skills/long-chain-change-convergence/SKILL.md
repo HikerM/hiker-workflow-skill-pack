@@ -32,8 +32,9 @@ py -3 <plugin-root>\scripts\convergence_guard.py --root . --task-id KG-001 init 
 2. 用户纠正、证据矛盾、范围扩大、方案失效或回滚发生时立即记录。旧 PASS 只对原验收修订、策略修订、代码指纹和环境有效。
 3. 同一验收条件连续两次真实实验失败后进入 `PIVOT_REQUIRED`。停止继续加补丁，先说明旧方案失效依据并创建新的策略修订。
 4. 真实、计费、生产或不可逆实验必须先登记假设、预期观察和停止条件；任何时刻只允许一个未结实验，禁止无依据重复执行。
-5. 源码 HEAD、远程主线和部署版本不一致时标记版本漂移。版本漂移未解释和收敛前，禁止再次生产执行或发布。
-6. 合并前所有验收条件必须达到各自要求的证据层级，不得使用一个总 PASS 覆盖局部失败或未知项。
+5. 修复前先登记问题 ID、单一根因假设、本轮允许动作与禁止动作。相同问题连续两个根因假设被证据否定即进入 `DIAGNOSIS_REQUIRED`，禁止继续猜测式修改，必须回到首个可观测失真边界补调用链、状态转换或运行时证据，再建立新策略。
+6. 源码 HEAD、远程主线和部署版本不一致时标记版本漂移。版本漂移未解释和收敛前，禁止再次生产执行或发布。
+7. 合并前所有验收条件必须达到各自要求的证据层级，不得使用一个总 PASS 覆盖局部失败或未知项。
 
 ## 治理不得吞噬交付
 
@@ -63,6 +64,13 @@ py -3 <plugin-root>\scripts\convergence_guard.py --root . --task-id KG-001 exper
   --criterion-id AC-002 --hypothesis "本次最小改动能恢复目标行为" `
   --expected "真实运行后状态与验收描述一致" --stop-condition "首次失败立即停止，不自动重试" `
   --environment production
+
+py -3 <plugin-root>\scripts\convergence_guard.py --root . --task-id KG-001 hypothesis-add `
+  --issue-id ISSUE-001 --statement "<可证伪根因假设>" `
+  --allowed-actions "<本轮允许动作>" --forbidden-actions "<禁止改动>"
+
+py -3 <plugin-root>\scripts\convergence_guard.py --root . --task-id KG-001 hypothesis-result `
+  --hypothesis-id HYP-001 --result REJECTED --evidence "<否定该假设的证据>"
 ```
 
 禁止为了通过门禁伪造职责登记、证据层级、部署哈希或实验结果。

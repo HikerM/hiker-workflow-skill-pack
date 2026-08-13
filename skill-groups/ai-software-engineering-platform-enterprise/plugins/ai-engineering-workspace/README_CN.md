@@ -1,6 +1,6 @@
-# 04 工作区与多会话协作 5.5
+# 04 工作区与多会话协作 5.11
 
-本插件已经从“任务分流与 Worktree 工具”升级为大型软件工程多 Agent 控制平面，共 10 个 Skill。
+本插件已经从“任务分流与 Worktree 工具”升级为大型软件工程多 Agent 控制平面，共 12 个 Skill。
 
 ## 控制平面
 
@@ -18,8 +18,10 @@
 - **功能验收闭环**：需求、实现、测试、截图/日志、文档和状态闭环。
 - **代码所有权与合并控制**：检查分支流向、Conventional Commit、冲突、锁、架构守卫和合并证据。
 
+5.11 增加任务查询失败关闭、项目环境预检、不可变审核候选和根因假设账本。API 错误或超时不能当作“没有任务”；Review、Testing、Merge 必须消费同一个 `candidate_id`；同一问题连续两个假设被否定后停止猜测式修改并进入诊断门禁。
+
 普通局部任务只写最小范围、不变量和测试，不要求维护全量架构配置；公共表面、受保护模块或影响半径高的变更才渐进启用消费者登记、模块规则和工程图谱。
 
 七个角色是职责契约：Master、Planning、Developer、Review、Test、Merge、Document。它们可映射到 Codex 主任务、用户明确授权的 Subagent 或不同 Worktree；不要求每次都创建七个并行 Agent。
 
-全局自动应用模板位于 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md`。它要求任务开始和结束都显示插件应用回执，但不会扩大 push、merge、部署或生产写入权限。
+全局自动应用模板位于 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md`。它要求会话开头显示轻量路由，并在真实加载、阶段切换或上下文恢复时显示一次去重中文应用回执；不会扩大 push、merge、部署或生产写入权限。

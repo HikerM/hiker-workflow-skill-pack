@@ -12,6 +12,8 @@ from release_review import review as release_review
 from test_plan import plan
 from interaction_guard import evaluate as interaction_evaluate, run as interaction_run
 from audit_skill_coherence import audit as coherence_audit
+from harness_preflight import preflight
+from handoff_redactor import redact_text, scan as redaction_scan
 
 def git(root,*args,check=True):return subprocess.run(["git",*args],cwd=root,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=check)
 def repo(root:Path):
@@ -131,4 +133,20 @@ class QualityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);repo(root);data=release_review(root,"KG-001");self.assertEqual("BLOCKED",data["result"])
             self.assertTrue(any("发布状态文档缺失" in x for x in data["blockers"]));self.assertTrue(any("项目状态" in x or "任务状态" in x for x in data["blockers"]))
+
+    def test_large_matrix_requires_harness_self_validation(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);repo(root)
+            invalid=preflight(root,{"mandatory":[],"recommended":[]},{"groups":[{"id":"g1","declared_count":2,"cases":["a"],"mutation_required":True}]})
+            self.assertEqual("INVALID",invalid["result"]);self.assertFalse(invalid["full_matrix_allowed"])
+            valid=preflight(root,{"mandatory":[],"recommended":[]},{"groups":[{"id":"g1","declared_count":1,"cases":["a"],"mutation_required":True,"mutation_evidence":"before!=after","sample_pass":"pass","sample_fail":"fail"}]})
+            self.assertEqual("PASS",valid["result"])
+
+    def test_handoff_redaction_blocks_raw_secret_and_emits_safe_copy(self):
+        redacted,findings=redact_text("账号 user 密码 123132\nAuthorization: Bearer abcdefghijklmnop")
+        self.assertEqual(2,len(findings));self.assertNotIn("123132",redacted);self.assertNotIn("abcdefghijklmnop",redacted)
+        with tempfile.TemporaryDirectory() as td:
+            source=Path(td)/"thread.txt";source.write_text("password: secret123",encoding="utf-8")
+            raw=redaction_scan(source,None);self.assertEqual("BLOCK",raw["result"]);self.assertFalse(raw["export_allowed"])
+            target=Path(td)/"safe.txt";safe=redaction_scan(source,target);self.assertTrue(safe["export_allowed"]);self.assertNotIn("secret123",target.read_text(encoding="utf-8"))
 if __name__=="__main__":unittest.main()

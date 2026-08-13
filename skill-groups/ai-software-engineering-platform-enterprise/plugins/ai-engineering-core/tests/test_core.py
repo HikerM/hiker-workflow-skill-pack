@@ -288,8 +288,13 @@ class CoreTests(unittest.TestCase):
     def test_skill_route_state_is_bounded_and_checkpointed(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); initialize(root)
-            routing = record_routing(root, "development", ["客户端技术路由", "客户端组件实现"], ["回归测试规划"])
+            routing = record_routing(
+                root, "development", ["客户端技术路由", "客户端组件实现"], ["回归测试规划"],
+                loaded_skills=["客户端技术路由", "客户端组件实现"],
+            )
             self.assertEqual(2, len(routing["active_atomic_skills"]))
+            self.assertEqual("skill-loader-telemetry", routing["receipt_source"])
+            self.assertEqual("已应用：03 客户端工程｜客户端技术路由；03 客户端工程｜客户端组件实现", routing["application_receipt"])
             update_active(root, json.loads((root / ".ai/runtime/task.json").read_text(encoding="utf-8")))
             self.assertIn("回归测试规划", (root / ".ai/runtime/active-context.md").read_text(encoding="utf-8"))
             cp = checkpoint(root, "routing")
@@ -297,5 +302,49 @@ class CoreTests(unittest.TestCase):
             self.assertTrue(snapshot["files"]["runtime/skill-routing.json"]["exists"])
             with self.assertRaises(ValueError):
                 record_routing(root, "development", ["一", "二", "三"], [])
+            with self.assertRaisesRegex(ValueError, "exactly match"):
+                record_routing(root, "testing", ["回归测试规划"], [], loaded_skills=["完整变更风险评估"])
+
+    def test_router_primary_action_beats_risk_and_validation_qualifiers(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "package.json").write_text(json.dumps({"dependencies": {"express": "5.0.0"}}), encoding="utf-8")
+            develop = route(root, "开发 PostgreSQL 迁移风险修复")
+            self.assertEqual("development", develop["stage"])
+            self.assertEqual("development", develop["intent"]["primary_action"])
+            self.assertEqual(["服务端技术路由", "数据库迁移治理"], [item["skill"] for item in develop["selected"]])
+            repair = route(root, "修复 PostgreSQL 数据库迁移并验证回滚")
+            self.assertEqual("development", repair["stage"])
+            self.assertIn("testing", repair["intent"]["follow_up_actions"])
+            review = route(root, "审核 PostgreSQL 迁移风险")
+            self.assertEqual("review", review["stage"])
+            verify = route(root, "验证 PostgreSQL 迁移回滚")
+            self.assertEqual("testing", verify["stage"])
+
+    def test_router_uses_structured_client_evidence_not_manifest_substrings(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "package.json").write_text(json.dumps({
+                "description": "Web service can send links to Android clients",
+                "dependencies": {"vue": "3.5.0", "express": "5.0.0"},
+            }), encoding="utf-8")
+            data = route(root, "实现当前功能")
+            self.assertNotEqual("cs", data["architecture"])
+            self.assertNotIn("客户端技术路由", [item["skill"] for item in data["selected"]])
+
+    def test_router_declares_loader_telemetry_and_phase_handoff(self):
+        with tempfile.TemporaryDirectory() as td:
+            data = route(Path(td), "修复接口并验证回归")
+            self.assertEqual("skill-loader-telemetry", data["receipt_source"])
+            self.assertTrue(data["phase_transition_required"])
+            self.assertEqual("development", data["intent"]["primary_action"])
+
+    def test_router_understands_completed_qualifiers_and_governance_actions(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            self.assertEqual("development", route(root, "按已审核设计实现Avalonia设置窗口")["stage"])
+            self.assertEqual("merge", route(root, "检查feature/web合并main的冲突和所有权")["stage"])
+            self.assertEqual("release", route(root, "根据真实测试和构建证据审核发布")["stage"])
+            self.assertEqual("review", route(root, "分析feature分支相对main的风险")["stage"])
 
 if __name__ == "__main__": unittest.main()

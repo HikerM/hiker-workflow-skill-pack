@@ -5,7 +5,7 @@ from pathlib import Path,PurePosixPath
 from typing import Any
 
 def now()->str:return datetime.now(timezone.utc).isoformat(timespec="seconds")
-def run(root:Path,*args:str,check:bool=True)->subprocess.CompletedProcess[str]:return subprocess.run(list(args),cwd=root,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=check)
+def run(root:Path,*args:str,check:bool=True)->subprocess.CompletedProcess[str]:return subprocess.run(list(args),cwd=root,text=True,encoding="utf-8",errors="replace",stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=check)
 def git(root:Path,*args:str,check:bool=True)->subprocess.CompletedProcess[str]:return run(root,"git",*args,check=check)
 def git_root(path:Path)->Path:return Path(git(path,"rev-parse","--show-toplevel").stdout.strip()).resolve()
 def head(root:Path)->str:

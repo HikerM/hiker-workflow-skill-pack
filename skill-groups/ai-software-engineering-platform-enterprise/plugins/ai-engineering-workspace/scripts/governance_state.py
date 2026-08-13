@@ -354,6 +354,10 @@ def transition(root: Path, args: argparse.Namespace) -> dict[str, Any]:
         max_debt = int(budget.get("max_merge_debt", 2))
         if len(merge_debt) >= max_debt:
             raise RuntimeError(f"merge debt budget exceeded: {len(merge_debt)}/{max_debt} tasks await closure")
+        convergence = task.get("convergence") or {}
+        governance_cycles = int((convergence.get("delivery_progress") or {}).get("consecutive_governance_only_cycles", 0))
+        if convergence.get("required") and governance_cycles >= 2:
+            raise RuntimeError("governance-only cycle budget exceeded; reuse evidence, fix the first real blocker or revise the strategy before Development")
     if target == "Review":
         if not task.get("commits"):
             raise RuntimeError("Development -> Review requires at least one commit")
@@ -363,6 +367,13 @@ def transition(root: Path, args: argparse.Namespace) -> dict[str, Any]:
             raise RuntimeError("Development -> Review requires architecture guard evidence")
         if evidence.get("head") != snapshot.get("head") or evidence.get("worktree_fingerprint") != worktree_fingerprint(root):
             raise RuntimeError("architecture guard evidence is stale; rerun it for the current change set")
+        candidate = task.get("review_candidate") or {}
+        if not candidate.get("candidate_id"):
+            raise RuntimeError("Development -> Review requires a frozen immutable candidate")
+        from candidate_guard import verify as verify_candidate
+        candidate_report = verify_candidate(root, str(candidate["candidate_id"]))
+        if candidate_report.get("result") != "PASS":
+            raise RuntimeError("review candidate is stale; freeze a new candidate before Review")
         convergence = task.get("convergence") or {}
         if convergence.get("required"):
             report = convergence_assess(convergence, "review")
@@ -484,6 +495,24 @@ def set_change_contract(root: Path, args: argparse.Namespace) -> dict[str, Any]:
     return task
 
 
+def bind_review_candidate(root: Path, args: argparse.Namespace) -> dict[str, Any]:
+    task = load_task(root, args.task_id)
+    if args.agent_role not in {"Developer Agent", "Master Agent"}:
+        raise RuntimeError("only Developer Agent or Master Agent may freeze a review candidate")
+    if task.get("state") != "Development":
+        raise RuntimeError("review candidate can only be frozen in Development")
+    from candidate_guard import freeze as freeze_candidate
+    candidate = freeze_candidate(root, args.candidate_id, str(task["task_id"]), args.review_source)
+    task["review_candidate"] = {
+        "candidate_id": candidate["candidate_id"], "candidate_fingerprint": candidate["candidate_fingerprint"],
+        "candidate_commit": candidate["candidate_commit"], "worktree_fingerprint": candidate["worktree_fingerprint"],
+        "writable": False, "frozen_at": candidate["frozen_at"],
+    }
+    task["history"].append({"at": now(), "event": "REVIEW_CANDIDATE_FROZEN", "candidate_id": candidate["candidate_id"], "agent_role": args.agent_role})
+    save_task(root, task)
+    return task
+
+
 def checkpoint(root: Path, task: dict[str, Any], label: str) -> Path:
     git = git_snapshot(root)
     data = {"schema_version": SCHEMA, "created_at": now(), "label": label, "event": "WorkspaceCheckpoint", "task": task, "git": git}
@@ -541,6 +570,7 @@ def main() -> int:
     p = sub.add_parser("transition"); p.add_argument("--task-id", required=True); p.add_argument("--to", choices=TASK_STATES, required=True); p.add_argument("--agent-role", required=True); p.add_argument("--commit-id")
     p = sub.add_parser("record"); p.add_argument("--task-id", required=True); p.add_argument("--kind", choices=["commit", "review", "test", "artifact", "document", "decision", "prohibition", "risk", "completed", "pending", "release"], required=True); p.add_argument("--value", required=True); p.add_argument("--status"); p.add_argument("--command"); p.add_argument("--reason"); p.add_argument("--agent-role", required=True)
     p = sub.add_parser("contract-set"); p.add_argument("--task-id", required=True); p.add_argument("--agent-role", required=True); p.add_argument("--allowed-files", nargs="*"); p.add_argument("--allowed-modules", nargs="*"); p.add_argument("--protected-modules", nargs="*"); p.add_argument("--public-contract-changes", nargs="*"); p.add_argument("--behavior-invariants", nargs="*"); p.add_argument("--characterization-tests", nargs="*"); p.add_argument("--consumer-tests", nargs="*"); p.add_argument("--required-tests", nargs="*"); p.add_argument("--consumers", nargs="*"); p.add_argument("--max-blast-radius", type=int); p.add_argument("--warn-lines", type=int); p.add_argument("--block-lines", type=int); p.add_argument("--warn-growth", type=int); p.add_argument("--block-growth", type=int)
+    p = sub.add_parser("candidate-freeze"); p.add_argument("--task-id", required=True); p.add_argument("--candidate-id", required=True); p.add_argument("--review-source", default="independent-review"); p.add_argument("--agent-role", required=True)
     p = sub.add_parser("checkpoint"); p.add_argument("--task-id", required=True); p.add_argument("--label", required=True)
     p = sub.add_parser("control"); p.add_argument("--task-id", required=True); p.add_argument("--action", choices=["pause", "resume", "adjust", "insert"], required=True); p.add_argument("--instruction", default=""); p.add_argument("--new-task-id"); p.add_argument("--branch"); p.add_argument("--base-branch", default="develop")
     p = sub.add_parser("status"); p.add_argument("--task-id")
@@ -553,6 +583,7 @@ def main() -> int:
             elif args.cmd == "transition": data = transition(root, args)
             elif args.cmd == "record": data = record(root, args)
             elif args.cmd == "contract-set": data = set_change_contract(root, args)
+            elif args.cmd == "candidate-freeze": data = bind_review_candidate(root, args)
             elif args.cmd == "checkpoint": data = {"path": str(checkpoint(root, load_task(root, args.task_id), args.label))}
             elif args.cmd == "control": data = control(root, args)
             elif args.cmd == "status": data = {"project": load_project(root), "task": load_task(root, args.task_id) if args.task_id else None, "tasks": all_tasks(root), "git": git_snapshot(root)}

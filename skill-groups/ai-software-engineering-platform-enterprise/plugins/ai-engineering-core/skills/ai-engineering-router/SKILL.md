@@ -18,16 +18,17 @@ description: AI软件工程原子Skill的唯一轻量自动入口。收到从0�
    ```
 
 2. 会话的第一条助手输出必须先展示 `已应用：01 智能工程核心｜智能工程轻量路由`，不得把计划、分析、提问或工具调用放在它前面。该路由入口不计入原子 Skill 数量上限。
-3. 只读取输出 `load` 中的 `SKILL.md`；同一阶段最多两个活跃原子 Skill。不得为“可能有用”而遍历其他 Skill。
-4. 路由完成后，在首次实质动作前展示实际活跃原子 Skill 的中文插件名与中文 Skill 名。只有阶段、活跃项变化或上下文恢复时才再次展示，避免每轮重复刷屏。
+3. 只读取输出 `load` 中的 `SKILL.md`；同一阶段最多两个活跃原子 Skill。不得为“可能有用”而遍历其他 Skill。只有实际完整读取成功的项才能登记为 `loaded`，路由命中不等于已经应用。
+4. 路由完成后，在首次实质动作前展示加载遥测生成的中文应用回执。回执必须来自 `statectl.py route-record` 的 `application_receipt`，不得根据路由候选手写或提前声称已应用。只有阶段、活跃项变化或上下文恢复时才再次展示，避免每轮重复刷屏。
 5. 输出 `deferred` 中的能力不得静默丢失：当前阶段通过门禁后重新路由，按顺序激活下一批；只保存名称、阶段与指纹，不把 Skill 正文长期注入上下文。
 6. 项目已初始化 `.ai` 时，把输出的 `stage`、活跃中文 Skill 名、待执行中文 Skill 名和 `route_fingerprint` 写入有界路由态：
 
    ```powershell
-   py -3 <plugin-root>\scripts\statectl.py --root <repo> route-record --stage <stage> --route-fingerprint <fingerprint> --active-skill <名称> --deferred-skill <名称>
+   py -3 <plugin-root>\scripts\statectl.py --root <repo> route-record --stage <stage> --route-fingerprint <fingerprint> --active-skill <名称> --loaded-skill <已完整读取的同名Skill> --deferred-skill <名称>
    ```
 
 7. 按已读取原子 Skill 执行。若原子 Skill 需要项目状态，则只读取它明确要求的状态文件。
+8. 当路由结果的 `phase_transition_required=true`，先完成当前阶段门禁和 Checkpoint，再重新运行路由并登记新阶段；不得把“审核、测试、合并”尾句反向覆盖当前“增强、修复、实现”动作。
 
 ## 路由约束
 

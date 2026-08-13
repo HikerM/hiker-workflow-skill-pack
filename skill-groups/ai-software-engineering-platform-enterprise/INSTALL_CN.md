@@ -29,7 +29,7 @@ py -3 .\install_personal.py
 7. 对源目录、安装目录、版本缓存、启用配置和全局规则做逐插件哈希核验，并写入 `~/.codex/plugin-install-state.json`；
 8. 输出结构化安装、缓存、启用、核验和后续操作结果。
 
-安装输出中的 `plugin_activation.status=activated`、`method=desktop-config` 且 `verification.ok=true` 表示桌面端启用状态与三层文件已一致；旧版显式兼容时也可能显示 `method=cli`。完成后新建任务以创建新的能力快照；只有新任务仍显示旧版本时才需要重启桌面端。
+安装输出中的 `plugin_activation.status=activated`、`method=desktop-config` 且 `verification.ok=true` 只表示桌面端启用配置与三层文件已经一致，不代表运行中进程已经刷新插件注册表。安装器会明确输出 `runtime_activation.status=NOT_VERIFIED`；必须新建任务读取实际 `SKILL.md`/`plugin.json` 路径复验。若新任务仍指向旧缓存，当前客户端进程必须重启后再复验。
 
 可选参数：
 

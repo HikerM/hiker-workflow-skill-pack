@@ -23,17 +23,21 @@ from convergence_guard import (
     record_evidence as convergence_record_evidence,
     record_verification,
     register_route,
+    register_hypothesis,
+    resolve_hypothesis,
     set_deployment,
     set_strategy,
     verification_plan,
 )
 from file_lock import acquire, check, release
 from git_workspace import cmd_adopt, cmd_close, cmd_create, cmd_inventory, cmd_list, cmd_pause, cmd_plan_close, validate_branch_policy
-from governance_state import checkpoint, control, create_task, init_project, load_task, record, save_task, set_change_contract, transition, validate
+from governance_state import bind_review_candidate, checkpoint, control, create_task, init_project, load_task, record, save_task, set_change_contract, transition, validate
 from merge_guard import conflict_probe, evaluate as merge_evaluate, flow_ok
 from task_router import route
 from task_reconciler import reconcile
 from workspacelib import common_dir, read_json, safe_branch, state_lock
+from dispatch_guard import classify_observation, environment_plan, status_fingerprint
+from candidate_guard import freeze as candidate_freeze, verify as candidate_verify
 
 
 def ns(**values): return argparse.Namespace(**values)
@@ -167,6 +171,7 @@ class WorkspaceTests(unittest.TestCase):
             quality_scripts = PLUGIN.parent / "ai-engineering-quality" / "scripts"
             run_guard = subprocess.run([sys.executable, str(quality_scripts / "architecture_guard.py"), "--root", str(root), "check", "--task-id", "KG-001"], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             self.assertEqual(0, run_guard.returncode, run_guard.stdout + run_guard.stderr)
+            bind_review_candidate(root, ns(task_id="KG-001", candidate_id="CAND-KG-001-001", review_source="independent-review", agent_role="Developer Agent"))
             transition(root, ns(task_id="KG-001", to="Review", agent_role="Developer Agent", commit_id=None))
             record(root, ns(task_id="KG-001", kind="review", value="independent review", status="PASS", command=None, reason=None, agent_role="Review Agent"))
             transition(root, ns(task_id="KG-001", to="Testing", agent_role="Review Agent", commit_id=None))
@@ -183,6 +188,33 @@ class WorkspaceTests(unittest.TestCase):
             atomic_json(root / ".ai/tasks/KG-001.json", task)
             gate = merge_evaluate(root, "feature/KG-001-login", "develop", "KG-001")
             self.assertTrue(gate["ok"], gate.get("failures"))
+
+    def test_dispatch_observation_fails_closed_on_api_error_and_timeout(self):
+        self.assertEqual("API_ERROR", classify_observation("ERROR"))
+        self.assertEqual("QUERY_TIMEOUT", classify_observation("TIMEOUT"))
+        self.assertEqual("SETUP_PENDING", classify_observation("FOUND", client_thread_id="client-1"))
+        self.assertEqual("RUNNING", classify_observation("FOUND", thread_id="thread-1", runtime_status="inProgress"))
+        self.assertEqual("EMPTY_CONFIRMED", classify_observation("EMPTY"))
+
+    def test_environment_preflight_keeps_repo_and_docker_tasks_out_of_projectless(self):
+        docker_review = environment_plan(["repository", "docker"], True)
+        self.assertEqual("project-local-readonly", docker_review["recommended_environment"])
+        docs = environment_plan([], True)
+        self.assertEqual("projectless", docs["recommended_environment"])
+
+    def test_status_notification_fingerprint_is_stable_and_changes_with_evidence(self):
+        first = status_fingerprint("KG-001", "RUNNING", "50", "", "E-1", "test")
+        self.assertEqual(first, status_fingerprint("KG-001", "RUNNING", "50", "", "E-1", "test"))
+        self.assertNotEqual(first, status_fingerprint("KG-001", "RUNNING", "50", "", "E-2", "test"))
+
+    def test_review_candidate_is_immutable_and_invalidates_after_change(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.repo(root)
+            frozen = candidate_freeze(root, "CAND-001", "KG-001", "independent-review")
+            self.assertFalse(frozen["writable"])
+            self.assertEqual("PASS", candidate_verify(root, "CAND-001")["result"])
+            (root / "a.txt").write_text("changed\n", encoding="utf-8")
+            self.assertEqual("STALE", candidate_verify(root, "CAND-001")["result"])
 
     def test_branch_flow_and_conflict_probe(self):
         self.assertTrue(flow_ok("feature/KG-001-x", "develop")); self.assertFalse(flow_ok("feature/KG-001-x", "main"))
@@ -319,6 +351,22 @@ class WorkspaceTests(unittest.TestCase):
             authorize_experiment(state, "AC-001", "假设三", "观察三", "失败即停止", "local")
         set_strategy(state, "重新设计后的唯一方案", "原方案连续两次被真实证据推翻")
         self.assertEqual(2, state["strategy_revision"])
+
+    def test_long_chain_guard_stops_guessing_after_two_rejected_root_cause_hypotheses(self):
+        task = {"change_contract": {"behavior_invariants": [], "required_tests": []}}
+        state = convergence_initialize(task, ["AC-001|真实链路恢复|runtime"], "先诊断再修改")
+        first = register_hypothesis(state, "ISSUE-001", "缓存状态错误", "只读日志与缓存探针", "修改业务源码")
+        resolve_hypothesis(state, first["id"], "REJECTED", "缓存命中与失败无相关性")
+        second = register_hypothesis(state, "ISSUE-001", "重试次数不足", "故障注入", "扩大重试范围")
+        resolve_hypothesis(state, second["id"], "REJECTED", "首个失真发生在重试之前")
+        self.assertEqual("DIAGNOSIS_REQUIRED", state["status"])
+        report = convergence_assess(state)
+        self.assertFalse(report["ok"])
+        self.assertTrue(any("禁止继续猜测式改码" in value for value in report["blockers"]))
+        with self.assertRaisesRegex(RuntimeError, "diagnosis evidence"):
+            register_hypothesis(state, "ISSUE-001", "继续猜测", "随意修改", "无")
+        set_strategy(state, "从首个运行时失真边界重新诊断", "补齐调用链证据后恢复")
+        self.assertEqual("WARNING", state["status"])
 
     def test_long_chain_guard_blocks_parallel_routes_and_unfinished_migration(self):
         task = {"change_contract": {"behavior_invariants": [], "required_tests": []}}

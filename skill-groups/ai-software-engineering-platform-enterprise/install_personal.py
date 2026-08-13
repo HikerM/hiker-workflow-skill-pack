@@ -241,11 +241,16 @@ def main() -> int:
     global_agents = {"status": "skipped", "path": str(home / ".codex" / "AGENTS.md"), "backup": None} if args.no_merge_global_agents else merge_global_agents(home, stamp)
     activation = activate_plugins(home, str(merged["name"]), args.codex_cli, args.no_activate_plugins, stamp)
     verification = verify_installation(home, str(merged["name"])) if not args.no_activate_plugins and not args.no_merge_global_agents else {"ok": True, "skipped": True}
-    install_state = {"schema_version": "1.0.0", "installed_at": stamp, "marketplace": str(merged["name"]), "plugins": [{"plugin": item["plugin"], "version": item["version"]} for item in cache], "cache_retention": args.cache_retention, "cache_pruned": cache_pruned, "verification": verification, "new_task_required": True}
+    runtime_activation = {
+        "status": "NOT_VERIFIED",
+        "reason": "文件、缓存与启用配置一致不等于运行中的桌面进程已刷新插件注册表",
+        "verification": "新建任务读取实际 SKILL.md 与 plugin.json 路径；若仍指向旧缓存，必须重启桌面端",
+    }
+    install_state = {"schema_version": "1.0.0", "installed_at": stamp, "marketplace": str(merged["name"]), "plugins": [{"plugin": item["plugin"], "version": item["version"]} for item in cache], "cache_retention": args.cache_retention, "cache_pruned": cache_pruned, "verification": verification, "runtime_activation": runtime_activation, "new_task_required": True}
     atomic_json(home / ".codex" / "plugin-install-state.json", install_state)
     ok = activation["status"] != "partial-failure" and verification.get("ok", False)
-    next_step = "新建任务即可使用；若插件列表仍显示缓存版本，再重启桌面端。" if activation["status"] == "activated" else "按manual_commands安装启用插件并新建任务；若列表未刷新，再重启桌面端。"
-    print(json.dumps({"ok": ok, "installed": installed, "cache": cache, "cache_pruned": cache_pruned, "marketplace": str(market), "marketplace_backup": str(marketplace_backup) if marketplace_backup else None, "plugin_backup": str(backup) if backup.exists() else None, "global_agents": global_agents, "plugin_activation": activation, "verification": verification, "install_state": str(home / ".codex" / "plugin-install-state.json"), "next_step": next_step}, ensure_ascii=False, indent=2)); return 0 if ok else 2
+    next_step = "新建任务读取实际插件路径复验；若仍指向旧缓存，关闭并重启桌面端后再新建任务。" if activation["status"] == "activated" else "按manual_commands安装启用插件并新建任务复验；若仍指向旧缓存，重启桌面端。"
+    print(json.dumps({"ok": ok, "installed": installed, "cache": cache, "cache_pruned": cache_pruned, "marketplace": str(market), "marketplace_backup": str(marketplace_backup) if marketplace_backup else None, "plugin_backup": str(backup) if backup.exists() else None, "global_agents": global_agents, "plugin_activation": activation, "verification": verification, "runtime_activation": runtime_activation, "install_state": str(home / ".codex" / "plugin-install-state.json"), "next_step": next_step}, ensure_ascii=False, indent=2)); return 0 if ok else 2
 
 
 if __name__ == "__main__": raise SystemExit(main())

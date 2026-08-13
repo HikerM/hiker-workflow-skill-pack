@@ -1,10 +1,10 @@
 # Hiker 中文工程 Skill 与插件仓库
 
-<!-- repository-facts: repo=0.8.0; engineering=5.10.0; plugins=5; engineering-skills=42; hiker-skills=9; desktop=1.3.0; desktop-skills=5; total-skills=56 -->
+<!-- repository-facts: repo=0.9.0; engineering=5.11.0; plugins=5; engineering-skills=42; hiker-skills=9; desktop=1.3.0; desktop-skills=5; total-skills=56 -->
 
 这是面向 ChatGPT/Codex 桌面应用和长期软件工程项目的中文能力仓库。
 
-> 仓库版本：`0.8.0`
+> 仓库版本：`0.9.0`
 >
 > 当前规模：共 `56` 个 Skill
 >
@@ -15,12 +15,12 @@
 | 能力集合 | 当前版本 | 规模 | 适用范围 | 默认使用方式 |
 |---|---:|---:|---|---|
 | Hiker 工作流守护包 | 0.8.0 | 9 个 Skill | 结果复核、阶段门禁、证据测试、契约审计、NodeTs 链路、Unity 保护和交付审核 | 手动选择 |
-| 智能软件工程平台 | 5.10.0 | 5 个插件、42 个原子 Skill | 从零开发、架构反证、存量源码接管、B/S、C/S、超长会话、大型工程、长链路收敛、交互冲突、Git、质量和发布 | 一个轻量自动入口，其余按需加载 |
+| 智能软件工程平台 | 5.11.0 | 5 个插件、42 个原子 Skill | 从零开发、架构反证、存量源码接管、B/S、C/S、超长会话、大型工程、长链路诊断、不可变审核、Git、质量和发布 | 一个轻量自动入口，其余按需加载 |
 | 桌面软件等价重建 | 1.3.0 | 5 个 Skill | 已授权桌面软件的发现、技术方案、实现、验证和发布 | 手动选择或手动进入阶段路由 |
 
 三套能力彼此独立，不会因为安装在同一仓库就同时进入每轮会话。详细清单见 [全部 Skill 索引](docs/SKILL_INDEX.md)。
 
-## 智能软件工程平台 5.10.0
+## 智能软件工程平台 5.11.0
 
 这是当前主要的 ChatGPT/Codex 桌面端软件工程插件套件。它使用一个小型入口识别项目模式、真实技术栈、版本和当前阶段。轻量路由不占额度，每阶段最多加载两个活跃原子 Skill；第三个及之后进入待执行队列，不预读完整能力目录，也不静默丢失后续能力。
 
@@ -34,7 +34,14 @@
 | 工作区与多会话协作 | 12 | 大型工程总控、项目状态、任务生命周期、长链路收敛、文件锁、多项目隔离、Worktree、合并控制和功能验收闭环 |
 | 质量、风险与发布 | 6 | 独立设计就绪复审、交互状态与冲突治理、完整变更风险、工程图谱、回归范围和发布就绪审核 |
 
-### 5.10 的关键能力
+### 5.11 的关键能力
+
+- **动作优先阶段路由**：先识别增强、修复、实现、审核、测试、合并和发布的主动作，再把风险、验证和推送作为后续阶段。
+- **真实加载回执**：中文应用回执来自 Skill 完整读取后的加载遥测；路由命中不再冒充已经应用。
+- **调度失败关闭**：桌面任务查询错误、超时、明确空结果分别建模；只有明确空结果允许创建，项目环境预检通过后才分派。
+- **不可变审核候选**：开发完成冻结 `candidate_id`；代码、索引或文件集合变化立即使旧 Review/Test/Merge 结论失效。
+- **根因假设账本**：同一问题连续两个假设被证据否定后停止猜测式改码，回到首个运行时失真边界补证据。
+- **工具自证与安全交接**：大测试矩阵先预检；跨会话材料先扫描密码、令牌、私钥和带凭据 URL，只允许脱敏副本导出。
 
 - **唯一源码身份**：Git 项目只使用已跟踪工程清单识别技术栈；旧副本、嵌套 Worktree 和未登记源码不会污染判断。
 - **Worktree 安全收敛**：快速清单不扫描源码；历史 Worktree 先登记、分类，再经过计划与确认两阶段关闭，禁止批量强制删除。
@@ -110,7 +117,7 @@ verification.ok=true
 py -3 -B .\tools\verify_desktop_install.py
 ```
 
-安装器会立即替换插件源码、版本缓存、启用配置和全局规则，这一部分不需要重启。已经打开的任务持有创建时的能力快照，不能在同一任务内强制热替换；新建桌面任务就是安全的无重启热切换边界。只有新任务仍显示旧注册时才需要重启应用。完整说明见 [安装指南](docs/INSTALLATION.md)。
+安装器会立即替换插件源码、版本缓存、启用配置和全局规则，但不会把“文件一致”冒充“运行时已刷新”。已经打开的任务持有创建时的能力快照；先新建任务读取实际插件路径复验。若新任务仍指向旧缓存，说明当前桌面进程缓存了插件注册表，必须重启应用。完整说明见 [安装指南](docs/INSTALLATION.md)。
 
 ## Hiker 工作流守护包 0.8.0
 
@@ -183,5 +190,5 @@ py -3 -B .\scripts\install_skill.py --scope user
 
 - [仓库 Changelog](CHANGELOG.md)
 - [智能软件工程平台 Changelog](skill-groups/ai-software-engineering-platform-enterprise/CHANGELOG.md)
-- [智能软件工程平台 5.10 验证报告](skill-groups/ai-software-engineering-platform-enterprise/VALIDATION_REPORT_CN.md)
+- [智能软件工程平台 5.11 验证报告](skill-groups/ai-software-engineering-platform-enterprise/VALIDATION_REPORT_CN.md)
 - [发布包哈希](skill-groups/ai-software-engineering-platform-enterprise/SHA256SUMS.txt)

@@ -61,6 +61,64 @@ IGNORED_DIRS = {".git", ".ai", "node_modules", "Library", "Temp", "obj", "bin", 
 FRONTEND_TOKENS = ("vue", "react", "next.js", "next", "nuxt", "angular", "svelte", "vite", "web-node")
 BACKEND_TOKENS = ("nestjs", "express", "fastify", "koa", "@hapi/hapi", "fastapi", "django", "flask", "litestar", "sanic", "spring boot", "spring-boot", "quarkus", "micronaut", "asp.net", "microsoft.net.sdk.web", "laravel", "rails", "backend", "server")
 CLIENT_TOKENS = ("unity", "wpf", "winui", "winforms", "avalonia", "maui", "qt", "qml", "electron", "tauri", "flutter", "android", "swiftui", "uikit", "appkit", "react native", "react-native", "javafx", "swing", "lvgl")
+
+ACTION_TERMS = {
+    "development": (
+        "增强", "升级", "更新", "开发", "修复", "整改", "落地", "改造", "重构", "实现", "增加", "新增", "修改",
+        "复用已有", "按现有", "按已通过", "继续", "完成",
+    ),
+    "review": ("只读审核", "只审核", "审核", "审查", "复审", "评估", "检查", "判断", "review", "风险评估", "分析风险", "风险是什么"),
+    "testing": ("只验证", "只测试", "测试", "回归", "验证"),
+    "design": ("设计", "原型"),
+    "merge": ("合并冲突", "处理冲突", "合并", "merge", "pull request", " pr", "推送", "push"),
+    "release": ("发布前", "发布审核", "审核发布", "发布就绪", "准备发布", "能否发布", "上线", "release"),
+}
+
+
+def classify_intent(text: str, unsafe_shortcut: bool = False) -> dict:
+    """Split the request into an action, subject qualifiers and later evidence phases.
+
+    The first explicit action wins.  Nouns such as ``风险`` are not actions, and a
+    later ``验证`` in "修复并验证" is retained as a requested follow-up instead of
+    stealing the development stage.
+    """
+    action_text = text
+    for completed in ("已审核设计", "已复审设计", "已审核", "已复审", "已验证", "已测试", "审核通过", "复审通过"):
+        action_text = action_text.replace(completed, "已有结论")
+    forced = None
+    if any(term in action_text for term in ("审核发布", "发布审核", "发布就绪", "能否发布")):
+        forced = "release"
+    elif "合并" in action_text and any(term in action_text for term in ("检查", "冲突", "所有权", "能否", "是否")):
+        forced = "merge"
+    elif (
+        "风险是什么" in action_text
+        or ("分析" in action_text and "风险" in action_text)
+        or ("找出" in action_text and "判断" in action_text)
+    ):
+        forced = "review"
+    hits: list[tuple[int, int, str, str]] = []
+    priority = {"release": 0, "merge": 1, "review": 2, "testing": 3, "design": 4, "development": 5}
+    for action, terms in ACTION_TERMS.items():
+        for term in terms:
+            index = action_text.find(term)
+            if index >= 0:
+                hits.append((index, priority[action], action, term))
+    hits.sort()
+    primary = forced or (hits[0][2] if hits else "development")
+    if unsafe_shortcut and primary in {"development", "merge", "release"}:
+        primary = "unknown"
+    mentioned = []
+    for _, _, action, _ in hits:
+        if action not in mentioned:
+            mentioned.append(action)
+    follow_up = [action for action in mentioned if action != primary]
+    return {
+        "primary_action": primary,
+        "mentioned_actions": mentioned,
+        "follow_up_actions": follow_up,
+        "risk_qualifier": any(x in text for x in ("风险", "兼容", "回滚", "影响")),
+        "evidence_qualifier": any(x in text for x in ("验证", "测试", "回归", "截图", "日志", "证据")),
+    }
 PLUGIN_DISPLAY = {
     "ai-engineering-core": "01 智能工程核心",
     "ai-engineering-web": "02 浏览器端与服务端工程",
@@ -92,9 +150,12 @@ def bounded_marker_paths(root: Path, max_depth: int = 3, max_dirs: int = 160) ->
 def project_signals(root: Path) -> dict:
     identity = identify(root)
     context = root / ".ai" / "context" / "tech-stack.json"; sources: list[str] = []; evidence_parts: list[str] = []
+    context_evidence = ""
     context_ready = context_fresh(context, identity.get("branch") or "", identity.get("head") or "") if identity["is_git"] else context.is_file()
     if context_ready:
-        try: evidence_parts.append(json.dumps(json.loads(context.read_text(encoding="utf-8")), ensure_ascii=False).lower()); sources.append(str(context))
+        try:
+            context_evidence = json.dumps(json.loads(context.read_text(encoding="utf-8")), ensure_ascii=False).lower()
+            evidence_parts.append(context_evidence); sources.append(str(context))
         except (OSError, json.JSONDecodeError): pass
     markers = bounded_marker_paths(root)
     package_dependencies: set[str] = set()
@@ -118,14 +179,19 @@ def project_signals(root: Path) -> dict:
     evidence = " ".join(evidence_parts)
     react_native = "react-native" in package_dependencies or "react-native" in evidence or "react native" in evidence
     web_packages = {"vue", "next", "nuxt", "@angular/core", "svelte", "vite"}
+    client_packages = {
+        "electron", "electron-builder", "react-native", "@tauri-apps/api", "@tauri-apps/cli",
+        "@capacitor/core", "@ionic/react", "@ionic/vue",
+    }
     web_from_packages = bool(package_dependencies & web_packages) or ("react" in package_dependencies and not react_native)
     backend = backend or any(dep == token or dep.startswith(token) for dep in package_dependencies for token in ("@nestjs/", "express", "fastify", "koa", "@hapi/", "hapi", "fastapi", "django", "flask", "spring-boot", "laravel", "rails"))
+    structured_context_cs = bool(context_evidence) and any(token in context_evidence for token in CLIENT_TOKENS)
     return {
         "existing": bool(markers or context_ready),
         "bs": web_from_packages or any(token in evidence for token in FRONTEND_TOKENS if token != "react") and not react_native,
         "backend": backend or any(token in evidence for token in BACKEND_TOKENS),
-        "cs": cs or react_native or any(token in evidence for token in CLIENT_TOKENS),
-        "unity": unity or "unity" in evidence,
+        "cs": cs or react_native or bool(package_dependencies & client_packages) or structured_context_cs,
+        "unity": unity or (bool(context_evidence) and "unity" in context_evidence),
         "context_ready": context_ready,
         "sources": sources[:12],
         "identity": identity,
@@ -187,17 +253,23 @@ def route(root: Path, request: str) -> dict:
     backend = explicit_backend or (not explicit_architecture and signals["backend"])
     unity = explicit_unity or (cs and signals["unity"])
     unsafe_shortcut = any(x in text for x in ("假装", "不看证据直接", "直接宣布", "强制合并并删除", "升级到最新大版本", "迁移成", "迁移到", "解释什么是", "解释一下", "架构概念"))
-    implementation = any(x in text for x in ("实现", "增加", "新增", "修改", "复用已有", "按现有", "按已通过", "继续")) and not unsafe_shortcut
-    design = any(x in text for x in ("设计", "ui", "视觉", "交互", "原型")) and not implementation
+    intent = classify_intent(text, unsafe_shortcut)
+    primary_action = intent["primary_action"]
+    mentioned_actions = set(intent["mentioned_actions"])
+    implementation = primary_action == "development"
+    design = primary_action == "design" or (not mentioned_actions and any(x in text for x in ("ui", "视觉", "交互")))
     architecture_decision = any(x in text for x in (
         "功能架构", "系统架构", "技术架构", "业务架构", "数据架构", "部署架构",
         "架构设计", "架构方案", "模块架构", "模块拆分", "服务拆分",
     )) or ("架构" in text and any(x in text for x in ("思路", "方案", "设计", "评估", "补全", "遗漏", "问题", "合理", "怎么拆")))
-    review = any(x in text for x in ("审核", "审查", "复审", "评估", "检查", "判断", "只读", "review", "风险"))
-    if implementation and any(x in text for x in ("按已审核", "按已通过")): review = False
-    test = any(x in text for x in ("测试", "回归", "验证"))
-    release = any(x in text for x in ("发布前", "发布审核", "审核发布", "发布就绪", "准备发布", "能否发布", "上线", "release"))
-    merge = any(x in text for x in ("合并", "merge", "冲突", "pull request", " pr", "推送", "push"))
+    review = primary_action == "review"
+    test = primary_action == "testing"
+    release = primary_action == "release"
+    merge = primary_action == "merge"
+    mentions_review = "review" in mentioned_actions
+    mentions_test = "testing" in mentioned_actions
+    mentions_release = "release" in mentioned_actions
+    mentions_merge = "merge" in mentioned_actions
     recovery = any(x in text for x in ("新会话恢复", "恢复上一个任务", "压缩后核对", "锁定决策和下一步"))
     long_context = any(x in text for x in ("多会话", "长会话", "超长会话", "会话超长", "超多轮", "上下文压缩", "多轮压缩", "不会丢", "越来越重", "压缩前", "checkpoint数量", "恢复回执"))
     pause = any(x in text for x in ("可中断", "暂停", "继续执行", "恢复执行", "调整方向", "插入需求"))
@@ -236,13 +308,16 @@ def route(root: Path, request: str) -> dict:
             "真实执行", "付费执行", "计费执行", "真实计费", "生产回滚", "回滚后", "主线不一致",
             "部署版本不一致", "结论作废", "验收被推翻", "方向走偏", "一直不行",
         ))
-        or (implementation and test and (release or merge))
-        or (multi and implementation and test)
+        or (implementation and mentions_test and (mentions_release or mentions_merge))
+        or (multi and implementation and mentions_test)
     )
     unity_review = review and any(x in text for x in ("missing script", "guid", "arm64", "prefab", "scene", "packages"))
     cs_review = review and any(x in text for x in ("ipc", "生命周期", "api兼容", "打包证据", "swiftui客户端", "electron客户端"))
     backend_contract = backend and any(x in text for x in ("api契约", "接口契约", "事件契约", "openapi", "protobuf", "graphql", "错误模型", "幂等"))
-    database_change = backend and any(x in text for x in ("数据库迁移", "migration", "schema变更", "表结构", "回滚脚本"))
+    database_change = backend and (
+        any(x in text for x in ("数据库迁移", "migration", "schema变更", "表结构", "回滚脚本"))
+        or ("迁移" in text and any(x in text for x in ("postgresql", "postgres", "mysql", "mariadb", "sqlite", "sql server", "oracle", "数据库")))
+    )
     selected: list[tuple[str, str]] = []
     deferred: list[tuple[str, str]] = []
 
@@ -257,9 +332,9 @@ def route(root: Path, request: str) -> dict:
 
     if plugin_engineering:
         mode = "existing" if (root / ".git").exists() else "unknown"
-        stage = "review" if review and not implementation else "development"
+        stage = "review" if review else "testing" if test else "release" if release else "development"
         add("full-change-risk-review", "插件增强结束前需要审核完整变更，并核对五个插件全部Skill的一致性")
-        if merge:
+        if merge or mentions_merge:
             add("change-ownership-merge", "推送前需要核对分支、提交范围与质量证据")
     elif greenfield:
         add("greenfield-project-planning", "空项目需要先融合自定义需求并锁定关键技术决策")
@@ -272,7 +347,7 @@ def route(root: Path, request: str) -> dict:
         add("brownfield-requirement-reconciliation", "建立现有能力基线，并把自定义需求对账为新增、修改、替换或移除")
     else:
         mode = "existing" if existing else "unknown"
-        stage = "release" if release else "review" if review else "testing" if test else "design" if design else "development"
+        stage = "release" if release else "merge" if merge else "review" if review else "testing" if test else "design" if design else "development"
         if signals["source_conflicts"]:
             stage = "governance"
             add("worktree-task-manager", "检测到嵌套工作目录，必须先确认唯一源码身份")
@@ -302,9 +377,9 @@ def route(root: Path, request: str) -> dict:
             add("long-chain-change-convergence", "复杂任务需要压制范围膨胀、重复失败、实现路径分叉和旧结论沿用")
             if sum(bool(x) for x in (bs, cs, backend)) > 1 or multi:
                 add("workspace-task-router", "跨模块或跨仓库链路需要先拆分所有权、依赖和串并行边界")
-            elif release:
+            elif release or mentions_release:
                 add("release-readiness-review", "真实发布前需要核对当前证据、部署版本与回滚状态")
-            elif test:
+            elif test or mentions_test:
                 add("regression-test-planner", "按当前策略和验收修订计算最小但充分的回归范围")
             elif backend:
                 add("backend-component-implementation", "在真实服务端技术栈中执行当前最小改动")
@@ -382,7 +457,7 @@ def route(root: Path, request: str) -> dict:
     if not selected: questions.append("当前请求未命中软件工程执行阶段；不自动加载原子Skill")
     elif signals["source_conflicts"]: questions.append("当前仓库包含嵌套工作目录；清点并移出规范仓库后再执行源码修改")
     elif ambiguous_hybrid: questions.append("工程包含多个技术通道；执行前需在任务契约中确认本次前端、客户端和服务端范围")
-    route_basis = json.dumps({"stage": stage, "active": [x[0] for x in selected], "deferred": [x[0] for x in deferred]}, ensure_ascii=False, sort_keys=True)
+    route_basis = json.dumps({"stage": stage, "primary_action": primary_action, "active": [x[0] for x in selected], "deferred": [x[0] for x in deferred]}, ensure_ascii=False, sort_keys=True)
     return {
         "schema_version": "1.0.0",
         "project_mode": mode,
@@ -393,6 +468,9 @@ def route(root: Path, request: str) -> dict:
         "load": [locate(s) for s, _ in selected],
         "max_loaded_atomic_skills": 2,
         "router_counts_toward_limit": False,
+        "intent": intent,
+        "phase_transition_required": bool(intent["follow_up_actions"]),
+        "receipt_source": "skill-loader-telemetry",
         "route_fingerprint": hashlib.sha256(route_basis.encode("utf-8")).hexdigest()[:16],
         "next_gate": "完成当前阶段并重新路由待执行能力" if deferred else None,
         "confidence": confidence,

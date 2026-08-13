@@ -26,6 +26,7 @@ MAX_EVIDENCE_PER_CRITERION = 12
 MAX_VERIFICATION_RECORDS = 30
 MAX_GOVERNANCE_ONLY_CYCLES = 2
 MAX_FULL_REPLAYS_PER_FINGERPRINT = 2
+MAX_REJECTED_HYPOTHESES_PER_ISSUE = 2
 
 
 def now() -> str:
@@ -106,6 +107,7 @@ def initialize(task: dict[str, Any], criteria: list[str], strategy: str) -> dict
         "open_contradictions": [],
         "implementation_routes": [],
         "experiments": [],
+        "hypotheses": [],
         "events": [],
         "deployment": {
             "source_head": "",
@@ -208,6 +210,9 @@ def assess(state: dict[str, Any], phase: str = "status") -> dict[str, Any]:
     if state.get("status") == "PIVOT_REQUIRED":
         blockers.append("当前方案已被证据推翻或同一验收点连续失败，必须重新定方案")
         actions.append("冻结现有方案，记录被推翻依据并建立新的策略修订")
+    if state.get("status") == "DIAGNOSIS_REQUIRED":
+        blockers.append("同一问题的连续根因假设已被证据否定，禁止继续猜测式改码")
+        actions.append("回到首个可观测失真边界，补齐调用链、状态转换或运行时证据后再建立新假设")
     if _unresolved_experiments(state):
         blockers.append("存在尚未记录结果的真实实验")
         actions.append("先完成或明确取消当前实验，禁止重复执行")
@@ -242,8 +247,8 @@ def assess(state: dict[str, Any], phase: str = "status") -> dict[str, Any]:
         if deployment.get("post_deploy_evidence") != "PASS":
             blockers.append("缺少当前部署版本的上线后验证证据")
     severity = "BLOCKED" if blockers else "WARNING" if warnings else "STABLE"
-    if state.get("status") == "PIVOT_REQUIRED":
-        severity = "PIVOT_REQUIRED"
+    if state.get("status") in {"PIVOT_REQUIRED", "DIAGNOSIS_REQUIRED"}:
+        severity = state["status"]
     latest_observations = []
     visible_kinds = OBSERVATIONS | {"acceptance-baseline-invalidated", "strategy-set", "strategy-retired"}
     for event in reversed(state.get("events", [])):
@@ -473,8 +478,60 @@ def set_strategy(state: dict[str, Any], summary: str, reason: str) -> None:
         "reason": reason,
     }
     state["open_contradictions"] = []
+    for item in state.get("hypotheses", []):
+        if item.get("status") == "ACTIVE":
+            item["status"] = "RETIRED"
+            item["retired_at"] = now()
     state["status"] = "WARNING"
     state.setdefault("events", []).append({"at": now(), "kind": "strategy-set", "summary": summary, "reason": reason})
+
+
+def register_hypothesis(
+    state: dict[str, Any], issue_id: str, statement: str, allowed_actions: str, forbidden_actions: str
+) -> dict[str, Any]:
+    issue = safe_id(issue_id).upper()
+    if not issue or not statement or not allowed_actions or not forbidden_actions:
+        raise RuntimeError("hypothesis requires issue id, statement, allowed actions and forbidden actions")
+    if state.get("status") == "DIAGNOSIS_REQUIRED":
+        raise RuntimeError("diagnosis evidence is required before another hypothesis can be registered")
+    if any(item.get("issue_id") == issue and item.get("status") == "ACTIVE" for item in state.get("hypotheses", [])):
+        raise RuntimeError(f"issue already has an active hypothesis: {issue}")
+    item = {
+        "id": f"HYP-{len(state.get('hypotheses', [])) + 1:03d}",
+        "issue_id": issue,
+        "statement": statement,
+        "allowed_actions": allowed_actions,
+        "forbidden_actions": forbidden_actions,
+        "status": "ACTIVE",
+        "created_at": now(),
+    }
+    state.setdefault("hypotheses", []).append(item)
+    state["hypotheses"] = _bounded(state["hypotheses"], 20)
+    return item
+
+
+def resolve_hypothesis(state: dict[str, Any], hypothesis_id: str, result: str, evidence: str) -> dict[str, Any]:
+    if result not in {"CONFIRMED", "REJECTED"} or not evidence:
+        raise RuntimeError("hypothesis result requires CONFIRMED/REJECTED and evidence")
+    item = next((value for value in state.get("hypotheses", []) if value.get("id") == hypothesis_id), None)
+    if not item or item.get("status") != "ACTIVE":
+        raise RuntimeError("active hypothesis not found")
+    item["status"] = result
+    item["evidence"] = evidence
+    item["resolved_at"] = now()
+    if result == "REJECTED":
+        rejected = sum(
+            value.get("issue_id") == item.get("issue_id") and value.get("status") == "REJECTED"
+            for value in state.get("hypotheses", [])
+        )
+        if rejected >= MAX_REJECTED_HYPOTHESES_PER_ISSUE:
+            state["status"] = "DIAGNOSIS_REQUIRED"
+            state.setdefault("events", []).append({
+                "at": now(), "kind": "strategy-invalidated",
+                "summary": f"{item['issue_id']} 连续 {rejected} 个根因假设被否定",
+                "action": "停止改码并回到首个可观测失真边界补证据",
+            })
+    return item
 
 
 def register_route(
@@ -629,6 +686,15 @@ def main() -> int:
     command = sub.add_parser("strategy-set")
     command.add_argument("--summary", required=True)
     command.add_argument("--reason", required=True)
+    command = sub.add_parser("hypothesis-add")
+    command.add_argument("--issue-id", required=True)
+    command.add_argument("--statement", required=True)
+    command.add_argument("--allowed-actions", required=True)
+    command.add_argument("--forbidden-actions", required=True)
+    command = sub.add_parser("hypothesis-result")
+    command.add_argument("--hypothesis-id", required=True)
+    command.add_argument("--result", choices=["CONFIRMED", "REJECTED"], required=True)
+    command.add_argument("--evidence", required=True)
     command = sub.add_parser("route-set")
     command.add_argument("--responsibility", required=True)
     command.add_argument("--route-id", required=True)
@@ -693,6 +759,12 @@ def main() -> int:
                 resolve_contradiction(state, args.contradiction_id, args.evidence)
             elif args.command == "strategy-set":
                 set_strategy(state, args.summary, args.reason)
+            elif args.command == "hypothesis-add":
+                operation_result = register_hypothesis(
+                    state, args.issue_id, args.statement, args.allowed_actions, args.forbidden_actions
+                )
+            elif args.command == "hypothesis-result":
+                operation_result = resolve_hypothesis(state, args.hypothesis_id, args.result, args.evidence)
             elif args.command == "route-set":
                 register_route(
                     state,

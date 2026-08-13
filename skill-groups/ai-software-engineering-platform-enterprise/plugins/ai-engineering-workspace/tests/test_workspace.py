@@ -11,6 +11,22 @@ PLUGIN = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PLUGIN / "scripts"))
 
 from closure_gate import evaluate as closure_evaluate
+from convergence_guard import (
+    acknowledge as convergence_acknowledge,
+    assess as convergence_assess,
+    authorize_experiment,
+    finish_experiment,
+    health_report,
+    initialize as convergence_initialize,
+    observe as convergence_observe,
+    record_progress,
+    record_evidence as convergence_record_evidence,
+    record_verification,
+    register_route,
+    set_deployment,
+    set_strategy,
+    verification_plan,
+)
 from file_lock import acquire, check, release
 from git_workspace import cmd_adopt, cmd_close, cmd_create, cmd_inventory, cmd_list, cmd_pause, cmd_plan_close, validate_branch_policy
 from governance_state import checkpoint, control, create_task, init_project, load_task, record, save_task, set_change_contract, transition, validate
@@ -252,6 +268,99 @@ class WorkspaceTests(unittest.TestCase):
             create_report = reconcile(root, phase="create")
             orphan_finding = next(item for item in create_report["findings"] if item["type"] == "ORPHAN_WORKTREE")
             self.assertEqual("BLOCK", orphan_finding["severity"])
+
+    def test_long_chain_guard_notifies_once_for_changed_engineering_health(self):
+        task = {"change_contract": {"behavior_invariants": [], "required_tests": []}}
+        state = convergence_initialize(task, ["AC-001|用户可见行为成立|user-visible"], "最小修改")
+        convergence_observe(
+            state,
+            "user-correction",
+            "原验收理解被用户纠正",
+            "旧的通过结论不再覆盖当前目标",
+            "重新建立验收基线",
+            "AC-001",
+        )
+        first = health_report(state)
+        self.assertTrue(first["should_notify"])
+        self.assertEqual("工程状态告警", first["notice"]["title"])
+        self.assertIn("原验收理解被用户纠正", first["notice"]["problem"])
+        self.assertIn("旧的通过结论不再覆盖当前目标", first["notice"]["impact"])
+        self.assertIn("重新建立验收基线", first["notice"]["action"])
+        self.assertEqual(2, state["acceptance_revision"])
+        self.assertEqual("PENDING", state["criteria"][0]["status"])
+        convergence_acknowledge(state, first["fingerprint"])
+        second = health_report(state)
+        self.assertFalse(second["should_notify"])
+
+    def test_long_chain_guard_blocks_reported_implementation_sprawl_until_resolved(self):
+        task = {"change_contract": {"behavior_invariants": [], "required_tests": []}}
+        state = convergence_initialize(task, ["AC-001|唯一执行入口成立|runtime"], "统一入口")
+        convergence_observe(
+            state,
+            "implementation-sprawl",
+            "同一职责检测到新旧实现并存",
+            "调用入口不唯一，回归结果无法代表全部路径",
+            "冻结新增补丁并退役旧路径",
+            "AC-001",
+        )
+        report = convergence_assess(state, "merge")
+        self.assertFalse(report["ok"])
+        self.assertTrue(any("证据矛盾" in value for value in report["blockers"]))
+
+    def test_long_chain_guard_forces_strategy_pivot_after_two_real_failures(self):
+        task = {"change_contract": {"behavior_invariants": [], "required_tests": []}}
+        state = convergence_initialize(task, ["AC-001|运行时目标成立|runtime"], "初始方案")
+        first = authorize_experiment(state, "AC-001", "假设一", "观察一", "失败即停止", "local")
+        finish_experiment(state, first["id"], "FAIL", "运行时证据一")
+        second = authorize_experiment(state, "AC-001", "假设二", "观察二", "失败即停止", "local")
+        finish_experiment(state, second["id"], "FAIL", "运行时证据二")
+        self.assertEqual("PIVOT_REQUIRED", state["status"])
+        with self.assertRaisesRegex(RuntimeError, "experiment blocked"):
+            authorize_experiment(state, "AC-001", "假设三", "观察三", "失败即停止", "local")
+        set_strategy(state, "重新设计后的唯一方案", "原方案连续两次被真实证据推翻")
+        self.assertEqual(2, state["strategy_revision"])
+
+    def test_long_chain_guard_blocks_parallel_routes_and_unfinished_migration(self):
+        task = {"change_contract": {"behavior_invariants": [], "required_tests": []}}
+        state = convergence_initialize(task, ["AC-001|公共行为保持一致|integration"], "统一入口")
+        register_route(state, "公共状态推进", "route-a", "ACTIVE")
+        register_route(state, "公共状态推进", "route-b", "ACTIVE")
+        report = convergence_assess(state, "merge")
+        self.assertFalse(report["ok"])
+        self.assertTrue(any("多个活动实现路径" in value for value in report["blockers"]))
+        register_route(state, "公共状态推进", "route-b", "MIGRATION", "完成等价回归后删除")
+        report = convergence_assess(state, "merge")
+        self.assertTrue(any("未收敛的迁移实现路径" in value for value in report["blockers"]))
+        register_route(state, "公共状态推进", "route-b", "RETIRED", removal_evidence="commit:deadbeef")
+        convergence_record_evidence(state, "AC-001", "integration", "PASS", "集成回归通过", "head-1")
+        self.assertTrue(convergence_assess(state, "merge")["ok"])
+
+    def test_long_chain_guard_keeps_evidence_levels_and_deployment_versions_distinct(self):
+        task = {"change_contract": {"behavior_invariants": [], "required_tests": []}}
+        state = convergence_initialize(task, ["AC-001|真实用户流程成立|production"], "当前方案")
+        convergence_record_evidence(state, "AC-001", "integration", "PASS", "合同测试通过", "head-1")
+        self.assertEqual("PARTIAL", state["criteria"][0]["status"])
+        set_deployment(state, "head-2", "head-2", "head-1", "PENDING")
+        production = convergence_assess(state, "production-experiment")
+        self.assertFalse(production["ok"])
+        self.assertTrue(any("生产版本漂移" in value for value in production["blockers"]))
+
+    def test_long_chain_guard_caps_governance_only_cycles_and_reuses_evidence(self):
+        task = {"change_contract": {"behavior_invariants": [], "required_tests": []}}
+        state = convergence_initialize(task, ["AC-001|真实业务链路成立|runtime"], "最小业务切片")
+        record_progress(state, "governance", "完成基线门禁", "开始最小业务实现")
+        record_progress(state, "governance", "修复门禁自身缺陷", "开始最小业务实现")
+        with self.assertRaisesRegex(RuntimeError, "governance-only cycle budget exceeded"):
+            record_progress(state, "governance", "继续扩展控制账本", "开始最小业务实现")
+        self.assertIn("连续 2 个治理周期", convergence_assess(state)["warnings"][-1])
+        first = record_verification(state, "GATE-001", "head-1", "validator", "full", "PASS", "matrix.json")
+        self.assertFalse(first["reused"])
+        self.assertEqual("REUSE_PASS", verification_plan(state, "GATE-001", "head-1", "validator")["decision"])
+        reused = record_verification(state, "GATE-001", "head-1", "validator", "targeted", "PASS", "matrix.json")
+        self.assertTrue(reused["reused"])
+        record_progress(state, "business", "完成首个业务源码切片", "运行真实集成验证")
+        self.assertTrue(state["delivery_progress"]["business_source_started"])
+        self.assertEqual(0, state["delivery_progress"]["consecutive_governance_only_cycles"])
 
 
 if __name__ == "__main__": unittest.main()

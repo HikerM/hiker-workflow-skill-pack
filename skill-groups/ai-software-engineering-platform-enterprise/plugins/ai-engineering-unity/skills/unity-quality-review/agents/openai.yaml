@@ -1,5 +1,6 @@
 interface:
   display_name: "游戏引擎质量审核"
   short_description: "审核资源、性能、多分辨率和平台风险"
+  default_prompt: "使用 $unity-quality-review 独立只读审核当前Unity代码、资源、界面与平台证据。"
 policy:
   allow_implicit_invocation: false

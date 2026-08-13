@@ -1,6 +1,6 @@
 interface:
   display_name: "工作目录安全收敛"
   short_description: "安全接管、分类并收敛长期堆积的 Git 工作目录"
-  default_prompt: "清点当前项目的 Git 工作目录，按证据分类并生成安全收敛计划；未经确认不得关闭或删除。"
+  default_prompt: "使用 $worktree-safe-convergence 清点当前Git工作目录，按证据分类并生成安全收敛计划；未经确认不得关闭或删除。"
 policy:
   allow_implicit_invocation: false

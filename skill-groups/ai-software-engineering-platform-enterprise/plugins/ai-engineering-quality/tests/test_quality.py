@@ -1,7 +1,8 @@
 from __future__ import annotations
-import json,subprocess,sys,tempfile,unittest
+import json,shutil,subprocess,sys,tempfile,unittest
 from pathlib import Path
 PLUGIN=Path(__file__).resolve().parents[1];sys.path.insert(0,str(PLUGIN/"scripts"))
+SUITE=PLUGIN.parents[1];sys.path.insert(0,str(SUITE/"tools"))
 from change_set import collect
 from architecture_guard import evaluate as architecture_evaluate
 from graph_store import connect,impact,index
@@ -10,12 +11,22 @@ from risk_review import review
 from release_review import review as release_review
 from test_plan import plan
 from interaction_guard import evaluate as interaction_evaluate, run as interaction_run
+from audit_skill_coherence import audit as coherence_audit
 
 def git(root,*args,check=True):return subprocess.run(["git",*args],cwd=root,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=check)
 def repo(root:Path):
     git(root,"init","-b","main");git(root,"config","user.email","test@example.com");git(root,"config","user.name","Test");(root/"README.md").write_text("init\n");git(root,"add",".");git(root,"commit","-m","init")
 
 class QualityTests(unittest.TestCase):
+    def test_skill_coherence_audits_every_skill_and_detects_receipt_distortion(self):
+        current=coherence_audit(SUITE);self.assertTrue(current["ok"],current["errors"]);self.assertEqual(42,current["skill_count"]);self.assertEqual(42,len(current["audited_skills"]))
+        with tempfile.TemporaryDirectory() as td:
+            copied=Path(td)/"suite";shutil.copytree(SUITE,copied,ignore=shutil.ignore_patterns("dist","__pycache__","*.pyc"))
+            target=copied/"plugins/ai-engineering-workspace/skills/plugin-application-receipt/agents/openai.yaml"
+            text=target.read_text(encoding="utf-8").replace("只展示本轮实际应用的插件中文名和Skill中文名", "展示本轮项目、模式和触发原因")
+            target.write_text(text,encoding="utf-8")
+            distorted=coherence_audit(copied);self.assertFalse(distorted["ok"]);self.assertIn("RECEIPT_SCOPE_CONFLICT",{item["code"] for item in distorted["errors"]})
+
     def test_interaction_guard_is_zero_config_and_bounded(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);data=interaction_run(root,None,"review");self.assertEqual("NOT_APPLICABLE",data["status"])

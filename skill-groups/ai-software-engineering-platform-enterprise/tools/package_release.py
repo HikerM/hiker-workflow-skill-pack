@@ -5,6 +5,8 @@ import json
 import zipfile
 from pathlib import Path
 
+from audit_skill_coherence import audit as audit_skill_coherence
+
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGINS = ROOT / "plugins"
@@ -25,6 +27,10 @@ def sha256(path: Path) -> str:
 
 
 def main() -> int:
+    coherence = audit_skill_coherence(ROOT)
+    if not coherence["ok"]:
+        print(json.dumps({"ok": False, "gate": "skill-coherence", "errors": coherence["errors"]}, ensure_ascii=False, indent=2))
+        return 2
     DIST.mkdir(parents=True, exist_ok=True)
     outputs = []
     release_specs = []

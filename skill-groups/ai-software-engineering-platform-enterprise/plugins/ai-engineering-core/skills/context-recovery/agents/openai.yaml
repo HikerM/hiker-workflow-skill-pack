@@ -1,5 +1,6 @@
 interface:
   display_name: "上下文恢复"
   short_description: "从统一状态和检查点恢复长期任务"
+  default_prompt: "使用 $context-recovery 从当前项目正式状态恢复目标、分支、证据和下一步。"
 policy:
   allow_implicit_invocation: false

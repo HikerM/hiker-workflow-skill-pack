@@ -1,5 +1,6 @@
 interface:
   display_name: "游戏引擎组件与页面实现"
   short_description: "实现Prefab、Renderer和页面组件"
+  default_prompt: "使用 $unity-component-implementation 按当前Unity版本、UI体系和已审核设计实现组件。"
 policy:
   allow_implicit_invocation: false

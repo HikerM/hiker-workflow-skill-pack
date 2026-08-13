@@ -1,5 +1,6 @@
 interface:
   display_name: "官方规范解析"
   short_description: "根据语言、框架和版本生成规范来源清单"
+  default_prompt: "使用 $official-standards-resolver 根据当前工程的真实技术版本解析对应官方规范。"
 policy:
   allow_implicit_invocation: false

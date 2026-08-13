@@ -1,0 +1,6 @@
+interface:
+  display_name: "长链路变更收敛"
+  short_description: "压制范围膨胀、重复失败、新旧路径并存和工程结论失效"
+  default_prompt: "使用 $long-chain-change-convergence 为当前复杂工程任务建立分层验收、唯一实现路径、实验预算和中文工程健康告警。"
+policy:
+  allow_implicit_invocation: false

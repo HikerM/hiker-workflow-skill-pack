@@ -1,6 +1,6 @@
 # Skill 索引
 
-仓库包含三组，共 54 个 Skill。每组都有轻量入口，单次只选择当前意图、技术栈和阶段所需的原子能力。
+仓库包含三组，共 56 个 Skill。每组都有轻量入口，单次只选择当前意图、技术栈和阶段所需的原子能力。
 
 ## 第一组：Hiker 工作流守护组（9 个）
 
@@ -18,7 +18,7 @@
 
 源码：`../.agents/skills/`
 
-## 第二组：AI 软件工程平台 Enterprise（40 个）
+## 第二组：AI 软件工程平台 Enterprise（42 个）
 
 ### `ai-engineering-core`
 
@@ -32,6 +32,7 @@
 | `ai-engineering-router` | 唯一轻量自动入口，按项目模式、架构和阶段最多加载两个原子 Skill |
 | `greenfield-project-planning` | 从零项目先融合稳定需求、冲突、未知项、验收条件和技术 Checkpoint |
 | `brownfield-requirement-reconciliation` | 为部分源码建立能力基线并对账新增、修改、替换或移除需求 |
+| `architecture-decision-challenge` | 把用户架构思路视为待验证假设，主动找出反例、遗漏、隐性耦合与演进风险，并给出有界替代方案和决策 Checkpoint |
 
 ### `ai-engineering-web`
 
@@ -62,9 +63,10 @@
 
 | Skill | 作用 |
 |---|---|
-| `multi-agent-project-governance` | 七角色大型工程控制平面与总控入口 |
+| `multi-agent-project-governance` | 七角色大型工程控制平面；采用单一事实源、派生视图、会话幂等绑定和治理预算，避免总控流程吞噬业务交付 |
 | `project-state-manager` | 维护项目状态、上下文快照和四个根文档 |
 | `task-lifecycle-manager` | 管理 Task ID、Created→Released 和人工控制 |
+| `long-chain-change-convergence` | 对复杂长链路建立分层验收、唯一实现路径、治理空转预算、验证证据复用、策略换轨、部署哈希和去重中文工程健康告警 |
 | `workspace-task-router` | 按B/S与C/S前后端、契约、审核、测试和发布拆分任务 |
 | `worktree-task-manager` | 按分支治理安全创建、管理和清理 Worktree |
 | `worktree-safe-convergence` | 只读接管、分类并以两阶段确认安全收敛历史 Worktree |

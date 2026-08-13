@@ -1,6 +1,6 @@
 interface:
   display_name: "服务端功能实现"
   short_description: "在现有服务端架构内实现有边界功能"
-  default_prompt: "按真实技术版本、契约和变更范围实现服务端功能并验证。"
+  default_prompt: "使用 $backend-component-implementation 按真实技术版本、契约和变更范围实现服务端功能并验证。"
 policy:
   allow_implicit_invocation: false

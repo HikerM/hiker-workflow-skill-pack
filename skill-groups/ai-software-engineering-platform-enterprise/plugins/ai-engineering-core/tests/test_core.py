@@ -22,11 +22,31 @@ from suite_router import route
 
 
 class CoreTests(unittest.TestCase):
+    def test_architecture_idea_is_challenged_without_expanding_normal_requests(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            proposal = route(root, "我提供了系统架构思路，请找出毛病、遗漏并给出更好的替代方案")
+            names = [item["skill"] for item in proposal["selected"]]
+            self.assertIn("架构决策挑战与补全", names)
+            self.assertLessEqual(len(proposal["load"]), 2)
+            ordinary = route(root, "解释一下什么是B/S架构")
+            self.assertNotIn("架构决策挑战与补全", [item["skill"] for item in ordinary["selected"]])
+
     def test_router_lazily_selects_interaction_conflict_governance(self):
         with tempfile.TemporaryDirectory() as td:
             data=route(Path(td),"检查大型项目的下拉框、弹窗、快捷键和请求乱序交互冲突")
             self.assertEqual(["交互状态与冲突治理"],[x["skill"] for x in data["selected"]])
             self.assertLessEqual(len(data["load"]),2)
+
+    def test_router_escalates_generic_long_chain_without_case_specific_terms(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            data = route(root, "这个跨仓库复杂链路已经多轮修复并回滚，继续修改测试后再上线")
+            names = [item["skill"] for item in data["selected"]]
+            self.assertEqual("长链路变更收敛", names[0])
+            self.assertLessEqual(len(data["load"]), 2)
+            ordinary = route(root, "修改一个本地按钮文案")
+            self.assertNotIn("长链路变更收敛", [item["skill"] for item in ordinary["selected"]])
     def test_greenfield_router_prefers_requirements_before_scaffold(self):
         with tempfile.TemporaryDirectory() as td:
             data = route(Path(td), "从0开始开发一个自定义B/S和C/S教学系统")

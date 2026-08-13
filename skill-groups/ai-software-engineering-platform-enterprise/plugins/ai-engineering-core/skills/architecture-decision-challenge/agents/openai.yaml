@@ -1,0 +1,6 @@
+interface:
+  display_name: "架构决策挑战与补全"
+  short_description: "主动反证用户方案、发现架构遗漏并形成可决策的高价值替代方案"
+  default_prompt: "使用 $architecture-decision-challenge 挑战并补全当前架构或功能架构思路，给出证据、风险和替代方案。"
+policy:
+  allow_implicit_invocation: false

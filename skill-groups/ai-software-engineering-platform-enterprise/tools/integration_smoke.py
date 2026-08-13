@@ -5,12 +5,14 @@ ROOT=Path(__file__).resolve().parents[1]
 CORE=ROOT/"plugins/ai-engineering-core/scripts";WORK=ROOT/"plugins/ai-engineering-workspace/scripts";QUALITY=ROOT/"plugins/ai-engineering-quality/scripts"
 sys.path.insert(0,str(ROOT))
 from install_personal import enable_plugins_in_config
+from tools.audit_skill_coherence import audit as coherence_audit
 def child_env(extra=None):
     env=dict(os.environ);env.update(extra or {});env["PYTHONIOENCODING"]="utf-8";env["PYTHONUTF8"]="1";return env
 def run(args,cwd,input_text=None,check=True):return subprocess.run(args,cwd=cwd,input=input_text,text=True,encoding="utf-8",errors="replace",env=child_env(),stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=check)
 def git(root,*args):return run(["git",*args],root)
 def main()->int:
     checks=[]
+    coherence=coherence_audit(ROOT);checks.append(("skill-coherence",coherence.get("ok") is True and coherence.get("skill_count")==42))
     with tempfile.TemporaryDirectory() as td:
         root=Path(td)/"repo";root.mkdir();git(root,"init","-b","main");git(root,"config","user.email","test@example.com");git(root,"config","user.name","Smoke")
         (root/"package.json").write_text(json.dumps({"name":"smoke","packageManager":"pnpm@9","dependencies":{"vue":"3.5.1"},"devDependencies":{"typescript":"5.7.0"},"scripts":{"lint":"eslint .","test":"vitest run","build":"vite build"}}));(root/"src").mkdir();(root/"src/a.ts").write_text("export const a=1\n");git(root,"add",".");git(root,"commit","-m","chore: initialize smoke repository");git(root,"branch","develop");git(root,"branch","release")
@@ -22,6 +24,10 @@ def main()->int:
         run([sys.executable,str(WORK/"governance_state.py"),"--root",str(root),"init","--project-id","SMOKE","--architecture","bs"],root)
         run([sys.executable,str(WORK/"governance_state.py"),"--root",str(root),"task-create","--task-id","KG-001","--goal","smoke web feature","--branch","feature/KG-001-web"],root)
         run([sys.executable,str(WORK/"governance_state.py"),"--root",str(root),"transition","--task-id","KG-001","--to","Planning","--agent-role","Planning Agent"],root)
+        run([sys.executable,str(WORK/"convergence_guard.py"),"--root",str(root),"--task-id","KG-001","init","--criterion","AC-001|现有行为保持可用|runtime","--strategy","最小有界改造"],root)
+        run([sys.executable,str(WORK/"convergence_guard.py"),"--root",str(root),"--task-id","KG-001","route-set","--responsibility","feature-entry","--route-id","current-entry","--status","ACTIVE"],root)
+        run([sys.executable,str(WORK/"convergence_guard.py"),"--root",str(root),"--task-id","KG-001","evidence-record","--criterion-id","AC-001","--level","runtime","--status","PASS","--value","smoke runtime passed","--fingerprint","smoke-runtime-v1"],root)
+        convergence=json.loads(run([sys.executable,str(WORK/"convergence_guard.py"),"--root",str(root),"--task-id","KG-001","status","--phase","merge"],root).stdout);checks.append(("long-chain-convergence",convergence.get("ok") is True and convergence.get("result",{}).get("severity")=="STABLE"))
         wt=Path(td)/"web-wt";created=run([sys.executable,str(WORK/"git_workspace.py"),"--root",str(root),"create","--task-id","KG-001","--base","develop","--branch","feature/KG-001-web","--path",str(wt)],root);checks.append(("governed-worktree",json.loads(created.stdout).get("ok") is True and wt.exists()))
         (root/"migration.sql").write_text("create table x(id int);\n");git(root,"add","migration.sql");(root/"src/a.ts").write_text("export const a=2\n");(root/"auth").mkdir();(root/"auth/login.py").write_text("token='x'\n")
         risk=run([sys.executable,str(QUALITY/"risk_review.py"),"--root",str(root),"--mode","all-local"],root);rd=json.loads(risk.stdout);paths={x["path"] for x in rd["changes"]};checks.append(("complete-change-set",{"migration.sql","src/a.ts","auth/login.py"}.issubset(paths)));checks.append(("risk-tags",{"database","security"}.issubset(set(rd["risk"]["tags"]))))

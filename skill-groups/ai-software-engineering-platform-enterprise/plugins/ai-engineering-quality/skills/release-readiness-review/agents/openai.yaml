@@ -1,5 +1,6 @@
 interface:
   display_name: "发布就绪审核"
   short_description: "根据真实构建、测试、迁移和回滚证据审核发布"
+  default_prompt: "使用 $release-readiness-review 独立审核当前版本是否具备发布证据和安全回滚条件。"
 policy:
   allow_implicit_invocation: false

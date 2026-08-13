@@ -1,6 +1,6 @@
 interface:
   display_name: "插件应用回执"
-  short_description: "用中文展示本次实际启用的插件、能力与触发原因"
-  default_prompt: "展示当前任务实际应用的插件中文名、能力中文名、项目与治理模式，不显示英文内部名称。"
+  short_description: "只用一行中文展示本次实际应用的插件与能力"
+  default_prompt: "使用 $plugin-application-receipt 只展示本轮实际应用的插件中文名和Skill中文名。"
 policy:
   allow_implicit_invocation: false

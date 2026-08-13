@@ -14,6 +14,12 @@
       "project_detection": "greenfield-owner",
       "may_modify_source": false
     },
+    "architecture-decision-challenge": {
+      "plugin": "ai-engineering-core",
+      "mode": "planning",
+      "project_detection": "consume-core-context",
+      "may_modify_source": false
+    },
     "brownfield-requirement-reconciliation": {
       "plugin": "ai-engineering-core",
       "mode": "planning",
@@ -100,7 +106,7 @@
     },
     "unity-ui-design": {
       "plugin": "ai-engineering-unity",
-      "mode": "workflow",
+      "mode": "design",
       "project_detection": "consume-core-context",
       "may_modify_source": false
     },
@@ -118,7 +124,7 @@
     },
     "web-ui-design": {
       "plugin": "ai-engineering-web",
-      "mode": "workflow",
+      "mode": "design",
       "project_detection": "consume-core-context",
       "may_modify_source": false
     },
@@ -160,13 +166,13 @@
     },
     "cs-client-router": {
       "plugin": "ai-engineering-unity",
-      "mode": "workflow",
+      "mode": "router",
       "project_detection": "consume-core-context",
       "may_modify_source": false
     },
     "cs-ui-design": {
       "plugin": "ai-engineering-unity",
-      "mode": "workflow",
+      "mode": "design",
       "project_detection": "consume-core-context",
       "may_modify_source": false
     },
@@ -219,6 +225,12 @@
       "may_modify_source": false
     },
     "task-lifecycle-manager": {
+      "plugin": "ai-engineering-workspace",
+      "mode": "control-plane",
+      "project_detection": "consume-governance-context",
+      "may_modify_source": false
+    },
+    "long-chain-change-convergence": {
       "plugin": "ai-engineering-workspace",
       "mode": "control-plane",
       "project_detection": "consume-governance-context",

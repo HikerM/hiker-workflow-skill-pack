@@ -109,11 +109,11 @@ quote → create → worker/provider → resource_transfer → result normalizat
 
 ---
 
-## 三、智能软件工程平台 5.7
+## 三、智能软件工程平台 5.9
 
 ### 3.1 设计目标
 
-这一组是一套插件化软件工程平台。它解决长期任务中最常见的六类问题：
+这是一套插件化软件工程平台。它解决长期任务中最常见的七类问题：
 
 1. 项目技术栈和规范不明确；
 2. 会话中断或上下文压缩后事实丢失；
@@ -121,12 +121,13 @@ quote → create → worker/provider → resource_transfer → result normalizat
 4. 编码前的设计只有引用和计数，没有足以实现、验收的语义深度；
 5. 只看已提交文件，漏掉暂存、未暂存或未跟踪变更；
 6. 多任务、多会话和 Worktree 缺乏所有权与合并治理。
+7. 长链路反复修改后出现范围膨胀、结论失效、新旧实现并存和低层证据冒充真实可用。
 
 核心原则是“核心插件只探测一次，其他插件消费统一 `.ai/` 上下文”。这样 Web、Unity、质量和工作区模块不会重复猜测技术栈。
 
-### 3.2 五个插件和 40 个 Skill
+### 3.2 五个插件和 42 个 Skill
 
-#### 插件一：`ai-engineering-core`（8 个 Skill）
+#### 插件一：`ai-engineering-core`（9 个 Skill）
 
 - `project-bootstrap`：首次接管仓库时识别语言、框架、精确版本、包管理器、Unity 版本和子项目，并建立 `.ai/` 状态。
 - `official-standards-resolver`：根据真实版本查阅对应官方文档，生成项目专属规范；禁止用无版本依据的通用模板冒充官方标准。
@@ -136,6 +137,7 @@ quote → create → worker/provider → resource_transfer → result normalizat
 - `ai-engineering-router`：唯一轻量自动入口，只检查有限工程标记，并按项目模式、架构和阶段选择最多两个原子 Skill。
 - `greenfield-project-planning`：从零开发先融合带稳定 ID 的需求、冲突、未知项、验收条件和技术决策 Checkpoint。
 - `brownfield-requirement-reconciliation`：为部分源码建立 `CAP-*` 能力基线，并把 `REQ-*` 对账为新增、修改、替换或移除。
+- `architecture-decision-challenge`：把用户提供的系统、功能、模块或技术架构视为待验证假设，主动构造反例、补齐遗漏、暴露权衡，并形成有界替代方案和人工决策 Checkpoint。
 
 `ai-engineering-core` 提供保存和恢复工程状态的脚本。当前 Codex 插件 manifest 不注册已不受支持的 `hooks` 字段，相关脚本由 Skill 或外部编排显式调用。
 
@@ -161,11 +163,12 @@ quote → create → worker/provider → resource_transfer → result normalizat
 - `unity-component-implementation`：实现 Prefab、VisualElement、Renderer 或页面组件，遵守资源生命周期和现有数据层。
 - `unity-quality-review`：只读审核代码、Prefab、Scene、`.meta`/GUID、多分辨率、GC、资源和平台兼容性。
 
-#### 插件四：`ai-engineering-workspace`（11 个 Skill）
+#### 插件四：`ai-engineering-workspace`（12 个 Skill）
 
-- `multi-agent-project-governance`：Master总控入口，协调Planning、Developer、Review、Test、Merge和Document角色。
+- `multi-agent-project-governance`：Master总控入口，协调Planning、Developer、Review、Test、Merge和Document角色；审批、任务、Gate和证据各自保持单一事实源，会话按幂等键绑定，避免延迟任务形成重复writer。
 - `project-state-manager`：维护PROJECT_STATE、CURRENT_CONTEXT、CHANGELOG、ARCHITECTURE及机器状态。
 - `task-lifecycle-manager`：管理Task ID、Created到Released状态机和暂停/调整/恢复。
+- `long-chain-change-convergence`：为复杂长链路登记分层验收、唯一活动实现、治理空转预算、验证证据复用、迁移退出条件、真实实验预算和部署哈希；连续失败要求换轨，并在工程健康状态变化时输出去重中文告警。
 - `workspace-task-router`：B/S拆分浏览器前端与服务端，C/S拆分客户端与服务端，并建立契约数据通道。
 - `worktree-task-manager`：按main/release/develop和feature/bugfix/hotfix规则管理Worktree。
 - `worktree-safe-convergence`：清点、接管、分类并以两阶段确认安全关闭历史Worktree。
@@ -193,6 +196,7 @@ UI任务不会无条件叠加该Skill。设计、实现或修改任务首先进�
 ```text
 project-bootstrap（识别真实技术与版本）
   → official-standards-resolver
+  → 长链路任务启用 long-chain-change-convergence
   → Web 或 C/S轻量路由
   → 当前技术族的设计
   → design-readiness-review
@@ -336,4 +340,4 @@ context-recovery → interruptible-task-control
 - 任务重点是“长期工程怎么持续执行”——选第二组。
 - 任务重点是“完整重建一个已授权桌面软件”——选第三组。
 - 同时需要执行和独立验收——第二组执行，第一组复核。
-- 不要把智能软件工程平台的40个Skill拆散安装成普通平铺Skill；桌面软件等价重建的五个可发现Skill可以按阶段选择，但共享参考、脚本和模板不能从主资源包剥离。
+- 不要把智能软件工程平台的42个Skill拆散安装成普通平铺Skill；桌面软件等价重建的五个可发现Skill可以按阶段选择，但共享参考、脚本和模板不能从主资源包剥离。

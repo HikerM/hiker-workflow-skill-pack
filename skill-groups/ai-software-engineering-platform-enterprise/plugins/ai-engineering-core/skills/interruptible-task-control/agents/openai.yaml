@@ -1,5 +1,6 @@
 interface:
   display_name: "可中断任务控制"
   short_description: "连续执行，并支持自然语言暂停、调整、继续和检查点"
+  default_prompt: "使用 $interruptible-task-control 保存当前状态，并安全处理暂停、调整、插入或恢复指令。"
 policy:
   allow_implicit_invocation: false

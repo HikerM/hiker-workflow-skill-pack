@@ -11,6 +11,7 @@ from typing import Any
 
 from workspacelib import atomic_json, load_state, read_json, repo_root, run, safe_id, state_lock, worktree_fingerprint
 from bounded_context import bounded_bullets, crop, ensure_policy, limit_text, retain_checkpoints
+from convergence_guard import assess as convergence_assess
 
 SCHEMA = "2.0.0"
 TASK_STATES = ["Created", "Planning", "Development", "Review", "Testing", "MergedPendingCleanup", "Merged", "Released"]
@@ -314,6 +315,7 @@ def create_task(root: Path, args: argparse.Namespace) -> dict[str, Any]:
         "risks": [],
         "closure": {"merge": "PENDING", "release": "PENDING"},
         "release": {"status": "PENDING", "records": []},
+        "convergence": {"required": False},
         "history": [{"at": now(), "event": "CREATED", "agent_role": args.owner_agent}],
         "created_at": now(),
         "updated_at": now(),
@@ -359,6 +361,11 @@ def transition(root: Path, args: argparse.Namespace) -> dict[str, Any]:
             raise RuntimeError("Development -> Review requires architecture guard evidence")
         if evidence.get("head") != snapshot.get("head") or evidence.get("worktree_fingerprint") != worktree_fingerprint(root):
             raise RuntimeError("architecture guard evidence is stale; rerun it for the current change set")
+        convergence = task.get("convergence") or {}
+        if convergence.get("required"):
+            report = convergence_assess(convergence, "review")
+            if not report["ok"]:
+                raise RuntimeError("convergence guard blocks Review: " + "; ".join(report["blockers"]))
     if target == "Testing" and task.get("review", {}).get("status") != "PASS":
         raise RuntimeError("Review -> Testing requires Review Agent PASS evidence")
     if target == "MergedPendingCleanup":
@@ -366,6 +373,11 @@ def transition(root: Path, args: argparse.Namespace) -> dict[str, Any]:
             raise RuntimeError("Testing -> MergedPendingCleanup requires tests PASS and merge closure PASS")
         if not args.commit_id:
             raise RuntimeError("MergedPendingCleanup transition requires merge commit id")
+        convergence = task.get("convergence") or {}
+        if convergence.get("required"):
+            report = convergence_assess(convergence, "merge")
+            if not report["ok"]:
+                raise RuntimeError("convergence guard blocks merge: " + "; ".join(report["blockers"]))
         task["merge_commit"] = args.commit_id
     if target == "Merged":
         from worktree_inventory import inventory
@@ -376,6 +388,12 @@ def transition(root: Path, args: argparse.Namespace) -> dict[str, Any]:
             raise RuntimeError("MergedPendingCleanup -> Merged requires the task worktree to be closed")
     if target == "Released" and task.get("release", {}).get("status") != "PASS":
         raise RuntimeError("Merged -> Released requires release evidence PASS")
+    if target == "Released":
+        convergence = task.get("convergence") or {}
+        if convergence.get("required"):
+            report = convergence_assess(convergence, "release")
+            if not report["ok"]:
+                raise RuntimeError("convergence guard blocks release: " + "; ".join(report["blockers"]))
     task["state"] = target
     task["history"].append({"at": now(), "event": f"STATE:{current}->{target}", "agent_role": args.agent_role, "commit_id": args.commit_id})
     save_task(root, task)
@@ -418,7 +436,8 @@ def set_change_contract(root: Path, args: argparse.Namespace) -> dict[str, Any]:
         raise RuntimeError("only Master Agent or Planning Agent may set a change contract")
     if task.get("state") not in {"Created", "Planning", "Development"}:
         raise RuntimeError("change contract can only be set before Review")
-    contract = dict(task.get("change_contract") or {})
+    original_contract = dict(task.get("change_contract") or {})
+    contract = dict(original_contract)
     list_fields = {
         "allowed_files": args.allowed_files,
         "allowed_modules": args.allowed_modules,
@@ -443,6 +462,20 @@ def set_change_contract(root: Path, args: argparse.Namespace) -> dict[str, Any]:
     contract["file_growth_budget"] = budget
     task["change_contract"] = contract
     task["affected_files"] = contract.get("allowed_files", [])
+    convergence = task.get("convergence") or {}
+    if convergence.get("required") and contract != original_contract:
+        convergence["acceptance_revision"] = int(convergence.get("acceptance_revision", 1)) + 1
+        convergence["status"] = "WARNING"
+        for criterion in convergence.get("criteria", []):
+            criterion["status"] = "PENDING"
+        convergence.setdefault("events", []).append({
+            "at": now(),
+            "kind": "acceptance-baseline-invalidated",
+            "summary": "变更契约已修改，旧验收证据需要按新修订重新确认",
+            "acceptance_revision": convergence["acceptance_revision"],
+        })
+        convergence["events"] = convergence["events"][-40:]
+        task["convergence"] = convergence
     task["history"].append({"at": now(), "event": "CHANGE_CONTRACT_UPDATED", "agent_role": args.agent_role})
     save_task(root, task)
     render_context(root, task)

@@ -1,5 +1,6 @@
 interface:
   display_name: "回归测试范围规划"
   short_description: "从真实项目配置生成最低必要回归范围"
+  default_prompt: "使用 $regression-test-planner 根据当前完整变更风险和真实脚本生成最低必要回归范围。"
 policy:
   allow_implicit_invocation: false

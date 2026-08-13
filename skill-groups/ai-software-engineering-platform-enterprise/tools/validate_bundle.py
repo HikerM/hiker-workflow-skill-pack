@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from evaluate_router import evaluate as evaluate_router
+from audit_skill_coherence import audit as audit_skill_coherence
 NAME_RE=re.compile(r"^[a-z0-9][a-z0-9-]*$")
 def frontmatter(path:Path)->dict:
     text=path.read_text(encoding="utf-8");m=re.match(r"^---\n(.*?)\n---\n",text,re.S)
@@ -81,6 +82,9 @@ def main()->int:
     if "先读取 [角色契约]" in governance_skill:errors.append("多智能体总控退化为启动时预读全部参考")
     router_eval=evaluate_router()
     if not router_eval["ok"]:errors.append(f"轻量路由行为Eval失败: {len(router_eval['failures'])} 条")
-    report={"ok":not errors,"plugin_count":len(plugins),"skill_count":len(skill_names),"router_eval":router_eval,"errors":errors,"warnings":warnings}
+    coherence=audit_skill_coherence(ROOT)
+    if not coherence["ok"]:errors.extend(f"Skill一致性审核: {item['code']} {item['skill']} {item['message']}" for item in coherence["errors"])
+    warnings.extend(f"Skill一致性审核: {item['code']} {item['skill']} {item['message']}" for item in coherence["warnings"])
+    report={"ok":not errors,"plugin_count":len(plugins),"skill_count":len(skill_names),"router_eval":router_eval,"skill_coherence":coherence,"errors":errors,"warnings":warnings}
     print(json.dumps(report,ensure_ascii=False,indent=2));return 0 if not errors else 2
 if __name__=="__main__":raise SystemExit(main())

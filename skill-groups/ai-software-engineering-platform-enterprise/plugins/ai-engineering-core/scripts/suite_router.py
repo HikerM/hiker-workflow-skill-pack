@@ -13,6 +13,7 @@ from source_identity import context_fresh, identify
 
 PLUGIN_FOR = {
     "greenfield-project-planning": "ai-engineering-core",
+    "architecture-decision-challenge": "ai-engineering-core",
     "brownfield-requirement-reconciliation": "ai-engineering-core",
     "project-bootstrap": "ai-engineering-core",
     "bounded-context-memory": "ai-engineering-core",
@@ -49,6 +50,7 @@ PLUGIN_FOR = {
     "plugin-application-receipt": "ai-engineering-workspace",
     "project-state-manager": "ai-engineering-workspace",
     "task-lifecycle-manager": "ai-engineering-workspace",
+    "long-chain-change-convergence": "ai-engineering-workspace",
     "worktree-task-manager": "ai-engineering-workspace",
     "worktree-safe-convergence": "ai-engineering-workspace",
 }
@@ -186,6 +188,10 @@ def route(root: Path, request: str) -> dict:
     unsafe_shortcut = any(x in text for x in ("假装", "不看证据直接", "直接宣布", "强制合并并删除", "升级到最新大版本", "迁移成", "迁移到", "解释什么是", "解释一下", "架构概念"))
     implementation = any(x in text for x in ("实现", "增加", "新增", "修改", "复用已有", "按现有", "按已通过", "继续")) and not unsafe_shortcut
     design = any(x in text for x in ("设计", "ui", "视觉", "交互", "原型")) and not implementation
+    architecture_decision = any(x in text for x in (
+        "功能架构", "系统架构", "技术架构", "业务架构", "数据架构", "部署架构",
+        "架构设计", "架构方案", "模块架构", "模块拆分", "服务拆分",
+    )) or ("架构" in text and any(x in text for x in ("思路", "方案", "设计", "评估", "补全", "遗漏", "问题", "合理", "怎么拆")))
     review = any(x in text for x in ("审核", "审查", "复审", "评估", "检查", "判断", "只读", "review", "风险"))
     if implementation and any(x in text for x in ("按已审核", "按已通过")): review = False
     test = any(x in text for x in ("测试", "回归", "验证"))
@@ -217,6 +223,16 @@ def route(root: Path, request: str) -> dict:
         "下拉冲突", "下拉框冲突", "弹窗冲突", "抽屉冲突", "快捷键冲突",
         "请求乱序", "重复提交", "焦点冲突", "菜单冲突",
     ))
+    long_chain = not unsafe_shortcut and (
+        any(x in text for x in (
+            "复杂链路", "长链路", "反复修复", "多次修改", "多轮修复", "多次失败",
+            "越来越大", "越来越乱", "内部膨胀", "新旧代码", "多份实现", "旧口子",
+            "真实执行", "付费执行", "计费执行", "真实计费", "生产回滚", "回滚后", "主线不一致",
+            "部署版本不一致", "结论作废", "验收被推翻", "方向走偏", "一直不行",
+        ))
+        or (implementation and test and (release or merge))
+        or (multi and implementation and test)
+    )
     unity_review = review and any(x in text for x in ("missing script", "guid", "arm64", "prefab", "scene", "packages"))
     cs_review = review and any(x in text for x in ("ipc", "生命周期", "api兼容", "打包证据", "swiftui客户端", "electron客户端"))
     backend_contract = backend and any(x in text for x in ("api契约", "接口契约", "事件契约", "openapi", "protobuf", "graphql", "错误模型", "幂等"))
@@ -230,11 +246,13 @@ def route(root: Path, request: str) -> dict:
     if plugin_engineering:
         mode = "existing" if (root / ".git").exists() else "unknown"
         stage = "review" if review and not implementation else "development"
-        add("full-change-risk-review", "插件增强需要核对完整源码、清单、测试与安装契约")
+        add("full-change-risk-review", "插件增强结束前需要审核完整变更，并核对五个插件全部Skill的一致性")
         if merge:
             add("change-ownership-merge", "推送前需要核对分支、提交范围与质量证据")
     elif greenfield:
         add("greenfield-project-planning", "空项目需要先融合自定义需求并锁定关键技术决策")
+        if architecture_decision:
+            add("architecture-decision-challenge", "用户架构思路需要独立反证、补全遗漏并比较真正不同的方案")
         mode, stage = "greenfield", "planning"
     elif brownfield_intent:
         mode, stage = "brownfield", "planning"
@@ -256,6 +274,10 @@ def route(root: Path, request: str) -> dict:
             add("bounded-context-memory", "长期多会话只注入有界工作集")
         elif pause and not worktree:
             add("interruptible-task-control", "控制指令必须先保存检查点")
+        elif architecture_decision:
+            if existing and not signals["context_ready"]:
+                add("project-bootstrap", "先从当前仓库证据确认真实技术、版本和系统边界")
+            add("architecture-decision-challenge", "把用户思路视为待验证假设，主动发现遗漏、反例和替代方案")
         elif portfolio:
             add("multi-project-portfolio-manager", "多个仓库必须保持项目身份与上下文隔离")
         elif worktree_cleanup:
@@ -264,6 +286,20 @@ def route(root: Path, request: str) -> dict:
             add("worktree-task-manager", "并行写任务需要受治理的独立工作目录")
         elif file_lock:
             add("file-lock-manager", "高冲突文件需要显式互斥和锁验证")
+        elif long_chain:
+            add("long-chain-change-convergence", "复杂任务需要压制范围膨胀、重复失败、实现路径分叉和旧结论沿用")
+            if sum(bool(x) for x in (bs, cs, backend)) > 1 or multi:
+                add("workspace-task-router", "跨模块或跨仓库链路需要先拆分所有权、依赖和串并行边界")
+            elif release:
+                add("release-readiness-review", "真实发布前需要核对当前证据、部署版本与回滚状态")
+            elif test:
+                add("regression-test-planner", "按当前策略和验收修订计算最小但充分的回归范围")
+            elif backend:
+                add("backend-component-implementation", "在真实服务端技术栈中执行当前最小改动")
+            elif cs:
+                add("cs-component-implementation", "在真实客户端技术栈中执行当前最小改动")
+            elif bs:
+                add("web-component-implementation", "在真实浏览器端技术栈中执行当前最小改动")
         elif task_state:
             add("project-state-manager", "需要维护有界项目状态与当前上下文")
         elif lifecycle:

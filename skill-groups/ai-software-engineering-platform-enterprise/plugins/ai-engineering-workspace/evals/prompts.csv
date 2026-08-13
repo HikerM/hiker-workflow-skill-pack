@@ -20,3 +20,4 @@ ws-18,true,feature-acceptance-closure,"不要只看代码生成，检查测试�
 ws-19,true,multi-project-portfolio-manager,"我同时维护三个Git仓库，切换时不要串上下文"
 ws-20,true,plugin-application-receipt,"告诉我这次任务实际用了哪些插件和skill"
 ws-21,false,file-lock-manager,"只读解释这个Prefab的结构"
+ws-22,true,worktree-safe-convergence,"清点并安全收敛长期堆积、孤儿和已经合并的worktree，未经确认不要删除"

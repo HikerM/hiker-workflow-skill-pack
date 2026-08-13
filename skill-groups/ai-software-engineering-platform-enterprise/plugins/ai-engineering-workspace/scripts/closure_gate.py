@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
+from convergence_guard import assess as convergence_assess
 from workspacelib import atomic_json, common_dir, read_json, repo_root, run, safe_id, state_lock, worktree_fingerprint
 
 
@@ -56,6 +57,11 @@ def evaluate(root: Path, task: dict, phase: str) -> dict:
         if task.get("state") != "Merged": failures.append("release gate requires Merged state")
         if task.get("release", {}).get("status") != "PASS": failures.append("release evidence is not PASS")
         if not task.get("merge_commit"): failures.append("merge commit is missing")
+    convergence = task.get("convergence") or {}
+    if convergence.get("required"):
+        convergence_report = convergence_assess(convergence, phase)
+        failures.extend(f"convergence: {value}" for value in convergence_report["blockers"])
+        warnings.extend(f"convergence: {value}" for value in convergence_report["warnings"])
     return {"ok": not failures, "phase": phase, "task_id": task.get("task_id"), "failures": failures, "warnings": warnings, "checked_at": now(), "git_branch": git_branch}
 
 

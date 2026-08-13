@@ -1,6 +1,6 @@
 ---
 name: release-readiness-review
-description: 结合任务闭环、风险、构建、测试、截图或日志、文档、迁移和回滚证据独立审核发布状态；适用于大型B/S、C/S、Unity和NodeTS项目，缺少PROJECT_STATE或发布门禁时不得判定就绪。
+description: 结合任务闭环、风险、构建、测试、截图或日志、文档、迁移、部署版本和回滚证据独立审核多技术栈软件的发布状态；适用于B/S、通用C/S、Unity、共享服务端和混合工程，缺少PROJECT_STATE或当前版本发布门禁时不得判定就绪。
 ---
 
 

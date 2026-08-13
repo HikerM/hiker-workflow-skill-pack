@@ -1,6 +1,6 @@
 interface:
   display_name: "数据库迁移治理"
   short_description: "串行治理数据库变更、兼容与回滚"
-  default_prompt: "按现有数据库版本设计并验证可回滚迁移。"
+  default_prompt: "使用 $database-migration-governance 按现有数据库版本设计并验证可回滚迁移。"
 policy:
   allow_implicit_invocation: false

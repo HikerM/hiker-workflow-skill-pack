@@ -202,7 +202,12 @@ def audit(root: Path = ROOT) -> dict[str, Any]:
         errors.append(_finding("IMPLICIT_ROUTER_CONFLICT", "suite", f"隐式入口必须且只能是智能工程轻量路由，实际{implicit}"))
 
     try:
-        mapping = _router_mapping(root / "plugins" / "ai-engineering-core" / "scripts" / "suite_router.py")
+        router_path = root / "plugins" / "ai-engineering-core" / "scripts" / "suite_router.py"
+        router_text = router_path.read_text(encoding="utf-8")
+        for token in ('"max_loaded_atomic_skills": 2', '"router_counts_toward_limit": False', '"deferred":'):
+            if token not in router_text:
+                errors.append(_finding("ROUTER_BOUNDED_LOADING_DRIFT", "ai-engineering-router", f"缺少路由有界加载契约：{token}", router_path))
+        mapping = _router_mapping(router_path)
         expected_routable = set(records) - {"ai-engineering-router"}
         if set(mapping) != expected_routable:
             errors.append(_finding("ROUTER_COVERAGE_DRIFT", "suite", f"缺少{sorted(expected_routable-set(mapping))}，多余{sorted(set(mapping)-expected_routable)}"))

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import shutil
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -74,6 +76,25 @@ def _milestone(data: dict[str, Any]) -> bool:
     return any(word in label for word in MILESTONE_WORDS) or event in {"manual", "milestone"}
 
 
+def _archive_checkpoint(root: Path, path: Path, data: dict[str, Any]) -> tuple[str, str | None]:
+    created = str(data.get("created_at") or "")
+    month = created[:7] if len(created) >= 7 and created[4:5] == "-" else "unknown"
+    archive_dir = root / ".ai" / "archive" / "checkpoints" / month
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    archive = archive_dir / f"{path.stem}.zip"
+    state_dir = path.parent / f"{path.stem}-state"
+    if not archive.exists():
+        with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as bundle:
+            bundle.write(path, arcname=path.name)
+            if state_dir.is_dir():
+                for item in sorted(state_dir.rglob("*")):
+                    if item.is_file(): bundle.write(item, arcname=(Path("state") / item.relative_to(state_dir)).as_posix())
+    index = root / ".ai" / "archive" / "checkpoints" / "index.jsonl"
+    with index.open("a", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps({"name": path.name, "created_at": data.get("created_at"), "archive": archive.relative_to(root / '.ai').as_posix(), "sha256": _sha(archive)}, ensure_ascii=False) + "\n")
+    return archive.relative_to(root / ".ai").as_posix(), _sha(archive)
+
+
 def retain_checkpoints(root: Path, updated_at: str) -> dict[str, Any]:
     policy = ensure_policy(root)
     folder = root / ".ai" / "runtime" / "checkpoints"; folder.mkdir(parents=True, exist_ok=True)
@@ -96,9 +117,10 @@ def retain_checkpoints(root: Path, updated_at: str) -> dict[str, Any]:
     first = ledger.get("first_pruned_at") if isinstance(ledger, dict) else None
     for path, data in sorted(prune, key=lambda item: (str(item[1].get("created_at") or ""), item[0].name)):
         digest = _sha(path)
+        archive, archive_digest = _archive_checkpoint(root, path, data)
         chain = hashlib.sha256(f"{chain}|{path.name}|{digest or 'unreadable'}".encode("utf-8")).hexdigest()
         created = data.get("created_at")
-        entries.append({"name": path.name, "created_at": created, "label": data.get("label"), "event": data.get("event"), "sha256": digest})
+        entries.append({"name": path.name, "created_at": created, "label": data.get("label"), "event": data.get("event"), "sha256": digest, "archive": archive, "archive_sha256": archive_digest})
         first = first or created or updated_at; count += 1
         path.unlink(missing_ok=True); shutil.rmtree(folder / f"{path.stem}-state", ignore_errors=True)
     entries = entries[-policy["max_ledger_entries"] :]

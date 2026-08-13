@@ -1,6 +1,6 @@
 {
   "name": "ai-engineering-workspace",
-  "version": "5.9.0+codex.20260813041840",
+  "version": "5.10.0+codex.20260813053908",
   "description": "\u5927\u578bB/S\u4e0eC/S\u5de5\u7a0b\u7684\u591aAgent\u63a7\u5236\u3001\u9879\u76ee\u72b6\u6001\u3001\u957f\u94fe\u8def\u6536\u655b\u3001\u6587\u4ef6\u9501\u3001Git\u4e0e\u9a8c\u6536\u95ed\u73af\u6cbb\u7406",
   "author": {
     "name": "AI Engineering Toolkit"

@@ -35,3 +35,5 @@ core-33,true,architecture-decision-challenge,"从零开发这个产品，我先�
 core-34,true,architecture-decision-challenge,"评估这个模块拆分是否合理，主动检查数据一致性、网络失败、回滚和演进问题"
 core-35,false,architecture-decision-challenge,"按已经审核通过的架构修改按钮文字"
 core-36,false,architecture-decision-challenge,"解释一下B/S架构是什么"
+core-37,true,plugin-application-receipt,"会话最开始显示当前使用到的插件名和 Skill 名"
+core-38,true,bounded-context-memory,"我会在一个会话里超长处理并经历超多轮上下文压缩，不能丢内容也不能越来越慢"

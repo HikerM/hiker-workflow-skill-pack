@@ -14,7 +14,7 @@ sys.path.insert(0, str(PLUGIN / "scripts"))
 from bootstrap_project import initialize
 from detect_project import detect
 from runtime_control import classify
-from statectl import checkpoint, update_active
+from statectl import checkpoint, record_routing, update_active
 from corelib import atomic_write_json
 from requirements_fusion import init as init_requirements, merge as merge_requirements, validate as validate_requirements
 from brownfield_reconcile import initialize as init_brownfield, set_baseline, reconcile, validate as validate_brownfield
@@ -22,6 +22,26 @@ from suite_router import route
 
 
 class CoreTests(unittest.TestCase):
+    def test_router_receipt_wording_and_atomic_quota_contract(self):
+        with tempfile.TemporaryDirectory() as td:
+            data = route(Path(td), "会话最开始显示使用到的插件名和 Skill 名")
+            self.assertEqual(["插件应用回执"], [item["skill"] for item in data["selected"]])
+            self.assertEqual(2, data["max_loaded_atomic_skills"])
+            self.assertFalse(data["router_counts_toward_limit"])
+
+    def test_router_defers_third_skill_instead_of_dropping_it(self):
+        with tempfile.TemporaryDirectory() as td:
+            data = route(Path(td), "大型项目多Agent跨模块实现、测试并发布")
+            self.assertEqual(2, len(data["selected"]))
+            self.assertTrue(data["deferred"])
+            self.assertTrue(data["next_gate"])
+            self.assertLessEqual(len(data["load"]), 2)
+
+    def test_ultra_long_single_session_routes_to_bounded_memory(self):
+        with tempfile.TemporaryDirectory() as td:
+            data = route(Path(td), "我经常一个会话超长处理，经历超多轮上下文压缩，也不能丢内容")
+            self.assertIn("有界上下文记忆", [item["skill"] for item in data["selected"]])
+
     def test_architecture_idea_is_challenged_without_expanding_normal_requests(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -263,5 +283,19 @@ class CoreTests(unittest.TestCase):
             ledger = json.loads((root / ".ai/runtime/checkpoint-ledger.json").read_text(encoding="utf-8"))
             self.assertGreaterEqual(ledger["pruned_count"], 7); self.assertLessEqual(len(ledger["recent_pruned"]), 3)
             self.assertTrue(ledger["pruned_hash_chain"])
+            self.assertTrue(list((root / ".ai/archive/checkpoints").rglob("*.zip")))
+
+    def test_skill_route_state_is_bounded_and_checkpointed(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); initialize(root)
+            routing = record_routing(root, "development", ["客户端技术路由", "客户端组件实现"], ["回归测试规划"])
+            self.assertEqual(2, len(routing["active_atomic_skills"]))
+            update_active(root, json.loads((root / ".ai/runtime/task.json").read_text(encoding="utf-8")))
+            self.assertIn("回归测试规划", (root / ".ai/runtime/active-context.md").read_text(encoding="utf-8"))
+            cp = checkpoint(root, "routing")
+            snapshot = json.loads(cp.read_text(encoding="utf-8"))
+            self.assertTrue(snapshot["files"]["runtime/skill-routing.json"]["exists"])
+            with self.assertRaises(ValueError):
+                record_routing(root, "development", ["一", "二", "三"], [])
 
 if __name__ == "__main__": unittest.main()

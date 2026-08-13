@@ -28,7 +28,7 @@ def main() -> int:
     git = git_info(root)
     status = memory_status(root)
     status["active_context_chars"] = len(active)
-    receipt = f"有界记忆：活动上下文 {status['active_context_chars']} 字符；检查点保留 {status['retained_checkpoints']} 个、已收敛 {status['pruned_checkpoints']} 个"
+    receipt = f"有界记忆：活动上下文 {status['active_context_chars']} 字符；热检查点 {status['retained_checkpoints']} 个、冷归档 {status['cold_archived_checkpoints']} 个"
     context = "\n".join([f"[智能工程状态协议 {version}]", f"会话来源：{payload.get('source')}", f"Git分支/提交：{git.get('branch')} / {str(git.get('head'))[:12]}", f"恢复来源：{active_path.relative_to(root).as_posix()}", receipt, active, f"## 锁定决策（共 {len(all_locked)} 项）", *(locked or ["- 无"]), *( ["- 列表已截断；修改前按需读取 .ai/governance/locked-decisions.json。"] if len(all_locked)>len(locked) else [] ), "规则：正式状态优先于聊天摘要；继续前不得覆盖锁定决策；用户中断指令按控制状态处理。"])
     context = limit_text(context, policy["session_context_max_chars"], ".ai/ 与四个根状态文档")
     out = {"continue": True, "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": context}}

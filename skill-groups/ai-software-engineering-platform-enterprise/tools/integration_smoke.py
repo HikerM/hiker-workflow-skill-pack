@@ -46,7 +46,7 @@ def main()->int:
         valid_sections=all(len(re.findall(rf'(?m)^\[plugins\."{re.escape(name)}"\]\r?\nenabled = true$',config))==1 for name in expected_ids)
         checks.append(("config-activation-fallback",enabled["status"]=="unchanged" and enabled_again["status"]=="unchanged" and valid_sections))
         agents=(fake_home/".codex/AGENTS.md").read_text(encoding="utf-8") if inst.returncode==0 else "";forbidden_group_terms=("第一组","第二组","第三组","组别")
-        checks.append(("global-auto-application","keep me" in agents and agents.count("<!-- ai-engineering-global-governance start -->")==1 and "已应用：插件中文名称｜实际加载的 Skill 中文名称" in agents and "智能工程轻量路由" in agents and not any(term in agents for term in forbidden_group_terms) and "ai-engineering-router" not in agents and "bounded-context-memory" not in agents))
+        checks.append(("global-auto-application","keep me" in agents and agents.count("<!-- ai-engineering-global-governance start -->")==1 and "已应用：01 智能工程核心｜智能工程轻量路由" in agents and "轻量路由不计入该上限" in agents and not any(term in agents for term in forbidden_group_terms) and "ai-engineering-router" not in agents and "bounded-context-memory" not in agents))
         core_cache=fake_home/".codex/plugins/cache/personal-ai-engineering-marketplace/ai-engineering-core"
         for stale in ("5.3.0+codex.stale-a","5.4.0+codex.stale-b"):(core_cache/stale).mkdir(parents=True)
         inst2=subprocess.run([sys.executable,str(ROOT/"install_personal.py")],cwd=ROOT,env=env,text=True,encoding="utf-8",errors="replace",stdout=subprocess.PIPE,stderr=subprocess.PIPE)

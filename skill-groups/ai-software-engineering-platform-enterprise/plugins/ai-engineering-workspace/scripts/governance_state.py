@@ -274,7 +274,9 @@ def create_task(root: Path, args: argparse.Namespace) -> dict[str, Any]:
         raise RuntimeError(f"task already exists: {task_id}")
     if args.branch in {"main", "develop", "release"}:
         raise RuntimeError("feature task cannot write a protected branch")
-    open_tasks = [item for item in all_tasks(root) if item.get("state") not in {"Merged", "Released"}]
+    index = read_json(task_index_file(root), {}) or {}
+    indexed = index.get("tasks", []) if isinstance(index.get("tasks"), list) else []
+    open_tasks = [item for item in indexed if isinstance(item, dict) and item.get("state") not in {"Merged", "Released"}]
     max_open = int(project.get("parallel_budget", {}).get("max_total_active_tasks", 5))
     if len(open_tasks) >= max_open:
         raise RuntimeError(f"total open task budget exceeded: {len(open_tasks)}/{max_open}")

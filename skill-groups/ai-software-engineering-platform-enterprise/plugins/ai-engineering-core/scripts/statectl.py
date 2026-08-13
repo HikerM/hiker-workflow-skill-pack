@@ -12,6 +12,7 @@ from context_memory import bounded_items, crop, enforce_checkpoint_retention, en
 
 def task_path(root: Path) -> Path: return ai_root(root) / "runtime" / "task.json"
 def control_path(root: Path) -> Path: return ai_root(root) / "runtime" / "control.json"
+def routing_path(root: Path) -> Path: return ai_root(root) / "runtime" / "skill-routing.json"
 
 
 def load_task(root: Path) -> dict:
@@ -23,6 +24,41 @@ def save_task(root: Path, task: dict) -> None:
     task["updated_at"] = utc_now(); atomic_write_json(task_path(root), task)
 
 
+def record_routing(root: Path, stage: str, active_skills: list[str], deferred_skills: list[str], route_fingerprint: str = "") -> dict:
+    active = list(dict.fromkeys(item.strip() for item in active_skills if item.strip()))
+    deferred = [item for item in dict.fromkeys(item.strip() for item in deferred_skills if item.strip()) if item not in active]
+    if len(active) > 2:
+        raise ValueError("active atomic skills cannot exceed 2; router is excluded from this limit")
+    previous = read_json(routing_path(root), {})
+    basis = {"stage": stage or "unknown", "active_atomic_skills": active, "deferred_atomic_skills": deferred}
+    fingerprint = route_fingerprint or __import__("hashlib").sha256(json.dumps(basis, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+    changed = fingerprint != previous.get("route_fingerprint")
+    data = {
+        "schema_version": "1.0.0", "route_revision": int(previous.get("route_revision", 0)) + (1 if changed else 0),
+        **basis, "router_counts_toward_limit": False, "max_loaded_atomic_skills": 2,
+        "route_fingerprint": fingerprint, "updated_at": utc_now(),
+    }
+    atomic_write_json(routing_path(root), data)
+    return data
+
+
+def active_governance_task_files(root: Path, limit: int = 5) -> list[Path]:
+    ai = ai_root(root)
+    index = read_json(ai / "governance" / "task-index.json", {}) or {}
+    summaries = index.get("tasks") if isinstance(index, dict) else []
+    if isinstance(summaries, list):
+        active_ids = [str(item.get("task_id") or "") for item in summaries if isinstance(item, dict) and item.get("state") not in {"Merged", "Released"}]
+        paths = [ai / "tasks" / f"{re.sub(r'[^A-Za-z0-9._-]+', '-', task_id).strip('._-')}.json" for task_id in active_ids[:limit] if task_id]
+        existing = [path for path in paths if path.is_file()]
+        if existing or index:
+            return existing
+    folder = ai / "tasks"
+    if not folder.is_dir():
+        return []
+    # Legacy fallback only. Once task-index.json exists, normal paths never enumerate all historical tasks.
+    return sorted(folder.glob("*.json"), key=lambda path: path.stat().st_mtime_ns, reverse=True)[:limit]
+
+
 def update_active(root: Path, task: dict) -> None:
     policy = ensure_memory_policy(root); limit = policy["max_items_per_section"]
     source = ".ai/runtime/task.json"
@@ -31,6 +67,11 @@ def update_active(root: Path, task: dict) -> None:
     lines += ["", "## 正在进行"] + bounded_items(task.get("working"), limit, source)
     lines += ["", "## 待处理"] + bounded_items(task.get("pending"), limit, source)
     lines += ["", "## 风险"] + bounded_items(task.get("risks"), limit, source)
+    routing = read_json(routing_path(root), {})
+    if routing:
+        lines += ["", "## 当前 Skill 路由", "- 路由入口：智能工程轻量路由（不计入原子 Skill 上限）", f"- 当前阶段：{crop(routing.get('stage') or 'unknown', 120)}"]
+        lines += [f"- 活跃原子 Skill：{crop('、'.join(routing.get('active_atomic_skills') or []) or '无')}" ]
+        lines += [f"- 待执行原子 Skill：{crop('、'.join(routing.get('deferred_atomic_skills') or []) or '无')}" ]
     lines += ["", "## 恢复规则", "- 本文件是有界工作集，不是完整历史。", "- 事实恢复顺序：项目身份 → Task/决定 → Git → 文档 → 检查点 → 聊天摘要。"]
     text = limit_text("\n".join(lines), policy["active_context_max_chars"], source)
     atomic_write_text(ai_root(root) / "runtime" / "active-context.md", text)
@@ -39,12 +80,8 @@ def update_active(root: Path, task: dict) -> None:
 def checkpoint(root: Path, label: str, event: str = "manual") -> Path:
     ai = ai_root(root); cp_dir = ai / "runtime" / "checkpoints"; cp_dir.mkdir(parents=True, exist_ok=True)
     stamp = utc_now().replace(":", "-")
-    key_files = ["schema.json", "context/project.json", "context/tech-stack.json", "context/architecture.json", "context/standards.json", "runtime/task.json", "runtime/control.json", "runtime/active-context.md", "governance/locked-decisions.json", "governance/ownership.json", "governance/project-state.json", "governance/task-index.json", "architecture/module-registry.json", "architecture/dependency-rules.json", "architecture/public-surface.json", "workspace/task-map.json", "quality/policy.json", "knowledge/metadata.json", "evidence/index.json"]
-    task_candidates = []
-    for candidate in (ai / "tasks").glob("*.json") if (ai / "tasks").is_dir() else []:
-        data = read_json(candidate, {})
-        if data.get("state") not in {"Merged", "Released"}: task_candidates.append(candidate)
-    for candidate in sorted(task_candidates, key=lambda p: p.stat().st_mtime_ns, reverse=True)[:5]:
+    key_files = ["schema.json", "context/project.json", "context/tech-stack.json", "context/architecture.json", "context/standards.json", "runtime/task.json", "runtime/control.json", "runtime/active-context.md", "runtime/skill-routing.json", "governance/locked-decisions.json", "governance/ownership.json", "governance/project-state.json", "governance/task-index.json", "architecture/module-registry.json", "architecture/dependency-rules.json", "architecture/public-surface.json", "workspace/task-map.json", "quality/policy.json", "knowledge/metadata.json", "evidence/index.json"]
+    for candidate in active_governance_task_files(root):
         key_files.append(candidate.relative_to(ai).as_posix())
     key_files = list(dict.fromkeys(key_files))
     root_files = ["PROJECT_STATE.md", "CURRENT_CONTEXT.md", "CHANGELOG.md", "ARCHITECTURE.md"]
@@ -86,6 +123,7 @@ def main() -> int:
     sub.add_parser("complete")
     sub.add_parser("validate")
     sub.add_parser("memory-status")
+    p = sub.add_parser("route-record"); p.add_argument("--stage", required=True); p.add_argument("--active-skill", action="append", default=[]); p.add_argument("--deferred-skill", action="append", default=[]); p.add_argument("--route-fingerprint", default="")
     p = sub.add_parser("lock-decision"); p.add_argument("--id", required=True); p.add_argument("--content", required=True); p.add_argument("--reason", required=True)
     args = ap.parse_args(); root = Path(args.root).resolve()
     ok, version = ensure_schema(root)
@@ -94,7 +132,7 @@ def main() -> int:
     if args.cmd == "task-start":
         task = {"schema_version": "1.0.0", "id": args.id, "goal": args.goal, "scope": args.scope, "status": "EXECUTING", "plan_version": 1, "completed": [], "working": ["分析并执行当前计划"], "pending": [], "risks": [], "updated_at": utc_now()}; save_task(root, task); update_active(root, task); checkpoint(root, "task-start")
     elif args.cmd == "status":
-        print(json.dumps({"schema_ok": ok, "schema": version, "task": task, "git": git_info(root), "control": read_json(control_path(root), {})}, ensure_ascii=False, indent=2)); return 0
+        print(json.dumps({"schema_ok": ok, "schema": version, "task": task, "git": git_info(root), "control": read_json(control_path(root), {}), "skill_routing": read_json(routing_path(root), {})}, ensure_ascii=False, indent=2)); return 0
     elif args.cmd == "pause":
         task["status"] = "PAUSED"; task.setdefault("risks", []).append(f"暂停原因：{args.reason}"); save_task(root, task); update_active(root, task); checkpoint(root, "paused")
     elif args.cmd == "resume":
@@ -109,6 +147,10 @@ def main() -> int:
         print(json.dumps({"ok": ok and not missing, "schema": version, "missing": missing, "git": git_info(root)}, ensure_ascii=False, indent=2)); return 0 if ok and not missing else 2
     elif args.cmd == "memory-status":
         print(json.dumps({"ok": True, "memory": memory_status(root)}, ensure_ascii=False, indent=2)); return 0
+    elif args.cmd == "route-record":
+        try: routing = record_routing(root, args.stage, args.active_skill, args.deferred_skill, args.route_fingerprint)
+        except ValueError as exc: raise SystemExit(f"ROUTE_STATE_ERROR: {exc}")
+        update_active(root, task); print(json.dumps({"ok": True, "routing": routing}, ensure_ascii=False, indent=2)); return 0
     elif args.cmd == "lock-decision":
         path = ai_root(root) / "governance" / "locked-decisions.json"; data = read_json(path, {"schema_version": "1.0.0", "decisions": []}); decisions = data.setdefault("decisions", [])
         if any(d.get("id") == args.id for d in decisions): raise SystemExit("decision id already exists")

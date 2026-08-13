@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -78,6 +79,26 @@ def _chain(previous: str, name: str, digest: str | None) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def archive_checkpoint(root: Path, path: Path, data: dict[str, Any]) -> tuple[str, str | None]:
+    created = str(data.get("created_at") or utc_now())
+    month = created[:7] if len(created) >= 7 and created[4:5] == "-" else "unknown"
+    archive_dir = ai_root(root) / "archive" / "checkpoints" / month
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    archive = archive_dir / f"{path.stem}.zip"
+    state_dir = path.parent / f"{path.stem}-state"
+    if not archive.exists():
+        with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as bundle:
+            bundle.write(path, arcname=path.name)
+            if state_dir.is_dir():
+                for item in sorted(state_dir.rglob("*")):
+                    if item.is_file():
+                        bundle.write(item, arcname=(Path("state") / item.relative_to(state_dir)).as_posix())
+    index = ai_root(root) / "archive" / "checkpoints" / "index.jsonl"
+    with index.open("a", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps({"name": path.name, "created_at": data.get("created_at"), "archive": archive.relative_to(ai_root(root)).as_posix(), "sha256": sha256_file(archive)}, ensure_ascii=False) + "\n")
+    return archive.relative_to(ai_root(root)).as_posix(), sha256_file(archive)
+
+
 def enforce_checkpoint_retention(root: Path) -> dict[str, Any]:
     policy = ensure_memory_policy(root)
     folder = ai_root(root) / "runtime" / "checkpoints"
@@ -104,6 +125,7 @@ def enforce_checkpoint_retention(root: Path) -> dict[str, Any]:
     count = int(ledger.get("pruned_count") or 0)
     for path, data in sorted(prune, key=lambda item: (str(item[1].get("created_at") or ""), item[0].name)):
         digest = sha256_file(path)
+        archive, archive_digest = archive_checkpoint(root, path, data)
         created = data.get("created_at")
         chain = _chain(chain, path.name, digest)
         entries.append({
@@ -112,6 +134,8 @@ def enforce_checkpoint_retention(root: Path) -> dict[str, Any]:
             "label": data.get("label"),
             "event": data.get("event"),
             "sha256": digest,
+            "archive": archive,
+            "archive_sha256": archive_digest,
         })
         first = first or created or utc_now()
         count += 1
@@ -147,6 +171,8 @@ def memory_status(root: Path) -> dict[str, Any]:
         "active_context_chars": len(active.read_text(encoding="utf-8")) if active.exists() else 0,
         "retained_checkpoints": int(ledger.get("retained_count") or 0),
         "pruned_checkpoints": int(ledger.get("pruned_count") or 0),
+        "cold_archived_checkpoints": int(ledger.get("pruned_count") or 0),
+        "cold_archive": ".ai/archive/checkpoints/",
         "pruned_hash_chain": ledger.get("pruned_hash_chain"),
         "canonical_sources": [
             "PROJECT_STATE.md", "CURRENT_CONTEXT.md", "CHANGELOG.md", "ARCHITECTURE.md",

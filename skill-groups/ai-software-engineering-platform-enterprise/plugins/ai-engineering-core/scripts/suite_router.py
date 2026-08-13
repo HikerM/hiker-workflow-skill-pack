@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -198,7 +199,7 @@ def route(root: Path, request: str) -> dict:
     release = any(x in text for x in ("发布前", "发布审核", "审核发布", "发布就绪", "准备发布", "能否发布", "上线", "release"))
     merge = any(x in text for x in ("合并", "merge", "冲突", "pull request", " pr", "推送", "push"))
     recovery = any(x in text for x in ("新会话恢复", "恢复上一个任务", "压缩后核对", "锁定决策和下一步"))
-    long_context = any(x in text for x in ("多会话", "长会话", "上下文压缩", "不会丢", "越来越重", "压缩前", "checkpoint数量", "恢复回执"))
+    long_context = any(x in text for x in ("多会话", "长会话", "超长会话", "会话超长", "超多轮", "上下文压缩", "多轮压缩", "不会丢", "越来越重", "压缩前", "checkpoint数量", "恢复回执"))
     pause = any(x in text for x in ("可中断", "暂停", "继续执行", "恢复执行", "调整方向", "插入需求"))
     multi = any(x in text for x in ("多agent", "多 agent", "worktree", "多仓库", "大型项目", "任务拆解", "分流", "subagent", "主线程只保留决策"))
     bootstrap = any(x in text for x in ("首次接管", "识别真实技术", "识别技术栈", "技术栈和版本", "初始化 .ai", "初始化.ai", "建立项目上下文"))
@@ -211,7 +212,12 @@ def route(root: Path, request: str) -> dict:
     lifecycle = any(x in text for x in ("任务生命周期", "task id", "task状态", "任务状态流转")) or bool(re.search(r"创建\s*[A-Z]{1,8}-\d{3,}", request, re.I))
     closure = any(x in text for x in ("验收闭环", "feature closed loop", "功能闭环", "截图/日志证明")) or ("闭环" in text and all(x in text for x in ("测试", "日志", "文档", "状态")))
     portfolio = any(x in text for x in ("多项目", "多个仓库", "项目组合", "仓库隔离")) or bool(re.search(r"(?:两|三|四|五|六|七|八|九|十|\d+)个\s*(?:git)?仓库", text))
-    receipt = any(x in text for x in ("插件应用回执", "用了什么插件", "用了哪些插件", "实际用了哪些插件", "应用了什么skill", "应用了什么 skill", "插件和skill"))
+    receipt = any(x in text for x in (
+        "插件应用回执", "用了什么插件", "用了哪些插件", "实际用了哪些插件", "使用了什么插件",
+        "使用到的插件", "显示插件名", "插件名称", "应用了什么skill", "应用了什么 skill",
+        "使用到的skill", "使用到的 skill", "显示skill名", "显示 skill 名", "skill名称", "skill 名称",
+        "插件和skill", "插件名和skill名", "插件名和 skill 名",
+    ))
     workspace_route = any(x in text for x in ("分流", "subagent", "哪些任务适合", "哪些必须串行", "主线程只保留决策"))
     project_governance = multi and not (review or test or release or merge) and any(x in text for x in ("长期接管", "大型项目", "大型工程", "多agent", "多 agent"))
     design_review = review and ("设计" in text or "编码前" in text or any(x in text for x in ("p0", "p1", "p2", "bootstrap式", "可验收", "验收深度", "数据、命令、并发")))
@@ -238,10 +244,16 @@ def route(root: Path, request: str) -> dict:
     backend_contract = backend and any(x in text for x in ("api契约", "接口契约", "事件契约", "openapi", "protobuf", "graphql", "错误模型", "幂等"))
     database_change = backend and any(x in text for x in ("数据库迁移", "migration", "schema变更", "表结构", "回滚脚本"))
     selected: list[tuple[str, str]] = []
+    deferred: list[tuple[str, str]] = []
 
     def add(skill: str, reason: str) -> None:
-        if len(selected) < 2 and skill not in {x[0] for x in selected}:
+        known = {x[0] for x in selected} | {x[0] for x in deferred}
+        if skill in known:
+            return
+        if len(selected) < 2:
             selected.append((skill, reason))
+        else:
+            deferred.append((skill, reason))
 
     if plugin_engineering:
         mode = "existing" if (root / ".git").exists() else "unknown"
@@ -357,7 +369,7 @@ def route(root: Path, request: str) -> dict:
         add("bounded-context-memory", "长期多会话只注入有界工作集")
     elif pause:
         add("interruptible-task-control", "控制指令必须先保存检查点")
-    if multi and not interaction_conflict and len(selected) < 2:
+    if multi and not interaction_conflict:
         add("multi-agent-project-governance", "大型工程需要任务、Git与Agent治理")
     if receipt and not selected:
         add("plugin-application-receipt", "用户只要求展示本轮实际应用能力")
@@ -370,14 +382,19 @@ def route(root: Path, request: str) -> dict:
     if not selected: questions.append("当前请求未命中软件工程执行阶段；不自动加载原子Skill")
     elif signals["source_conflicts"]: questions.append("当前仓库包含嵌套工作目录；清点并移出规范仓库后再执行源码修改")
     elif ambiguous_hybrid: questions.append("工程包含多个技术通道；执行前需在任务契约中确认本次前端、客户端和服务端范围")
+    route_basis = json.dumps({"stage": stage, "active": [x[0] for x in selected], "deferred": [x[0] for x in deferred]}, ensure_ascii=False, sort_keys=True)
     return {
         "schema_version": "1.0.0",
         "project_mode": mode,
         "architecture": architecture,
         "stage": stage,
         "selected": [{"skill": skill_display(s), "plugin": PLUGIN_DISPLAY[PLUGIN_FOR[s]], "reason": reason} for s, reason in selected],
+        "deferred": [{"skill": skill_display(s), "plugin": PLUGIN_DISPLAY[PLUGIN_FOR[s]], "reason": reason} for s, reason in deferred],
         "load": [locate(s) for s, _ in selected],
-        "max_loaded_skills": 2,
+        "max_loaded_atomic_skills": 2,
+        "router_counts_toward_limit": False,
+        "route_fingerprint": hashlib.sha256(route_basis.encode("utf-8")).hexdigest()[:16],
+        "next_gate": "完成当前阶段并重新路由待执行能力" if deferred else None,
         "confidence": confidence,
         "project_evidence": signals["sources"],
         "source_identity": {

@@ -69,7 +69,7 @@ python install_repo.py /path/to/your/repository
 
 ```text
 @AI工程轻量路由
-识别当前是0→1还是已有工程，只加载最多两个直接相关原子Skill并显示应用回执。
+会话第一条助手输出先显示中文轻量路由名称；识别当前是0→1还是已有工程，再加载最多两个直接相关的活跃原子 Skill。轻量路由不占这两个额度，后续能力进入待执行队列。
 ```
 
 空项目会先建立需求账本和技术决策 Checkpoint；已有项目才识别真实技术栈。无需手动同时选择多个插件。
@@ -86,7 +86,7 @@ codex plugin marketplace add /absolute/path/to/ai-software-engineering-platform-
 
 ## 全局自动应用与应用回执
 
-个人安装器默认把 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 中带标记的区块合并到 `C:\Users\<用户名>\.codex\AGENTS.md`。之后软件工程任务只自动进入“智能工程轻量路由”，正常回执仅显示实际应用的中文插件名称和中文 Skill 名称；其他入口只有手动点名才启用。安装器只替换自己的标记区块，禁止覆盖用户已有全局规则。
+个人安装器默认把 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 中带标记的区块合并到 `C:\Users\<用户名>\.codex\AGENTS.md`。之后软件工程会话第一条助手输出先显示“智能工程轻量路由”，确定性路由后再显示实际活跃的中文插件名称和中文 Skill 名称；其他入口只有手动点名才启用。安装器只替换自己的标记区块，禁止覆盖用户已有全局规则。
 
 自动选择不意味着自动获得外部写权限；push、merge、部署、发布和生产数据写入仍按用户授权与门禁执行。
 

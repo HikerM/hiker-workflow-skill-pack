@@ -65,7 +65,7 @@
 .\UNINSTALL.ps1 -TargetRoot C:\path\to\project -Apply -RestoreBackup 20260624-210000
 ```
 
-## 智能软件工程平台 5.9
+## 智能软件工程平台 5.10
 
 ### 推荐范围
 
@@ -93,6 +93,8 @@ py -3 -B .\install_personal.py
 - 直接写入桌面端启用配置并生成安装状态快照；CLI只作显式旧版兼容。
 
 安装输出中的 `plugin_activation.status=activated` 且 `verification.ok=true` 才表示桌面端安装完成。可用 `--no-merge-global-agents` 退出全局规则，或用 `--no-activate-plugins` 只注册Marketplace。
+
+安装器会立即更新插件源码、版本缓存、启用配置和全局规则，不要求先重启桌面应用。已经打开的任务保留创建时的能力快照，不能在同一任务内强制热替换；安装后新建任务即可无重启加载新版本。只有新任务仍显示旧版本时才需要重启桌面应用。
 
 ### 第二步：确认5个插件已启用
 

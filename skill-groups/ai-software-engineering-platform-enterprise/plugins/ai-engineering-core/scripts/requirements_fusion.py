@@ -39,7 +39,7 @@ def render(root: Path, limit: int = 30, mode: str = "greenfield") -> None:
     lines += [f"- {a} 与 {b} 冲突，必须解决后锁定相关决策。" for a, b in conflicts] or ["- 当前未记录显式冲突。"]
     unknowns = context.get("unknowns", [])
     lines += [f"- 未知：{x}" for x in unknowns] or ["- 当前未记录未知项。"]
-    lines += ["", "## 关键决策", "", f"- Checkpoint：{context.get('checkpoint_status', 'PENDING')}", f"- 已锁定：{', '.join(context.get('locked_decisions', [])) or '无'}", "", "> 完整历史和被裁剪需求见 `.ai/requirements/ledger.json`，会话只加载本文件活动切片。", ""]
+    lines += ["", "## 关键决策", "", f"- Checkpoint：{context.get('checkpoint_status', 'AUTO_RECORD_REQUIRED')}", f"- 决策模式：{context.get('decision_mode', 'automatic_non_blocking')}", f"- 已锁定：{', '.join(context.get('locked_decisions', [])) or '无'}", "", "> 决策 Checkpoint 自动记录后非阻塞继续，不设置人工审批暂停点。完整历史和被裁剪需求见 `.ai/requirements/ledger.json`，会话只加载本文件活动切片。", ""]
     atomic_write_text(markdown_path, "\n".join(lines))
 
 
@@ -49,7 +49,12 @@ def init(root: Path, project_id: str, goal: str, mode: str = "greenfield") -> di
         atomic_write_json(ledger_path, {"schema_version": SCHEMA, "revision": 0, "requirements": [], "updated_at": now()})
     if not context_path.exists():
         unknowns = ["目标平台与部署边界", "数据与安全边界", "可验收的核心工作流"] if mode == "greenfield" else ["现有能力及代码证据", "新增需求与存量行为的冲突", "兼容与迁移边界"]
-        atomic_write_json(context_path, {"schema_version": SCHEMA, "project_id": project_id, "goal": goal, "mode": mode, "stage": "REQUIREMENTS", "checkpoint_status": "PENDING", "locked_decisions": [], "unknowns": unknowns, "updated_at": now()})
+        atomic_write_json(context_path, {"schema_version": SCHEMA, "project_id": project_id, "goal": goal, "mode": mode, "stage": "REQUIREMENTS", "decision_mode": "automatic_non_blocking", "checkpoint_status": "AUTO_RECORD_REQUIRED", "locked_decisions": [], "unknowns": unknowns, "updated_at": now()})
+    else:
+        context = load_json(context_path)
+        if context.get("decision_mode") != "automatic_non_blocking" or context.get("checkpoint_status") in {"PENDING", "REQUIRED"}:
+            context.update({"decision_mode": "automatic_non_blocking", "checkpoint_status": "AUTO_RECORD_REQUIRED", "updated_at": now()})
+            atomic_write_json(context_path, context)
     render(root, mode=mode)
     return {"ok": True, "ledger": str(ledger_path), "context": str(context_path)}
 

@@ -178,13 +178,27 @@ def audit(root: Path = ROOT) -> dict[str, Any]:
             "USER_IDEA_NOT_APPROVED": "待验证假设",
             "MISSING_COUNTEREXAMPLE": "反例",
             "MISSING_ALTERNATIVES": "替代方案",
-            "MISSING_HUMAN_CHECKPOINT": "人工Checkpoint",
+            "MISSING_AUTOMATIC_CHECKPOINT": "自动生成决策 Checkpoint",
+            "MISSING_NON_BLOCKING_DECISION": "不得弹出审批",
             "MISSING_READ_ONLY_BOUNDARY": "不直接修改",
             "MISSING_BOUNDED_DEPTH": "无边界过度设计",
         }
         for code, token in required_concepts.items():
             if token not in architecture_text:
                 errors.append(_finding(code, "architecture-decision-challenge", f"缺少架构挑战边界：{token}", architecture_challenge["path"]))
+
+    non_blocking_decision_files = {
+        "global-governance": ROOT / "templates" / "GLOBAL_AGENTS_AI_ENGINEERING.md",
+        "greenfield-project-planning": ROOT / "plugins" / "ai-engineering-core" / "skills" / "greenfield-project-planning" / "SKILL.md",
+        "architecture-decision-challenge": ROOT / "plugins" / "ai-engineering-core" / "skills" / "architecture-decision-challenge" / "SKILL.md",
+        "brownfield-requirement-reconciliation": ROOT / "plugins" / "ai-engineering-core" / "skills" / "brownfield-requirement-reconciliation" / "SKILL.md",
+    }
+    forbidden_approval_phrases = ("人工 Checkpoint", "人工Checkpoint", "批准后才锁定", "Checkpoint通过前")
+    for owner, path in non_blocking_decision_files.items():
+        text = path.read_text(encoding="utf-8") if path.is_file() else ""
+        for phrase in forbidden_approval_phrases:
+            if phrase in text:
+                errors.append(_finding("BLOCKING_DECISION_APPROVAL", owner, f"决策 Checkpoint 不得要求人工审批：{phrase}", path))
 
     convergence = records.get("long-chain-change-convergence")
     if convergence:

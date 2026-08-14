@@ -62,7 +62,8 @@ def initialize(root: Path, project_id: str, goal: str) -> dict:
         "mode": "brownfield",
         "stage": "BASELINE_DISCOVERY",
         "baseline_status": "PENDING",
-        "checkpoint_status": "PENDING",
+        "decision_mode": "automatic_non_blocking",
+        "checkpoint_status": "AUTO_RECORD_REQUIRED",
         "updated_at": now(),
     })
     render(root)
@@ -136,18 +137,19 @@ def reconcile(root: Path, payload: dict) -> dict:
         "matrix": matrix,
         "blockers": blockers,
         "checkpoint_required": any(row["impact"][key] for row in matrix for key in ("apis", "data", "permissions", "migrations")),
+        "checkpoint_mode": "automatic_non_blocking",
         "status": "BLOCKED" if blockers else "READY_FOR_PLANNING",
         "updated_at": now(),
     }
     atomic_write_json(paths["result"], result)
-    context = read_json(paths["context"]); context.update({"stage": result["status"], "checkpoint_status": "REQUIRED" if result["checkpoint_required"] else "NOT_REQUIRED", "updated_at": now()}); atomic_write_json(paths["context"], context)
+    context = read_json(paths["context"]); context.update({"stage": result["status"], "decision_mode": "automatic_non_blocking", "checkpoint_status": "AUTO_RECORDED" if result["checkpoint_required"] else "NOT_REQUIRED", "updated_at": now()}); atomic_write_json(paths["context"], context)
     render(root)
     return {"ok": not blockers, **result}
 
 
 def render(root: Path) -> None:
     paths = locations(root); baseline, result = read_json(paths["baseline"]), read_json(paths["result"])
-    lines = ["# REQUIREMENT DELTA", "", f"- 模式：brownfield", f"- 存量能力：{len(baseline.get('capabilities', []))}", f"- 对账状态：{result.get('status', 'BASELINE_DISCOVERY')}", f"- Checkpoint：{'需要' if result.get('checkpoint_required') else '暂不需要'}", "", "## 存量能力基线", ""]
+    lines = ["# REQUIREMENT DELTA", "", f"- 模式：brownfield", f"- 存量能力：{len(baseline.get('capabilities', []))}", f"- 对账状态：{result.get('status', 'BASELINE_DISCOVERY')}", f"- Checkpoint：{'已自动记录，非阻塞继续' if result.get('checkpoint_required') else '暂不需要'}", "", "## 存量能力基线", ""]
     lines += [f"- **{x['id']}** {x['statement']}（证据：{', '.join(e['path'] for e in x.get('evidence', []))}）" for x in baseline.get("capabilities", [])] or ["- 尚未登记。"]
     lines += ["", "## 需求变更矩阵", ""]
     for row in result.get("matrix", []):

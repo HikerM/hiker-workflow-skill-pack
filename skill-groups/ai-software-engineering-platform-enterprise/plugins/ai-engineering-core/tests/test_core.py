@@ -210,12 +210,42 @@ class CoreTests(unittest.TestCase):
     def test_requirements_merge_preserves_revision_and_conflicts(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); init_requirements(root, "APP", "自定义业务系统")
+            context = json.loads((root / ".ai/context/greenfield.json").read_text(encoding="utf-8"))
+            self.assertEqual("automatic_non_blocking", context["decision_mode"])
+            self.assertEqual("AUTO_RECORD_REQUIRED", context["checkpoint_status"])
             first = merge_requirements(root, [{"id":"REQ-001","statement":"支持离线使用","priority":"must","acceptance":["断网可打开核心数据"]}])
             second = merge_requirements(root, [{"id":"REQ-001","statement":"支持离线使用并在联网后同步","priority":"must","acceptance":["断网可用","联网自动同步"],"conflicts_with":["REQ-002"]}])
             self.assertTrue(first["ok"]); self.assertEqual(["REQ-001"], second["updated"]); self.assertEqual(1, second["conflicts"])
             ledger = json.loads((root / ".ai/requirements/ledger.json").read_text(encoding="utf-8"))
             self.assertEqual(1, len(ledger["requirements"][0]["history"]))
             self.assertTrue(validate_requirements(root)["ok"]); self.assertIn("REQ-001", (root / "REQUIREMENTS.md").read_text(encoding="utf-8"))
+
+    def test_legacy_pending_decision_state_is_migrated_without_approval(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); (root / ".ai/context").mkdir(parents=True); (root / ".ai/requirements").mkdir(parents=True)
+            atomic_write_json(root / ".ai/context/greenfield.json", {
+                "schema_version": "1.0.0", "project_id": "APP", "goal": "旧项目", "mode": "greenfield",
+                "stage": "REQUIREMENTS", "checkpoint_status": "PENDING", "locked_decisions": [], "unknowns": []
+            })
+            init_requirements(root, "APP", "旧项目")
+            context = json.loads((root / ".ai/context/greenfield.json").read_text(encoding="utf-8"))
+            self.assertEqual("automatic_non_blocking", context["decision_mode"])
+            self.assertEqual("AUTO_RECORD_REQUIRED", context["checkpoint_status"])
+
+    def test_brownfield_checkpoint_is_automatic_and_non_blocking(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); (root / "src").mkdir(); (root / "src/Api.ts").write_text("export const api = true", encoding="utf-8")
+            init_brownfield(root, "APP", "调整公共接口")
+            set_baseline(root, {"capabilities": [{"id": "CAP-001", "statement": "现有接口", "evidence": ["src/Api.ts"]}]})
+            result = reconcile(root, {"requirements": [{
+                "id": "REQ-001", "statement": "调整公共接口", "priority": "must", "acceptance": ["新旧客户端兼容"],
+                "change_type": "modify", "targets": ["CAP-001"], "impact": {"apis": ["public-api"]}
+            }]})
+            context = json.loads((root / ".ai/context/requirement-reconciliation.json").read_text(encoding="utf-8"))
+            self.assertTrue(result["checkpoint_required"])
+            self.assertEqual("automatic_non_blocking", result["checkpoint_mode"])
+            self.assertEqual("AUTO_RECORDED", context["checkpoint_status"])
+            self.assertIn("非阻塞继续", (root / "REQUIREMENT_DELTA.md").read_text(encoding="utf-8"))
     def test_ignored_dependency_manifest_not_detected(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);(root/"node_modules/dependency").mkdir(parents=True);(root/"node_modules/dependency/package.json").write_text(json.dumps({"name":"dependency","dependencies":{"react":"19"}}))

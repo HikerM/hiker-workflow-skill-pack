@@ -172,6 +172,16 @@ class CoreTests(unittest.TestCase):
             self.assertEqual("tooling", data["architecture"])
             self.assertEqual("完整变更风险评估", data["selected"][0]["skill"])
 
+    def test_router_selects_master_governance_for_session_runtime_sprawl(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            for request in (
+                "总控每次派发任务都创建新会话和Worktree，导致会话堆积和线程没关闭",
+                "让总控复用固定角色槽位并在终态自动验证运行时释放",
+            ):
+                data = route(root, request)
+                self.assertEqual("大型工程多智能体总控", data["selected"][0]["skill"])
+
     def test_router_receipt_uses_chinese_names_without_consuming_functional_slot(self):
         with tempfile.TemporaryDirectory() as td:
             data=route(Path(td),"大型项目风险审核，并告诉我用了什么插件")

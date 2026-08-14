@@ -21,3 +21,4 @@ ws-19,true,multi-project-portfolio-manager,"我同时维护三个Git仓库，切
 ws-20,true,plugin-application-receipt,"告诉我这次任务实际用了哪些插件和skill"
 ws-21,false,file-lock-manager,"只读解释这个Prefab的结构"
 ws-22,true,worktree-safe-convergence,"清点并安全收敛长期堆积、孤儿和已经合并的worktree，未经确认不要删除"
+ws-23,true,multi-agent-project-governance,"总控不要为实现审核修复复验分别创建新会话和worktree，复用固定角色槽并自动释放终态运行时"

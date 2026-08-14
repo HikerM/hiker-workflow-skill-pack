@@ -1,10 +1,10 @@
 # Hiker 中文工程 Skill 与插件仓库
 
-<!-- repository-facts: repo=0.9.0; engineering=5.11.0; plugins=5; engineering-skills=42; hiker-skills=9; desktop=1.3.0; desktop-skills=5; total-skills=56 -->
+<!-- repository-facts: repo=0.8.0; engineering=5.12.0; plugins=5; engineering-skills=42; hiker-skills=9; desktop=1.3.0; desktop-skills=5; total-skills=56 -->
 
 这是面向 ChatGPT/Codex 桌面应用和长期软件工程项目的中文能力仓库。
 
-> 仓库版本：`0.9.0`
+> 仓库版本：`0.8.0`
 >
 > 当前规模：共 `56` 个 Skill
 >
@@ -15,12 +15,12 @@
 | 能力集合 | 当前版本 | 规模 | 适用范围 | 默认使用方式 |
 |---|---:|---:|---|---|
 | Hiker 工作流守护包 | 0.8.0 | 9 个 Skill | 结果复核、阶段门禁、证据测试、契约审计、NodeTs 链路、Unity 保护和交付审核 | 手动选择 |
-| 智能软件工程平台 | 5.11.0 | 5 个插件、42 个原子 Skill | 从零开发、架构反证、存量源码接管、B/S、C/S、超长会话、大型工程、长链路诊断、不可变审核、Git、质量和发布 | 一个轻量自动入口，其余按需加载 |
+| 智能软件工程平台 | 5.12.0 | 5 个插件、42 个原子 Skill | 从零开发、架构反证、存量源码接管、B/S、C/S、超长会话、大型工程、长链路诊断、不可变审核、Git、质量和发布 | 一个轻量自动入口，其余按需加载 |
 | 桌面软件等价重建 | 1.3.0 | 5 个 Skill | 已授权桌面软件的发现、技术方案、实现、验证和发布 | 手动选择或手动进入阶段路由 |
 
 三套能力彼此独立，不会因为安装在同一仓库就同时进入每轮会话。详细清单见 [全部 Skill 索引](docs/SKILL_INDEX.md)。
 
-## 智能软件工程平台 5.11.0
+## 智能软件工程平台 5.12.0
 
 这是当前主要的 ChatGPT/Codex 桌面端软件工程插件套件。它使用一个小型入口识别项目模式、真实技术栈、版本和当前阶段。轻量路由不占额度，每阶段最多加载两个活跃原子 Skill；第三个及之后进入待执行队列，不预读完整能力目录，也不静默丢失后续能力。
 
@@ -34,7 +34,11 @@
 | 工作区与多会话协作 | 12 | 大型工程总控、项目状态、任务生命周期、长链路收敛、文件锁、多项目隔离、Worktree、合并控制和功能验收闭环 |
 | 质量、风险与发布 | 6 | 独立设计就绪复审、交互状态与冲突治理、完整变更风险、工程图谱、回归范围和发布就绪审核 |
 
-### 5.11 的关键能力
+### 5.12 的关键能力
+
+- **总控固定角色会话池**：实现/修复复用 writer，审核/测试/复验复用 assurance；Task、候选或基线变化不再触发新桌面任务和新 Worktree。
+- **总控自动终态回收**：普通任务完成后自动 Checkpoint、释放锁与任务资源并保留空闲槽复用；项目终态自动归档并验证本地工具运行时释放，不要求人工确认。脏改动、强杀进程和强删 Worktree 仍受安全门禁保护。
+- **有界运行时预算**：每项目默认最多四个常驻角色槽、同一时刻最多一个待创建槽；查询错误、超时、待启动或回收未完成时禁止创建替代会话。
 
 - **动作优先阶段路由**：先识别增强、修复、实现、审核、测试、合并和发布的主动作，再把风险、验证和推送作为后续阶段。
 - **真实加载回执**：中文应用回执来自 Skill 完整读取后的加载遥测；路由命中不再冒充已经应用。
@@ -190,5 +194,5 @@ py -3 -B .\scripts\install_skill.py --scope user
 
 - [仓库 Changelog](CHANGELOG.md)
 - [智能软件工程平台 Changelog](skill-groups/ai-software-engineering-platform-enterprise/CHANGELOG.md)
-- [智能软件工程平台 5.11 验证报告](skill-groups/ai-software-engineering-platform-enterprise/VALIDATION_REPORT_CN.md)
+- [智能软件工程平台 5.12 验证报告](skill-groups/ai-software-engineering-platform-enterprise/VALIDATION_REPORT_CN.md)
 - [发布包哈希](skill-groups/ai-software-engineering-platform-enterprise/SHA256SUMS.txt)

@@ -8,6 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from workspacelib import atomic_json, read_json, repo_root, safe_id, state_lock
+from session_pool import bind as bind_slot
+from session_pool import complete as complete_slot
+from session_pool import plan as plan_slot
+from session_pool import release_ack as release_slot
+from session_pool import status as pool_status
 
 SCHEMA = "1.0.0"
 ACTIVE_STATES = {"SETUP_PENDING", "BOUND", "READY", "RUNNING", "WAITING_APPROVAL", "UNKNOWN_RUNNING"}
@@ -64,7 +69,11 @@ def classify_observation(
 
 
 def load(root: Path) -> dict[str, Any]:
-    return read_json(dispatch_file(root), {}) or {"schema_version": SCHEMA, "dispatches": {}, "notifications": {}}
+    state = read_json(dispatch_file(root), {}) or {}
+    state.setdefault("schema_version", SCHEMA)
+    state.setdefault("dispatches", {})
+    state.setdefault("notifications", {})
+    return state
 
 
 def observe(root: Path, args: argparse.Namespace) -> dict[str, Any]:
@@ -88,8 +97,20 @@ def observe(root: Path, args: argparse.Namespace) -> dict[str, Any]:
     state["updated_at"] = now()
     atomic_json(dispatch_file(root), state)
     conflicts = [item for item in state["dispatches"].values() if item.get("dispatch_key") != key and item.get("task_id") == entry["task_id"] and item.get("role") == entry["role"] and item.get("state") in ACTIVE_STATES]
-    create_allowed = observed == "EMPTY_CONFIRMED" and previous.get("state") not in ACTIVE_STATES and not conflicts
-    return {"observation": entry, "create_allowed": create_allowed, "conflicts": conflicts, "rule": "only EMPTY_CONFIRMED may create"}
+    project = read_json(root / ".ai" / "governance" / "project-state.json", {}) or {}
+    session = plan_slot(
+        root,
+        args.project_id or str(project.get("project_id") or root.name),
+        args.task_id,
+        args.role,
+        args.repository or str(root),
+        args.base_sha,
+        observed,
+        args.thread_id,
+        args.client_thread_id,
+    )
+    create_allowed = session["action"] == "CREATE_THREAD" and previous.get("state") not in ACTIVE_STATES and not conflicts
+    return {"observation": entry, "session": session, "create_allowed": create_allowed, "conflicts": conflicts, "rule": "reuse a project/repository/role slot before creating a thread"}
 
 
 def environment_plan(requirements: list[str], read_only: bool) -> dict[str, Any]:
@@ -134,7 +155,21 @@ def main() -> int:
     p = sub.add_parser("observe")
     p.add_argument("--task-id", required=True); p.add_argument("--role", required=True); p.add_argument("--repository")
     p.add_argument("--base-sha", required=True); p.add_argument("--api-result", choices=["ERROR", "TIMEOUT", "EMPTY", "FOUND"], required=True)
-    p.add_argument("--thread-id"); p.add_argument("--client-thread-id"); p.add_argument("--runtime-status"); p.add_argument("--detail", default="")
+    p.add_argument("--project-id"); p.add_argument("--thread-id"); p.add_argument("--client-thread-id"); p.add_argument("--runtime-status"); p.add_argument("--detail", default="")
+    p = sub.add_parser("bind")
+    p.add_argument("--project-id", required=True); p.add_argument("--task-id", required=True); p.add_argument("--role", required=True)
+    p.add_argument("--repository"); p.add_argument("--base-sha", required=True); p.add_argument("--thread-id"); p.add_argument("--client-thread-id")
+    p.add_argument("--runtime-state", choices=sorted(ACTIVE_STATES | {"IDLE_REUSABLE"}), required=True); p.add_argument("--worktree")
+    p = sub.add_parser("complete")
+    p.add_argument("--project-id", required=True); p.add_argument("--task-id", required=True); p.add_argument("--role", required=True); p.add_argument("--repository")
+    p.add_argument("--outcome", choices=["PASS", "FAIL", "CANCELLED", "SUPERSEDED"], required=True); p.add_argument("--checkpoint-id", required=True); p.add_argument("--candidate-id")
+    p.add_argument("--locks-released", action="store_true"); p.add_argument("--resources-released", action="store_true")
+    p.add_argument("--worktree-state", choices=["CLEAN", "CLOSED", "PAUSED_DIRTY"], required=True); p.add_argument("--project-terminal", action="store_true")
+    p = sub.add_parser("release-ack")
+    p.add_argument("--project-id", required=True); p.add_argument("--role", required=True); p.add_argument("--repository")
+    p.add_argument("--thread-archived", action="store_true"); p.add_argument("--runtime-release-verified", action="store_true")
+    p.add_argument("--worktree-state", choices=["KEPT", "CLOSED"], required=True)
+    p = sub.add_parser("pool-status"); p.add_argument("--project-id")
     p = sub.add_parser("environment")
     p.add_argument("--require", action="append", default=[]); p.add_argument("--read-only", action="store_true")
     p = sub.add_parser("notify")
@@ -145,6 +180,14 @@ def main() -> int:
     with state_lock(root):
         if args.cmd == "observe":
             result = observe(root, args)
+        elif args.cmd == "bind":
+            result = bind_slot(root, args.project_id, args.task_id, args.role, args.repository or str(root), args.base_sha, args.thread_id, args.client_thread_id, args.runtime_state, args.worktree)
+        elif args.cmd == "complete":
+            result = complete_slot(root, args.project_id, args.task_id, args.role, args.repository or str(root), args.outcome, args.checkpoint_id, args.locks_released, args.resources_released, args.worktree_state, args.candidate_id, args.project_terminal)
+        elif args.cmd == "release-ack":
+            result = release_slot(root, args.project_id, args.role, args.repository or str(root), args.thread_archived, args.runtime_release_verified, args.worktree_state)
+        elif args.cmd == "pool-status":
+            result = pool_status(root, args.project_id)
         elif args.cmd == "environment":
             result = environment_plan(args.require, args.read_only)
         else:

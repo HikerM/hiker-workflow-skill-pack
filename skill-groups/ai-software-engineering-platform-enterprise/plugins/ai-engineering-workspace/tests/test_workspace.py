@@ -38,6 +38,7 @@ from task_reconciler import reconcile
 from workspacelib import common_dir, read_json, safe_branch, state_lock
 from dispatch_guard import classify_observation, environment_plan, status_fingerprint
 from candidate_guard import freeze as candidate_freeze, verify as candidate_verify
+from session_pool import bind as session_bind, complete as session_complete, plan as session_plan, release_ack as session_release_ack, status as session_status
 
 
 def ns(**values): return argparse.Namespace(**values)
@@ -300,6 +301,39 @@ class WorkspaceTests(unittest.TestCase):
             create_report = reconcile(root, phase="create")
             orphan_finding = next(item for item in create_report["findings"] if item["type"] == "ORPHAN_WORKTREE")
             self.assertEqual("BLOCK", orphan_finding["severity"])
+
+    def test_master_reuses_fixed_writer_and_assurance_slots_across_task_phases(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "repo"; root.mkdir(); self.repo(root)
+            init_project(root, ns(project_id="PROJECT-A", architecture="hybrid", version="1.0.0", database_version="001", api_version="v1"))
+            first = session_plan(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "base-a", "EMPTY_CONFIRMED")
+            self.assertEqual("CREATE_THREAD", first["action"])
+            writer = session_bind(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "base-a", "thread-writer", None, "RUNNING", str(Path(td) / "writer-wt"))
+            done = session_complete(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "PASS", "CP-KG-001", True, True, "CLEAN")
+            self.assertTrue(done["ok"]); self.assertEqual("IDLE_REUSABLE", done["slot"]["state"])
+            repair = session_plan(root, "PROJECT-A", "KG-002", "Repair Agent", str(root), "base-b", "EMPTY_CONFIRMED")
+            self.assertEqual(writer["slot_key"], repair["slot_key"]); self.assertEqual("REUSE_THREAD", repair["action"])
+            session_bind(root, "PROJECT-A", "KG-002", "Repair Agent", str(root), "base-b", "thread-writer", None, "RUNNING", str(Path(td) / "writer-wt"))
+
+            assurance = session_plan(root, "PROJECT-A", "KG-002", "Review Agent", str(root), "base-b", "EMPTY_CONFIRMED")
+            self.assertEqual("CREATE_THREAD", assurance["action"])
+            session_bind(root, "PROJECT-A", "KG-002", "Review Agent", str(root), "base-b", "thread-assurance", None, "RUNNING")
+            session_complete(root, "PROJECT-A", "KG-002", "Review Agent", str(root), "PASS", "CP-REVIEW", True, True, "CLOSED")
+            reverify = session_plan(root, "PROJECT-A", "KG-003", "Reverify Agent", str(root), "base-c", "EMPTY_CONFIRMED")
+            self.assertEqual(assurance["slot_key"], reverify["slot_key"]); self.assertEqual("REUSE_THREAD", reverify["action"])
+
+    def test_master_auto_release_retries_without_human_confirmation(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "repo"; root.mkdir(); self.repo(root)
+            init_project(root, ns(project_id="PROJECT-A", architecture="hybrid", version="1.0.0", database_version="001", api_version="v1"))
+            session_bind(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "base-a", "thread-writer", None, "RUNNING", str(Path(td) / "writer-wt"))
+            terminal = session_complete(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "PASS", "CP-FINAL", True, True, "CLOSED", project_terminal=True)
+            self.assertEqual("ARCHIVE_AND_VERIFY_RUNTIME", terminal["next_action"])
+            waiting = session_release_ack(root, "PROJECT-A", "Developer Agent", str(root), True, False, "CLOSED")
+            self.assertEqual("ARCHIVED_RUNTIME_UNVERIFIED", waiting["slot"]["state"])
+            released = session_release_ack(root, "PROJECT-A", "Developer Agent", str(root), True, True, "CLOSED")
+            self.assertTrue(released["ok"]); self.assertEqual("RELEASED", released["slot"]["state"])
+            self.assertTrue(session_status(root, "PROJECT-A")["ok"])
 
     def test_long_chain_guard_notifies_once_for_changed_engineering_health(self):
         task = {"change_contract": {"behavior_invariants": [], "required_tests": []}}

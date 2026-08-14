@@ -194,7 +194,9 @@ REQUIREMENT_DELTA.md
 
 复杂总控还必须分别报告“业务价值进度”和“治理进度”。修复控制账本、validator、测试夹具或会话绑定不等于业务功能已经开始实现；连续两个治理周期没有业务增量时，第三轮必须先复用证据、缩小验证范围或明确换轨理由。相同 Gate、源码/合同指纹和验证范围已有 PASS 时不再全量重跑；夹具或汇总器错误记为 `INVALID`，只补受影响切片，不把工具失败算成产品失败。
 
-任务只返回 `clientThreadId` 时保持 `SETUP_PENDING`。必须先查询真实任务、等待 pending lease 到期并确认没有 `threadId`，才允许恢复；幂等键相同的延迟任务一旦出现，立即冻结重复 writer 并保留唯一会话。
+只有总控负责桌面任务与 Worktree 生命周期。它按“项目 + 仓库 + 角色族”维护固定槽：实现/修复复用 writer，审核/测试/复验复用 assurance；Task、Candidate 或 base SHA 变化不能成为新建会话的理由。普通任务结束后自动生成 Checkpoint、释放锁与任务资源并进入 `IDLE_REUSABLE`；项目终态自动归档任务并验证本地工具运行时释放，不需要用户确认。
+
+任务只返回 `clientThreadId` 时保持 `SETUP_PENDING`。必须先查询真实任务、等待 pending lease 到期并确认没有 `threadId`，才允许创建；延迟任务一旦出现，立即冻结重复同族槽并保留唯一会话。归档成功但运行时无法证明已经释放时进入 `ARCHIVED_RUNTIME_UNVERIFIED`，总控自动复查且不得继续创建替代会话。自动回收不授权强杀进程、强删 Worktree、删除分支或丢弃未提交修改。
 
 ## 十、全局自动应用与可见回执
 

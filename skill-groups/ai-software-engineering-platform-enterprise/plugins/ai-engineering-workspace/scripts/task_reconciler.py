@@ -107,6 +107,17 @@ def reconcile(path: Path, write_report: bool = False, mode: str = "quick", phase
             severity = "BLOCK" if phase == "create" else "WARN"
             findings.append({"severity": severity, "type": "STALE_WORKTREE_LEASE", "task_id": str(lease.get("task_id") or lease.get("worktree_id") or ""), "detail": f"{branch} expired {expires}"})
 
+    session_pool = read_json(common_dir(root) / "ai-engineering" / "session-pool.json", {}) or {}
+    session_slots = list(session_pool.get("slots", {}).values())
+    max_slots = int(project.get("session_budget", {}).get("max_resident_slots", 4))
+    resident_slots = [slot for slot in session_slots if slot.get("state") != "RELEASED"]
+    if len(resident_slots) > max_slots:
+        findings.append({"severity": "BLOCK", "type": "SESSION_SLOT_BUDGET", "task_id": "", "detail": f"{len(resident_slots)}/{max_slots}"})
+    for slot in resident_slots:
+        if slot.get("state") in {"RELEASE_PENDING", "ARCHIVE_REQUESTED", "ARCHIVED_RUNTIME_UNVERIFIED", "PAUSED_DIRTY"}:
+            severity = "BLOCK" if phase == "create" else "WARN"
+            findings.append({"severity": severity, "type": "SESSION_RELEASE_PENDING", "task_id": str(slot.get("current_task_id") or ""), "detail": f"{slot.get('role_family')}:{slot.get('state')}"})
+
     report = {
         "schema_version": "1.0.0",
         "project_id": project.get("project_id"),
@@ -120,6 +131,8 @@ def reconcile(path: Path, write_report: bool = False, mode: str = "quick", phase
             "unmanaged_worktrees": stock["summary"]["unmanaged"],
             "nested_worktrees": stock["summary"]["nested"],
             "prunable_worktrees": stock["summary"]["prunable"],
+            "resident_session_slots": len(resident_slots),
+            "session_release_pending": sum(1 for item in findings if item["type"] == "SESSION_RELEASE_PENDING"),
             "blockers": sum(1 for item in findings if item["severity"] == "BLOCK"),
             "warnings": sum(1 for item in findings if item["severity"] == "WARN"),
         },

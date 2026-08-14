@@ -65,7 +65,7 @@
 .\UNINSTALL.ps1 -TargetRoot C:\path\to\project -Apply -RestoreBackup 20260624-210000
 ```
 
-## 智能软件工程平台 5.10
+## 智能软件工程平台 5.12
 
 ### 推荐范围
 

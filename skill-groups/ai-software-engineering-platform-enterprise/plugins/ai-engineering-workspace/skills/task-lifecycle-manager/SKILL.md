@@ -15,7 +15,7 @@ python <plugin-root>/scripts/governance_state.py --root . contract-set --task-id
 
 使用 `contract-set` 记录本次允许文件/模块、公共契约变化、原有行为不变量和最低回归；没有范围、不变量和测试不得进入 Development。使用 `record` 写入 commit/review/test/artifact/document/decision/risk；使用 `checkpoint` 保存阶段快照。`pause` 不改变生命周期状态，只把 `control_status` 设为 PAUSED；`adjust` 记录新方向；`insert` 必须创建新的Task ID并关联原任务；`resume` 从原状态继续。未满足阶段证据门禁时不得推进。
 
-生命周期状态之外单独维护会话绑定子状态：`SETUP_PENDING → BOUND → RUNNING → DELIVERED`。`clientThreadId` 不能当作真实 `threadId`，`SETUP_PENDING` 不能触发同一幂等键的第二个会话；恢复前必须确认 pending lease 到期且不存在延迟启动任务。任何时刻一个写任务只能绑定一个活动 writer 和一个 Worktree。
+生命周期状态之外单独维护会话绑定子状态：`SETUP_PENDING → BOUND → RUNNING → IDLE_REUSABLE / RELEASE_PENDING → RELEASED`。只有 Master Agent 管理该状态；角色槽以项目、仓库和角色族为稳定身份，Task ID 是槽内工作项。`clientThreadId` 不能当作真实 `threadId`，`SETUP_PENDING` 不能触发第二个同族会话；任何时刻一个项目仓库只能有一个活动 writer 槽。普通任务结束自动回到 `IDLE_REUSABLE`，项目终态由总控自动归档并验证运行时释放，不要求用户确认。
 
 Development 进入 Review 前必须生成与当前 Git HEAD、工作区指纹一致的架构守卫证据，并运行 `governance_state.py candidate-freeze --task-id <TASK-ID> --agent-role "Developer Agent" --candidate-id <CANDIDATE-ID>` 冻结只读审核候选。Review、Testing 与 Merge 只可消费该 `candidate_id`；候选提交、索引、源文件集合或工作区指纹发生任何变化即 `STALE`，必须生成新候选并重新取得受影响证据。普通局部任务只需最小变更契约，不要求维护全量模块、依赖或运行拓扑配置。
 

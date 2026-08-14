@@ -14,7 +14,8 @@ description: 面向大型B/S、通用C/S、Unity、共享服务端和混合工�
 - 拆解前后端、客户端、后端、数据和基础设施通道时，只读取 [系统分层](references/system-lane-model.md)。
 - 涉及 Branch、Worktree、Commit、Merge 或冲突处理时，只读取 [Git治理](references/git-governance.md)。
 - 涉及状态迁移、Task 记录、上下文恢复或 Checkpoint 时，只读取 [状态模型](references/state-and-task-model.md)。
-- 单轮通常读取零到一份参考文件；请求确实同时跨越两个治理域时最多读取两份，禁止预读全部四份。
+- 涉及桌面任务分派、角色会话复用、任务终态归档或运行时释放时，只读取 [会话与运行时生命周期](references/session-runtime-lifecycle.md)。
+- 单轮通常读取零到一份参考文件；请求确实同时跨越两个治理域时最多读取两份，禁止预读全部五份。
 
 ## 启动顺序
 
@@ -33,9 +34,13 @@ description: 面向大型B/S、通用C/S、Unity、共享服务端和混合工�
 
 独立审核失败后只创建一个有界修复任务；修复完成只复验受影响 Gate。架构、基线或公共合同未变化时，不重新执行完整架构审核，不重建所有控制文件，也不让实现→审核→修复→复验无限递归。
 
-## 会话绑定与延迟启动防重
+## 总控强制执行的固定角色槽
 
-会话调度以 `Task ID + 角色 + repo root + base SHA` 为幂等键。只返回 `clientThreadId` 时记录 `SETUP_PENDING`，它既不是 RUNNING，也不是失败；在查询桌面任务状态、确认没有真实 `threadId` 且 pending lease 到期前，禁止创建恢复会话或第二个 writer。延迟启动的旧任务出现时，先冻结双方写入并按幂等键选出唯一会话，禁止两个会话在同一 Worktree“各自收敛”。
+只有 Master Agent 负责桌面任务与 Worktree 的创建、复用和终态回收。会话槽位以 `project_id + repo root + role family` 为稳定身份，Task ID、候选版本和 base SHA 是槽内工作项，不再作为新建会话的理由。固定角色族为：`master`、`writer`、`assurance`、`control`、`browser`；实现、修复和返工复用同一 writer，Review、Testing 与 Reverify 复用同一 assurance。独立审核依靠只读权限和冻结候选证据，不依靠无限创建审核会话或审核 Worktree。
+
+每次分派先运行 `dispatch_guard.py observe`。返回 `REUSE_THREAD`、`CONTINUE_EXISTING` 或 `QUEUE` 时禁止创建；只有 `CREATE_THREAD` 才能创建一次，并立即 `bind`。只返回 `clientThreadId` 时记录 `SETUP_PENDING`；查询失败、超时、pending 未到期或已有活动槽位时一律失败关闭。默认每项目最多四个常驻角色槽、同一时刻最多一个 pending create。
+
+普通任务完成后，总控自动保存 Checkpoint、释放文件锁和外部资源、确认 writer Worktree 为 CLEAN/CLOSED，并把槽位置为 `IDLE_REUSABLE`，无需用户确认。项目终态、用户明确停止或角色槽不再需要时，总控自动归档任务并验证本地运行时已释放；归档但无法证明运行时释放时保持 `ARCHIVED_RUNTIME_UNVERIFIED` 并阻止继续创建。不得用强杀进程、强删 Worktree 或丢弃未提交修改冒充自动回收；这三类破坏性处置仍服从安全门禁。
 
 调度查询必须通过 `dispatch_guard.py` 归一化：API 错误、查询超时和明确空结果是三个不同状态；前两者失败关闭，不能创建替代任务。每个任务先生成环境预检计划，确认项目上下文、运行时、浏览器/设备与并发预算满足后才分派，避免任务创建后才发现环境不兼容。
 

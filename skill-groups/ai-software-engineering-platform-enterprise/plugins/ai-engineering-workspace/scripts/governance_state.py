@@ -248,6 +248,10 @@ def init_project(root: Path, args: argparse.Namespace) -> dict[str, Any]:
             "max_total_active_tasks": 5,
             "max_merge_debt": 2,
         }),
+        "session_budget": existing.get("session_budget", {
+            "max_resident_slots": 4,
+            "max_pending_creates": 1,
+        }),
         "created_at": existing.get("created_at", now()),
         "updated_at": now(),
     }

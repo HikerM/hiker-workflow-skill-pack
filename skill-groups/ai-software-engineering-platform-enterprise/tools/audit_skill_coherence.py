@@ -193,7 +193,7 @@ def audit(root: Path = ROOT) -> dict[str, Any]:
                 errors.append(_finding("CONVERGENCE_GOVERNANCE_DRIFT", "long-chain-change-convergence", f"缺少治理收敛契约：{token}", convergence["path"]))
     governance = records.get("multi-agent-project-governance")
     if governance:
-        for token in ("SETUP_PENDING", "pending lease", "幂等键", "业务价值进度", "派生视图"):
+        for token in ("SETUP_PENDING", "project_id + repo root + role family", "IDLE_REUSABLE", "ARCHIVED_RUNTIME_UNVERIFIED", "业务价值进度", "派生视图"):
             if token not in governance["text"]:
                 errors.append(_finding("MULTI_AGENT_BINDING_DRIFT", "multi-agent-project-governance", f"缺少多会话防重契约：{token}", governance["path"]))
 

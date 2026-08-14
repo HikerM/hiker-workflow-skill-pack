@@ -1,6 +1,6 @@
 {
   "name": "ai-engineering-core",
-  "version": "5.11.0+codex.20260813232721",
+  "version": "5.12.0+codex.20260814061010",
   "description": "\u8f7b\u91cf\u8def\u7531\u30010\u21921\u9700\u6c42\u878d\u5408\u3001\u67b6\u6784\u51b3\u7b56\u6311\u6218\u3001\u5b58\u91cf\u6e90\u7801\u5bf9\u8d26\u3001\u9879\u76ee\u8bc6\u522b\u4e0e\u6709\u754c\u4e0a\u4e0b\u6587\u6062\u590d",
   "author": {
     "name": "AI Engineering Toolkit"

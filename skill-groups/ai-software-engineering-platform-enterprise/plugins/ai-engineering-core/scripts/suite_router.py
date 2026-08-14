@@ -273,7 +273,10 @@ def route(root: Path, request: str) -> dict:
     recovery = any(x in text for x in ("新会话恢复", "恢复上一个任务", "压缩后核对", "锁定决策和下一步"))
     long_context = any(x in text for x in ("多会话", "长会话", "超长会话", "会话超长", "超多轮", "上下文压缩", "多轮压缩", "不会丢", "越来越重", "压缩前", "checkpoint数量", "恢复回执"))
     pause = any(x in text for x in ("可中断", "暂停", "继续执行", "恢复执行", "调整方向", "插入需求"))
-    multi = any(x in text for x in ("多agent", "多 agent", "worktree", "多仓库", "大型项目", "任务拆解", "分流", "subagent", "主线程只保留决策"))
+    multi = any(x in text for x in (
+        "多agent", "多 agent", "worktree", "多仓库", "大型项目", "任务拆解", "分流", "subagent", "主线程只保留决策",
+        "总控", "派发任务", "新会话", "会话堆积", "线程没关闭", "运行时释放", "角色槽位", "会话池",
+    ))
     bootstrap = any(x in text for x in ("首次接管", "识别真实技术", "识别技术栈", "技术栈和版本", "初始化 .ai", "初始化.ai", "建立项目上下文"))
     standards = any(x in text for x in ("官方规范", "官方文档", "编码规范", "标准解析"))
     graph = any(x in text for x in ("知识图谱", "工程图谱", "依赖图", "影响图谱", "两跳", "节点分析影响"))
@@ -291,7 +294,12 @@ def route(root: Path, request: str) -> dict:
         "插件和skill", "插件名和skill名", "插件名和 skill 名",
     ))
     workspace_route = any(x in text for x in ("分流", "subagent", "哪些任务适合", "哪些必须串行", "主线程只保留决策"))
-    project_governance = multi and not (review or test or release or merge) and any(x in text for x in ("长期接管", "大型项目", "大型工程", "多agent", "多 agent"))
+    project_governance = multi and not (review or test or release or merge) and any(x in text for x in (
+        "长期接管", "大型项目", "大型工程", "多agent", "多 agent", "总控", "派发任务", "会话堆积", "线程没关闭", "运行时释放", "角色槽位", "会话池",
+    ))
+    session_runtime_governance = any(x in text for x in (
+        "会话堆积", "线程没关闭", "运行时释放", "角色槽位", "会话池",
+    )) or ("总控" in text and any(x in text for x in ("新会话", "派发任务", "worktree", "工作树")))
     design_review = review and ("设计" in text or "编码前" in text or any(x in text for x in ("p0", "p1", "p2", "bootstrap式", "可验收", "验收深度", "数据、命令、并发")))
     full_risk = review and any(x in text for x in ("暂存", "未跟踪", "feature分支", "相对main", "迁移和权限", "全部修改", "受影响设计层", "重跑设计复审", "prefab、scene", "packages变更"))
     regression = not unsafe_shortcut and any(x in text for x in ("最低回归范围", "风险报告生成", "真实scripts", "测试命令", "项目实际命令"))
@@ -365,6 +373,8 @@ def route(root: Path, request: str) -> dict:
             if existing and not signals["context_ready"]:
                 add("project-bootstrap", "先从当前仓库证据确认真实技术、版本和系统边界")
             add("architecture-decision-challenge", "把用户思路视为待验证假设，主动发现遗漏、反例和替代方案")
+        elif session_runtime_governance:
+            add("multi-agent-project-governance", "总控需要复用固定角色会话槽并自动完成任务终态运行时回收")
         elif portfolio:
             add("multi-project-portfolio-manager", "多个仓库必须保持项目身份与上下文隔离")
         elif worktree_cleanup:

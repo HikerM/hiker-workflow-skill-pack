@@ -1,6 +1,6 @@
 {
   "name": "ai-engineering-web",
-  "version": "5.11.0+codex.20260813232721",
+  "version": "5.12.0+codex.20260814061010",
   "description": "\u975e\u6a21\u677f\u5316\u6d4f\u89c8\u5668\u7aef\u8bbe\u8ba1\u7cfb\u7edf\u3001\u670d\u52a1\u7aef\u5951\u7ea6\u4e0e\u5b9e\u73b0\u3001\u6570\u636e\u5e93\u8fc1\u79fb\u548c\u5168\u6808\u8d28\u91cf\u5ba1\u6838",
   "author": {
     "name": "AI Engineering Toolkit"

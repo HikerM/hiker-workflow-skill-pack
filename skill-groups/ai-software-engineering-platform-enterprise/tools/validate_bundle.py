@@ -77,7 +77,7 @@ def main()->int:
     actual_archives={p.name for p in (ROOT/'dist').glob('*.zip')}
     if actual_archives!=expected_archives:errors.append(f"发布包目录必须只保留当前版本: 缺少{sorted(expected_archives-actual_archives)} 多余{sorted(actual_archives-expected_archives)}")
     governance_skill=(ROOT/"plugins/ai-engineering-workspace/skills/multi-agent-project-governance/SKILL.md").read_text(encoding="utf-8")
-    for required in ["辅助 Skill 时，不加载", "单轮通常读取零到一份", "最多读取两份", "禁止预读全部四份"]:
+    for required in ["辅助 Skill 时，不加载", "单轮通常读取零到一份", "最多读取两份", "禁止预读全部五份"]:
         if required not in governance_skill:errors.append(f"多智能体总控缺少懒加载约束: {required}")
     if "先读取 [角色契约]" in governance_skill:errors.append("多智能体总控退化为启动时预读全部参考")
     router_eval=evaluate_router()

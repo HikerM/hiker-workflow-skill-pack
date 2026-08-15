@@ -218,9 +218,24 @@ def audit(root: Path = ROOT) -> dict[str, Any]:
     try:
         router_path = root / "plugins" / "ai-engineering-core" / "scripts" / "suite_router.py"
         router_text = router_path.read_text(encoding="utf-8")
-        for token in ('"max_loaded_atomic_skills": 2', '"router_counts_toward_limit": False', '"deferred":'):
+        for token in (
+            '"max_loaded_atomic_skills": 2', '"router_counts_toward_limit": False', '"deferred":',
+            '"routing_authority": "chatgpt-semantic-selection"',
+            '"guard_role": "constraints-and-evidence-only"',
+        ):
             if token not in router_text:
                 errors.append(_finding("ROUTER_BOUNDED_LOADING_DRIFT", "ai-engineering-router", f"缺少路由有界加载契约：{token}", router_path))
+        for forbidden in ("ACTION_TERMS =", "classify_intent(", "explicit_bs =", "explicit_cs =", "plugin_engineering ="):
+            if forbidden in router_text:
+                errors.append(_finding("KEYWORD_ROUTING_AUTHORITY", "ai-engineering-router", f"守门器仍在按关键词替代模型选择：{forbidden}", router_path))
+        workspace_router_path = root / "plugins" / "ai-engineering-workspace" / "scripts" / "task_router.py"
+        workspace_router_text = workspace_router_path.read_text(encoding="utf-8")
+        for token in ("chatgpt-semantic-selection", "PROPOSAL_REQUIRED", "constraints-and-workflow-expansion-only"):
+            if token not in workspace_router_text:
+                errors.append(_finding("WORKSPACE_ROUTER_MODEL_AUTHORITY_DRIFT", "workspace-task-router", f"缺少模型选择与脚本守门契约：{token}", workspace_router_path))
+        for forbidden in ("explicit_bs =", "explicit_cs =", "explicit_backend =", "request_families ="):
+            if forbidden in workspace_router_text:
+                errors.append(_finding("WORKSPACE_KEYWORD_ROUTING_AUTHORITY", "workspace-task-router", f"工作区守门器仍在按关键词替代模型选择：{forbidden}", workspace_router_path))
         mapping = _router_mapping(router_path)
         expected_routable = set(records) - {"ai-engineering-router"}
         if set(mapping) != expected_routable:
@@ -228,6 +243,15 @@ def audit(root: Path = ROOT) -> dict[str, Any]:
         for name, plugin in mapping.items():
             if name in records and records[name]["plugin"] != plugin:
                 errors.append(_finding("ROUTER_PLUGIN_CONFLICT", name, f"路由映射到 {plugin}，实际属于 {records[name]['plugin']}"))
+        catalog_path = root / "plugins" / "ai-engineering-core" / "references" / "semantic-routing-catalog.md"
+        catalog_text = catalog_path.read_text(encoding="utf-8")
+        catalog_skills = set(re.findall(r"`([a-z0-9][a-z0-9-]+)`｜", catalog_text))
+        if catalog_skills != expected_routable:
+            errors.append(_finding(
+                "SEMANTIC_CATALOG_DRIFT", "ai-engineering-router",
+                f"语义目录缺少{sorted(expected_routable-catalog_skills)}，多余{sorted(catalog_skills-expected_routable)}",
+                catalog_path,
+            ))
     except (OSError, RuntimeError, SyntaxError, ValueError) as exc:
         errors.append(_finding("ROUTER_MAPPING_INVALID", "suite", str(exc)))
 

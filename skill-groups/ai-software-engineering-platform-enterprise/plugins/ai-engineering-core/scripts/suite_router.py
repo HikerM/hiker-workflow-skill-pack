@@ -3,15 +3,16 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import re
 from collections import deque
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 from source_identity import context_fresh, identify
 
 
+# Keep this literal mapping: the release audit uses it as the single coverage map.
 PLUGIN_FOR = {
     "greenfield-project-planning": "ai-engineering-core",
     "architecture-decision-challenge": "ai-engineering-core",
@@ -56,69 +57,6 @@ PLUGIN_FOR = {
     "worktree-safe-convergence": "ai-engineering-workspace",
 }
 
-PROJECT_MARKERS = ("package.json", "pyproject.toml", "requirements.txt", "Cargo.toml", "go.mod", "pom.xml", "build.gradle", "build.gradle.kts", "composer.json", "Gemfile", "CMakeLists.txt", "Packages/manifest.json")
-IGNORED_DIRS = {".git", ".ai", "node_modules", "Library", "Temp", "obj", "bin", "dist", "build", ".venv", "venv", "Pods", "DerivedData"}
-FRONTEND_TOKENS = ("vue", "react", "next.js", "next", "nuxt", "angular", "svelte", "vite", "web-node")
-BACKEND_TOKENS = ("nestjs", "express", "fastify", "koa", "@hapi/hapi", "fastapi", "django", "flask", "litestar", "sanic", "spring boot", "spring-boot", "quarkus", "micronaut", "asp.net", "microsoft.net.sdk.web", "laravel", "rails", "backend", "server")
-CLIENT_TOKENS = ("unity", "wpf", "winui", "winforms", "avalonia", "maui", "qt", "qml", "electron", "tauri", "flutter", "android", "swiftui", "uikit", "appkit", "react native", "react-native", "javafx", "swing", "lvgl")
-
-ACTION_TERMS = {
-    "development": (
-        "增强", "升级", "更新", "开发", "修复", "整改", "落地", "改造", "重构", "实现", "增加", "新增", "修改",
-        "复用已有", "按现有", "按已通过", "继续", "完成",
-    ),
-    "review": ("只读审核", "只审核", "审核", "审查", "复审", "评估", "检查", "判断", "review", "风险评估", "分析风险", "风险是什么"),
-    "testing": ("只验证", "只测试", "测试", "回归", "验证"),
-    "design": ("设计", "原型"),
-    "merge": ("合并冲突", "处理冲突", "合并", "merge", "pull request", " pr", "推送", "push"),
-    "release": ("发布前", "发布审核", "审核发布", "发布就绪", "准备发布", "能否发布", "上线", "release"),
-}
-
-
-def classify_intent(text: str, unsafe_shortcut: bool = False) -> dict:
-    """Split the request into an action, subject qualifiers and later evidence phases.
-
-    The first explicit action wins.  Nouns such as ``风险`` are not actions, and a
-    later ``验证`` in "修复并验证" is retained as a requested follow-up instead of
-    stealing the development stage.
-    """
-    action_text = text
-    for completed in ("已审核设计", "已复审设计", "已审核", "已复审", "已验证", "已测试", "审核通过", "复审通过"):
-        action_text = action_text.replace(completed, "已有结论")
-    forced = None
-    if any(term in action_text for term in ("审核发布", "发布审核", "发布就绪", "能否发布")):
-        forced = "release"
-    elif "合并" in action_text and any(term in action_text for term in ("检查", "冲突", "所有权", "能否", "是否")):
-        forced = "merge"
-    elif (
-        "风险是什么" in action_text
-        or ("分析" in action_text and "风险" in action_text)
-        or ("找出" in action_text and "判断" in action_text)
-    ):
-        forced = "review"
-    hits: list[tuple[int, int, str, str]] = []
-    priority = {"release": 0, "merge": 1, "review": 2, "testing": 3, "design": 4, "development": 5}
-    for action, terms in ACTION_TERMS.items():
-        for term in terms:
-            index = action_text.find(term)
-            if index >= 0:
-                hits.append((index, priority[action], action, term))
-    hits.sort()
-    primary = forced or (hits[0][2] if hits else "development")
-    if unsafe_shortcut and primary in {"development", "merge", "release"}:
-        primary = "unknown"
-    mentioned = []
-    for _, _, action, _ in hits:
-        if action not in mentioned:
-            mentioned.append(action)
-    follow_up = [action for action in mentioned if action != primary]
-    return {
-        "primary_action": primary,
-        "mentioned_actions": mentioned,
-        "follow_up_actions": follow_up,
-        "risk_qualifier": any(x in text for x in ("风险", "兼容", "回滚", "影响")),
-        "evidence_qualifier": any(x in text for x in ("验证", "测试", "回归", "截图", "日志", "证据")),
-    }
 PLUGIN_DISPLAY = {
     "ai-engineering-core": "01 智能工程核心",
     "ai-engineering-web": "02 浏览器端与服务端工程",
@@ -127,71 +65,152 @@ PLUGIN_DISPLAY = {
     "ai-engineering-quality": "05 质量、风险与发布",
 }
 
+PROJECT_MARKERS = (
+    "package.json", "pyproject.toml", "requirements.txt", "Cargo.toml", "go.mod",
+    "pom.xml", "build.gradle", "build.gradle.kts", "composer.json", "Gemfile",
+    "CMakeLists.txt", "Packages/manifest.json",
+)
+IGNORED_DIRS = {
+    ".git", ".ai", "node_modules", "Library", "Temp", "obj", "bin", "dist",
+    "build", ".venv", "venv", "Pods", "DerivedData",
+}
+FRONTEND_TOKENS = ("vue", "react", "next.js", "next", "nuxt", "angular", "svelte", "vite", "web-node")
+BACKEND_TOKENS = (
+    "nestjs", "express", "fastify", "koa", "@hapi/hapi", "fastapi", "django",
+    "flask", "litestar", "sanic", "spring boot", "spring-boot", "quarkus",
+    "micronaut", "asp.net", "microsoft.net.sdk.web", "laravel", "rails", "backend", "server",
+)
+CLIENT_TOKENS = (
+    "unity", "wpf", "winui", "winforms", "avalonia", "maui", "qt", "qml",
+    "electron", "tauri", "flutter", "android", "swiftui", "uikit", "appkit",
+    "react native", "react-native", "javafx", "swing", "lvgl",
+)
+
+VALID_STAGES = {"planning", "design", "development", "review", "testing", "merge", "release", "governance", "unknown"}
+VALID_ARCHITECTURES = {"bs", "cs", "backend", "hybrid", "tooling", "unknown"}
+VALID_MODES = {"greenfield", "brownfield", "existing", "unknown"}
+VALID_CONFIDENCE = {"high", "medium", "low"}
+
+DESIGN_SKILLS = {"web-ui-design", "cs-ui-design", "unity-ui-design"}
+IMPLEMENTATION_SKILLS = {
+    "web-component-implementation", "backend-component-implementation",
+    "cs-component-implementation", "unity-component-implementation",
+}
+QUALITY_REVIEW_SKILLS = {
+    "design-readiness-review", "full-change-risk-review", "interaction-conflict-governance",
+    "web-quality-review", "backend-quality-review", "cs-quality-review", "unity-quality-review",
+}
+PLANNING_SKILLS = {
+    "greenfield-project-planning", "architecture-decision-challenge",
+    "brownfield-requirement-reconciliation", "api-event-contract-design", "project-bootstrap",
+}
+WEB_SKILLS = {"web-ui-design", "web-component-implementation", "web-quality-review"}
+BACKEND_SKILLS = {
+    "backend-technology-router", "api-event-contract-design", "backend-component-implementation",
+    "database-migration-governance", "backend-quality-review",
+}
+CLIENT_SKILLS = {
+    "cs-client-router", "cs-ui-design", "cs-component-implementation", "cs-quality-review",
+    "unity-ui-design", "unity-component-implementation", "unity-quality-review",
+}
+SOURCE_CONFLICT_SAFE = {
+    "worktree-task-manager", "worktree-safe-convergence", "project-bootstrap",
+    "full-change-risk-review", "project-state-manager",
+}
+
 
 def bounded_marker_paths(root: Path, max_depth: int = 3, max_dirs: int = 160) -> list[Path]:
-    """Find only shallow project manifests; never turn routing into a repository scan."""
+    """Read only shallow manifests; never scan project source during routing."""
     identity = identify(root)
     if identity["is_git"]:
         return [Path(path) for path in identity["trusted_markers"]]
-    root = root.resolve(); found: list[Path] = []; queue = deque([(root, 0)]); visited = 0
+    root = root.resolve()
+    found: list[Path] = []
+    queue = deque([(root, 0)])
+    visited = 0
     while queue and visited < max_dirs:
-        current, depth = queue.popleft(); visited += 1
+        current, depth = queue.popleft()
+        visited += 1
         for marker in PROJECT_MARKERS:
             path = current / marker
-            if path.is_file(): found.append(path)
-        found.extend(sorted(current.glob("*.sln"))[:4]); found.extend(sorted(current.glob("*.csproj"))[:8])
-        if depth >= max_depth: continue
-        try: children = [p for p in current.iterdir() if p.is_dir() and p.name not in IGNORED_DIRS and not (p / ".git").exists()]
-        except OSError: children = []
+            if path.is_file():
+                found.append(path)
+        found.extend(sorted(current.glob("*.sln"))[:4])
+        found.extend(sorted(current.glob("*.csproj"))[:8])
+        if depth >= max_depth:
+            continue
+        try:
+            children = [
+                path for path in current.iterdir()
+                if path.is_dir() and path.name not in IGNORED_DIRS and not (path / ".git").exists()
+            ]
+        except OSError:
+            children = []
         queue.extend((child, depth + 1) for child in sorted(children)[:64])
     return list(dict.fromkeys(found))
 
 
-def project_signals(root: Path) -> dict:
+def project_signals(root: Path) -> dict[str, Any]:
+    """Return bounded, evidence-backed facts. Do not interpret the user's prose."""
     identity = identify(root)
-    context = root / ".ai" / "context" / "tech-stack.json"; sources: list[str] = []; evidence_parts: list[str] = []
+    context = root / ".ai" / "context" / "tech-stack.json"
+    sources: list[str] = []
+    evidence_parts: list[str] = []
     context_evidence = ""
     context_ready = context_fresh(context, identity.get("branch") or "", identity.get("head") or "") if identity["is_git"] else context.is_file()
     if context_ready:
         try:
             context_evidence = json.dumps(json.loads(context.read_text(encoding="utf-8")), ensure_ascii=False).lower()
-            evidence_parts.append(context_evidence); sources.append(str(context))
-        except (OSError, json.JSONDecodeError): pass
+            evidence_parts.append(context_evidence)
+            sources.append(str(context))
+        except (OSError, json.JSONDecodeError):
+            pass
     markers = bounded_marker_paths(root)
     package_dependencies: set[str] = set()
-    backend = False; cs = False; unity = False
+    backend = False
+    client = False
+    unity = False
     for marker in markers:
         sources.append(str(marker))
-        try: content = marker.read_text(encoding="utf-8", errors="ignore")[:120_000].lower()
-        except OSError: content = ""
+        try:
+            content = marker.read_text(encoding="utf-8", errors="ignore")[:120_000].lower()
+        except OSError:
+            content = ""
         evidence_parts.extend((marker.as_posix().lower(), content))
         if marker.name == "package.json":
             try:
                 package = json.loads(content)
-                package_dependencies.update(str(x).lower() for section in ("dependencies", "devDependencies", "peerDependencies") for x in (package.get(section) or {}))
-            except (TypeError, json.JSONDecodeError): pass
+                package_dependencies.update(
+                    str(name).lower()
+                    for section in ("dependencies", "devDependencies", "peerDependencies")
+                    for name in (package.get(section) or {})
+                )
+            except (TypeError, json.JSONDecodeError):
+                pass
         if marker.suffix.lower() == ".csproj":
             backend = backend or any(token in content for token in ("microsoft.net.sdk.web", "microsoft.aspnetcore", "include=\"aspnetcore\""))
-            cs = cs or any(token in content for token in ("<usewpf>true", "<usewindowsforms>true", "microsoft.windowsappsdk", "avalonia", "maui", "xamarin"))
+            client = client or any(token in content for token in ("<usewpf>true", "<usewindowsforms>true", "microsoft.windowsappsdk", "avalonia", "maui", "xamarin"))
         if marker.name.lower() in {"pyproject.toml", "requirements.txt", "go.mod", "cargo.toml", "pom.xml", "build.gradle", "build.gradle.kts", "composer.json", "gemfile"}:
             backend = backend or marker.name.lower() in {"go.mod", "cargo.toml", "composer.json", "gemfile"} or any(token in content for token in BACKEND_TOKENS)
         unity = unity or marker.as_posix().lower().endswith("packages/manifest.json") or "com.unity" in content
     evidence = " ".join(evidence_parts)
     react_native = "react-native" in package_dependencies or "react-native" in evidence or "react native" in evidence
     web_packages = {"vue", "next", "nuxt", "@angular/core", "svelte", "vite"}
-    client_packages = {
-        "electron", "electron-builder", "react-native", "@tauri-apps/api", "@tauri-apps/cli",
-        "@capacitor/core", "@ionic/react", "@ionic/vue",
-    }
-    web_from_packages = bool(package_dependencies & web_packages) or ("react" in package_dependencies and not react_native)
-    backend = backend or any(dep == token or dep.startswith(token) for dep in package_dependencies for token in ("@nestjs/", "express", "fastify", "koa", "@hapi/", "hapi", "fastapi", "django", "flask", "spring-boot", "laravel", "rails"))
-    structured_context_cs = bool(context_evidence) and any(token in context_evidence for token in CLIENT_TOKENS)
+    client_packages = {"electron", "electron-builder", "react-native", "@tauri-apps/api", "@tauri-apps/cli", "@capacitor/core", "@ionic/react", "@ionic/vue"}
+    web = bool(package_dependencies & web_packages) or ("react" in package_dependencies and not react_native)
+    backend = backend or any(
+        dependency == token or dependency.startswith(token)
+        for dependency in package_dependencies
+        for token in ("@nestjs/", "express", "fastify", "koa", "@hapi/", "hapi", "fastapi", "django", "flask", "spring-boot", "laravel", "rails")
+    ) or any(token in evidence for token in BACKEND_TOKENS)
+    structured_client = bool(context_evidence) and any(token in context_evidence for token in CLIENT_TOKENS)
+    client = client or react_native or bool(package_dependencies & client_packages) or structured_client
+    unity = unity or (bool(context_evidence) and "unity" in context_evidence)
+    architectures = [name for name, present in (("bs", web), ("cs", client), ("backend", backend)) if present]
     return {
         "existing": bool(markers or context_ready),
-        "bs": web_from_packages or any(token in evidence for token in FRONTEND_TOKENS if token != "react") and not react_native,
-        "backend": backend or any(token in evidence for token in BACKEND_TOKENS),
-        "cs": cs or react_native or bool(package_dependencies & client_packages) or structured_context_cs,
-        "unity": unity or (bool(context_evidence) and "unity" in context_evidence),
+        "architectures": architectures,
+        "unity": unity,
         "context_ready": context_ready,
         "sources": sources[:12],
         "identity": identity,
@@ -199,12 +218,8 @@ def project_signals(root: Path) -> dict:
     }
 
 
-def has_project_evidence(root: Path) -> bool:
-    return project_signals(root)["existing"]
-
-
 @lru_cache(maxsize=64)
-def locate(skill: str) -> str | None:
+def locate(skill: str) -> str:
     plugin = PLUGIN_FOR[skill]
     here = Path(__file__).resolve().parents[1]
     candidates = [
@@ -214,297 +229,288 @@ def locate(skill: str) -> str | None:
     cache = Path.home() / ".codex" / "plugins" / "cache"
     if cache.is_dir():
         candidates.extend(sorted(cache.glob(f"*/{plugin}/*/skills/{skill}/SKILL.md"), reverse=True))
-    return str(next((p.resolve() for p in candidates if p.is_file()), candidates[0].resolve()))
+    return str(next((path.resolve() for path in candidates if path.is_file()), candidates[0].resolve()))
 
 
 @lru_cache(maxsize=64)
 def skill_display(skill: str) -> str:
-    skill_file = Path(locate(skill) or "")
-    yaml_file = skill_file.parent / "agents" / "openai.yaml"
+    yaml_file = Path(locate(skill)).parent / "agents" / "openai.yaml"
     if yaml_file.is_file():
         try:
             match = re.search(r'^\s*display_name:\s*["\']?([^"\'\r\n]+)', yaml_file.read_text(encoding="utf-8"), re.M)
-            if match: return match.group(1).strip()
-        except OSError: pass
+            if match:
+                return match.group(1).strip()
+        except OSError:
+            pass
     return "未命名工程能力"
 
 
-def route(root: Path, request: str) -> dict:
-    root = root.resolve(); text = request.lower(); signals = project_signals(root); existing = signals["existing"]
-    plugin_engineering = any(x in text for x in ("插件", "skill", "marketplace", "codex扩展", "chatgpt桌面", "桌面端插件")) and any(
-        x in text for x in ("增强", "升级", "更新", "开发", "修改", "修复", "审核", "验证", "安装", "重新安装", "推送", "发布", "检查", "诊断", "性能", "变慢", "慢", "走偏", "遗漏", "卡")
-    )
-    explicit_greenfield = any(x in text for x in ("从0", "从零", "空项目", "空目录", "新项目", "greenfield", "从头开发", "初始化一个项目"))
-    create_intent = any(x in text for x in ("开发一个", "创建一个", "新建一个", "搭建一个", "做一个系统", "做一套"))
-    greenfield = (explicit_greenfield or create_intent) and not existing
-    brownfield_words = any(x in text for x in (
-        "已有一部分", "部分源码", "已有源码", "现有源码", "半成品", "遗留系统",
-        "二次开发", "接着开发", "继续开发", "基于现有", "接手项目", "存量项目",
-        "在现有工程", "增量需求",
-    ))
-    brownfield_intent = brownfield_words
-    explicit_bs = any(x in text for x in ("b/s", "bs架构", "web", "网页", "前端", "浏览器", "后台页面", "saas", "网站", "官网", "响应式", "运营工作台", "vue", "react", "angular", "svelte"))
-    explicit_unity = any(x in text for x in ("unity", "ugui", "prefab", "missing script", "guid"))
-    explicit_cs = not plugin_engineering and (explicit_unity or any(x in text for x in ("c/s", "cs架构", "桌面", "客户端", "wpf", "winui", "winforms", "avalonia", "maui", "qt", "qml", "electron", "tauri", "flutter", "android", "ios", "macos", "swiftui", "react native", "react-native", "javafx", "swing", "lvgl", "嵌入式hmi")))
-    explicit_backend = any(x in text for x in ("后端", "服务端", "服务器", "nodets", "node.ts", "nestjs", "express", "fastify", "koa", "hapi", "fastapi", "django", "flask", "spring", "asp.net", "laravel", "rails", "数据库", "migration", "service.ts", "api接口", "接口契约"))
-    explicit_architecture = explicit_bs or explicit_cs or explicit_backend
-    bs = explicit_bs or (not explicit_architecture and signals["bs"])
-    cs = explicit_cs or (not explicit_architecture and signals["cs"])
-    backend = explicit_backend or (not explicit_architecture and signals["backend"])
-    unity = explicit_unity or (cs and signals["unity"])
-    unsafe_shortcut = any(x in text for x in ("假装", "不看证据直接", "直接宣布", "强制合并并删除", "升级到最新大版本", "迁移成", "迁移到", "解释什么是", "解释一下", "架构概念"))
-    intent = classify_intent(text, unsafe_shortcut)
-    primary_action = intent["primary_action"]
-    mentioned_actions = set(intent["mentioned_actions"])
-    implementation = primary_action == "development"
-    design = primary_action == "design" or (not mentioned_actions and any(x in text for x in ("ui", "视觉", "交互")))
-    architecture_decision = any(x in text for x in (
-        "功能架构", "系统架构", "技术架构", "业务架构", "数据架构", "部署架构",
-        "架构设计", "架构方案", "模块架构", "模块拆分", "服务拆分",
-    )) or ("架构" in text and any(x in text for x in ("思路", "方案", "设计", "评估", "补全", "遗漏", "问题", "合理", "怎么拆")))
-    review = primary_action == "review"
-    test = primary_action == "testing"
-    release = primary_action == "release"
-    merge = primary_action == "merge"
-    mentions_review = "review" in mentioned_actions
-    mentions_test = "testing" in mentioned_actions
-    mentions_release = "release" in mentioned_actions
-    mentions_merge = "merge" in mentioned_actions
-    recovery = any(x in text for x in ("新会话恢复", "恢复上一个任务", "压缩后核对", "锁定决策和下一步"))
-    long_context = any(x in text for x in ("多会话", "长会话", "超长会话", "会话超长", "超多轮", "上下文压缩", "多轮压缩", "不会丢", "越来越重", "压缩前", "checkpoint数量", "恢复回执"))
-    pause = any(x in text for x in ("可中断", "暂停", "继续执行", "恢复执行", "调整方向", "插入需求"))
-    multi = any(x in text for x in (
-        "多agent", "多 agent", "worktree", "多仓库", "大型项目", "任务拆解", "分流", "subagent", "主线程只保留决策",
-        "总控", "派发任务", "新会话", "会话堆积", "线程没关闭", "运行时释放", "角色槽位", "会话池",
-    ))
-    bootstrap = any(x in text for x in ("首次接管", "识别真实技术", "识别技术栈", "技术栈和版本", "初始化 .ai", "初始化.ai", "建立项目上下文"))
-    standards = any(x in text for x in ("官方规范", "官方文档", "编码规范", "标准解析"))
-    graph = any(x in text for x in ("知识图谱", "工程图谱", "依赖图", "影响图谱", "两跳", "节点分析影响"))
-    worktree = any(x in text for x in ("worktree", "工作树", "多工作目录", "工作目录"))
-    worktree_cleanup = worktree and any(x in text for x in ("堆积", "孤儿", "历史", "清理", "关闭", "收敛", "整理", "接管", "过期"))
-    file_lock = any(x in text for x in ("文件锁", "锁定文件", "锁冲突", "prefab锁", "migration锁"))
-    task_state = any(x in text for x in ("项目状态", "project_state", "current_context", "状态文档"))
-    lifecycle = any(x in text for x in ("任务生命周期", "task id", "task状态", "任务状态流转")) or bool(re.search(r"创建\s*[A-Z]{1,8}-\d{3,}", request, re.I))
-    closure = any(x in text for x in ("验收闭环", "feature closed loop", "功能闭环", "截图/日志证明")) or ("闭环" in text and all(x in text for x in ("测试", "日志", "文档", "状态")))
-    portfolio = any(x in text for x in ("多项目", "多个仓库", "项目组合", "仓库隔离")) or bool(re.search(r"(?:两|三|四|五|六|七|八|九|十|\d+)个\s*(?:git)?仓库", text))
-    receipt = any(x in text for x in (
-        "插件应用回执", "用了什么插件", "用了哪些插件", "实际用了哪些插件", "使用了什么插件",
-        "使用到的插件", "显示插件名", "插件名称", "应用了什么skill", "应用了什么 skill",
-        "使用到的skill", "使用到的 skill", "显示skill名", "显示 skill 名", "skill名称", "skill 名称",
-        "插件和skill", "插件名和skill名", "插件名和 skill 名",
-    ))
-    workspace_route = any(x in text for x in ("分流", "subagent", "哪些任务适合", "哪些必须串行", "主线程只保留决策"))
-    project_governance = multi and not (review or test or release or merge) and any(x in text for x in (
-        "长期接管", "大型项目", "大型工程", "多agent", "多 agent", "总控", "派发任务", "会话堆积", "线程没关闭", "运行时释放", "角色槽位", "会话池",
-    ))
-    session_runtime_governance = any(x in text for x in (
-        "会话堆积", "线程没关闭", "运行时释放", "角色槽位", "会话池",
-    )) or ("总控" in text and any(x in text for x in ("新会话", "派发任务", "worktree", "工作树")))
-    design_review = review and ("设计" in text or "编码前" in text or any(x in text for x in ("p0", "p1", "p2", "bootstrap式", "可验收", "验收深度", "数据、命令、并发")))
-    full_risk = review and any(x in text for x in ("暂存", "未跟踪", "feature分支", "相对main", "迁移和权限", "全部修改", "受影响设计层", "重跑设计复审", "prefab、scene", "packages变更"))
-    regression = not unsafe_shortcut and any(x in text for x in ("最低回归范围", "风险报告生成", "真实scripts", "测试命令", "项目实际命令"))
-    visual_review = review and "编码前" not in text and any(x in text for x in ("视觉回归", "硬编码样式", "bootstrap风格", "指标卡模板", "所有区域都做成卡片", "单调等权", "微交互"))
-    interaction_conflict = any(x in text for x in (
-        "交互冲突", "状态冲突", "隐藏交互", "隐藏状态", "交互状态机", "浮层冲突",
-        "下拉冲突", "下拉框冲突", "弹窗冲突", "抽屉冲突", "快捷键冲突",
-        "请求乱序", "重复提交", "焦点冲突", "菜单冲突",
-    ))
-    long_chain = not unsafe_shortcut and (
-        any(x in text for x in (
-            "复杂链路", "长链路", "反复修复", "多次修改", "多轮修复", "多次失败",
-            "越来越大", "越来越乱", "内部膨胀", "新旧代码", "多份实现", "旧口子",
-            "真实执行", "付费执行", "计费执行", "真实计费", "生产回滚", "回滚后", "主线不一致",
-            "部署版本不一致", "结论作废", "验收被推翻", "方向走偏", "一直不行",
-        ))
-        or (implementation and mentions_test and (mentions_release or mentions_merge))
-        or (multi and implementation and mentions_test)
-    )
-    unity_review = review and any(x in text for x in ("missing script", "guid", "arm64", "prefab", "scene", "packages"))
-    cs_review = review and any(x in text for x in ("ipc", "生命周期", "api兼容", "打包证据", "swiftui客户端", "electron客户端"))
-    backend_contract = backend and any(x in text for x in ("api契约", "接口契约", "事件契约", "openapi", "protobuf", "graphql", "错误模型", "幂等"))
-    database_change = backend and (
-        any(x in text for x in ("数据库迁移", "migration", "schema变更", "表结构", "回滚脚本"))
-        or ("迁移" in text and any(x in text for x in ("postgresql", "postgres", "mysql", "mariadb", "sqlite", "sql server", "oracle", "数据库")))
-    )
-    selected: list[tuple[str, str]] = []
-    deferred: list[tuple[str, str]] = []
-
-    def add(skill: str, reason: str) -> None:
-        known = {x[0] for x in selected} | {x[0] for x in deferred}
-        if skill in known:
-            return
-        if len(selected) < 2:
-            selected.append((skill, reason))
-        else:
-            deferred.append((skill, reason))
-
-    if plugin_engineering:
-        mode = "existing" if (root / ".git").exists() else "unknown"
-        stage = "review" if review else "testing" if test else "release" if release else "development"
-        add("full-change-risk-review", "插件增强结束前需要审核完整变更，并核对五个插件全部Skill的一致性")
-        if merge or mentions_merge:
-            add("change-ownership-merge", "推送前需要核对分支、提交范围与质量证据")
-    elif greenfield:
-        add("greenfield-project-planning", "空项目需要先融合自定义需求并锁定关键技术决策")
-        if architecture_decision:
-            add("architecture-decision-challenge", "用户架构思路需要独立反证、补全遗漏并比较真正不同的方案")
-        mode, stage = "greenfield", "planning"
-    elif brownfield_intent:
-        mode, stage = "brownfield", "planning"
-        add("project-bootstrap", "先从现有工程证据识别真实技术、版本和项目边界")
-        add("brownfield-requirement-reconciliation", "建立现有能力基线，并把自定义需求对账为新增、修改、替换或移除")
-    else:
-        mode = "existing" if existing else "unknown"
-        stage = "release" if release else "merge" if merge else "review" if review else "testing" if test else "design" if design else "development"
-        if signals["source_conflicts"]:
-            stage = "governance"
-            add("worktree-task-manager", "检测到嵌套工作目录，必须先确认唯一源码身份")
-        elif bootstrap:
-            add("project-bootstrap", "需要从工程证据识别真实技术与版本")
-        elif standards:
-            add("official-standards-resolver", "需要按已识别的真实版本解析官方规范")
-        elif recovery:
-            add("context-recovery", "新会话或压缩后必须从正式状态恢复并核对锁定决定")
-        elif long_context:
-            add("bounded-context-memory", "长期多会话只注入有界工作集")
-        elif pause and not worktree:
-            add("interruptible-task-control", "控制指令必须先保存检查点")
-        elif architecture_decision:
-            if existing and not signals["context_ready"]:
-                add("project-bootstrap", "先从当前仓库证据确认真实技术、版本和系统边界")
-            add("architecture-decision-challenge", "把用户思路视为待验证假设，主动发现遗漏、反例和替代方案")
-        elif session_runtime_governance:
-            add("multi-agent-project-governance", "总控需要复用固定角色会话槽并自动完成任务终态运行时回收")
-        elif portfolio:
-            add("multi-project-portfolio-manager", "多个仓库必须保持项目身份与上下文隔离")
-        elif worktree_cleanup:
-            add("worktree-safe-convergence", "历史或堆积工作目录需要只读接管、证据分类和两阶段安全收敛")
-        elif worktree:
-            add("worktree-task-manager", "并行写任务需要受治理的独立工作目录")
-        elif file_lock:
-            add("file-lock-manager", "高冲突文件需要显式互斥和锁验证")
-        elif long_chain:
-            add("long-chain-change-convergence", "复杂任务需要压制范围膨胀、重复失败、实现路径分叉和旧结论沿用")
-            if sum(bool(x) for x in (bs, cs, backend)) > 1 or multi:
-                add("workspace-task-router", "跨模块或跨仓库链路需要先拆分所有权、依赖和串并行边界")
-            elif release or mentions_release:
-                add("release-readiness-review", "真实发布前需要核对当前证据、部署版本与回滚状态")
-            elif test or mentions_test:
-                add("regression-test-planner", "按当前策略和验收修订计算最小但充分的回归范围")
-            elif backend:
-                add("backend-component-implementation", "在真实服务端技术栈中执行当前最小改动")
-            elif cs:
-                add("cs-component-implementation", "在真实客户端技术栈中执行当前最小改动")
-            elif bs:
-                add("web-component-implementation", "在真实浏览器端技术栈中执行当前最小改动")
-        elif task_state:
-            add("project-state-manager", "需要维护有界项目状态与当前上下文")
-        elif lifecycle:
-            add("task-lifecycle-manager", "需要验证任务状态、角色和证据流转")
-        elif closure:
-            add("feature-acceptance-closure", "需要执行功能、测试、证据、文档和状态闭环")
-        elif graph:
-            add("knowledge-graph-maintenance", "大型工程需要增量关系图谱与影响查询")
-        elif interaction_conflict:
-            add("interaction-conflict-governance", "当前任务需要按模块检查隐藏状态、浮层、焦点、并发和交互冲突")
-        elif project_governance:
-            add("multi-agent-project-governance", "长期大型工程需要项目状态、任务、角色、Git与验收治理")
-            add("workspace-task-router", "跨技术栈工作需要拆成独立且可合并的执行通道")
-        elif workspace_route:
-            add("workspace-task-router", "需要在主会话、子智能体和工作区之间进行有边界的任务分流")
-        elif full_risk:
-            add("full-change-risk-review", "需要审核完整变更集及其设计和公共能力影响")
-        elif visual_review:
-            add("web-quality-review", "需要只读审核Web视觉、组件复用和反模板质量")
-        elif design_review:
-            add("design-readiness-review", "编码前设计、视觉与契约需要独立就绪复审")
-        elif regression:
-            add("regression-test-planner", "需要从真实变更风险与项目脚本计算最低回归范围")
-        elif release and not unsafe_shortcut:
-            add("release-readiness-review", "发布前需要独立门禁证据")
-        elif merge and not unsafe_shortcut:
-            add("change-ownership-merge", "合并前需要所有权、冲突与证据检查")
-        elif test and not review and not unsafe_shortcut:
-            add("regression-test-planner", "按变更风险生成最低必要回归范围")
-        elif review and sum(bool(x) for x in (bs, cs, backend)) > 1:
-            add("workspace-task-router", "跨前后端审核必须先拆分边界、证据和独立质量通道")
-        elif review:
-            if unity_review or unity: add("unity-quality-review", "当前请求是游戏引擎专项只读质量审核")
-            elif cs_review or cs: add("cs-quality-review", "当前请求是客户端专项只读质量审核")
-            elif bs and not backend: add("web-quality-review", "当前请求是浏览器端只读质量审核")
-            elif backend: add("backend-quality-review", "当前请求是服务端、契约与数据变更的独立审核")
-            elif not unsafe_shortcut: add("full-change-risk-review", "当前请求是只读质量审核")
-        elif sum(bool(x) for x in (bs, cs, backend)) > 1 and not unsafe_shortcut:
-            add("workspace-task-router", "跨前后端变更必须先拆分所有权、依赖和可合并执行通道")
-        elif cs and not unsafe_shortcut:
-            add("cs-client-router", "先识别C/S客户端语言、框架、SDK和版本证据")
-            add("unity-ui-design" if unity and design else "unity-component-implementation" if unity else "cs-ui-design" if design else "cs-component-implementation", "按已识别客户端技术处理当前阶段")
-        elif bs and not unsafe_shortcut:
-            add("web-ui-design" if design else "web-component-implementation", "按现有Web技术和设计系统处理当前阶段")
-        elif backend:
-            if not signals["context_ready"]: add("backend-technology-router", "后端任务先识别真实语言、框架、运行时和版本证据")
-            if database_change: add("database-migration-governance", "数据库变化需要迁移、兼容和回滚治理")
-            elif backend_contract: add("api-event-contract-design", "公共API或事件需要版本化契约和消费者兼容设计")
-            else: add("backend-component-implementation", "在现有服务端技术栈内实现并验证当前功能")
-        elif multi:
-            add("workspace-task-router", "任务跨模块或需要工作区编排")
-    if recovery:
-        add("context-recovery", "新会话或压缩后必须从正式状态恢复并核对锁定决定")
-    elif long_context:
-        add("bounded-context-memory", "长期多会话只注入有界工作集")
-    elif pause:
-        add("interruptible-task-control", "控制指令必须先保存检查点")
-    if multi and not interaction_conflict:
-        add("multi-agent-project-governance", "大型工程需要任务、Git与Agent治理")
-    if receipt and not selected:
-        add("plugin-application-receipt", "用户只要求展示本轮实际应用能力")
-
-    kinds = sum(bool(x) for x in (bs, cs, backend))
-    architecture = "tooling" if plugin_engineering else "hybrid" if kinds > 1 else "cs" if cs else "bs" if bs else "backend" if backend else "unknown"
-    ambiguous_hybrid = kinds > 1 and not explicit_architecture
-    confidence = "low" if not selected else "medium" if ambiguous_hybrid or (kinds > 1 and not plugin_engineering) else "high"
-    questions = []
-    if not selected: questions.append("当前请求未命中软件工程执行阶段；不自动加载原子Skill")
-    elif signals["source_conflicts"]: questions.append("当前仓库包含嵌套工作目录；清点并移出规范仓库后再执行源码修改")
-    elif ambiguous_hybrid: questions.append("工程包含多个技术通道；执行前需在任务契约中确认本次前端、客户端和服务端范围")
-    route_basis = json.dumps({"stage": stage, "primary_action": primary_action, "active": [x[0] for x in selected], "deferred": [x[0] for x in deferred]}, ensure_ascii=False, sort_keys=True)
+def inspect_project(root: Path) -> dict[str, Any]:
+    root = root.resolve()
+    signals = project_signals(root)
+    identity = signals["identity"]
     return {
-        "schema_version": "1.0.0",
-        "project_mode": mode,
-        "architecture": architecture,
-        "stage": stage,
-        "selected": [{"skill": skill_display(s), "plugin": PLUGIN_DISPLAY[PLUGIN_FOR[s]], "reason": reason} for s, reason in selected],
-        "deferred": [{"skill": skill_display(s), "plugin": PLUGIN_DISPLAY[PLUGIN_FOR[s]], "reason": reason} for s, reason in deferred],
-        "load": [locate(s) for s, _ in selected],
-        "max_loaded_atomic_skills": 2,
-        "router_counts_toward_limit": False,
-        "intent": intent,
-        "phase_transition_required": bool(intent["follow_up_actions"]),
-        "receipt_source": "skill-loader-telemetry",
-        "route_fingerprint": hashlib.sha256(route_basis.encode("utf-8")).hexdigest()[:16],
-        "next_gate": "完成当前阶段并重新路由待执行能力" if deferred else None,
-        "confidence": confidence,
-        "project_evidence": signals["sources"],
-        "source_identity": {
-            "repo_root": signals["identity"].get("repo_root"),
-            "worktree_root": signals["identity"].get("worktree_root"),
-            "branch": signals["identity"].get("branch"),
-            "head": signals["identity"].get("head"),
-            "trusted_manifest_count": len(signals["identity"].get("trusted_markers", [])),
-            "nested_worktree_count": len(signals["identity"].get("nested_worktrees", [])),
+        "schema_version": "2.0.0",
+        "routing_authority": "chatgpt-semantic-selection",
+        "guard_role": "constraints-and-evidence-only",
+        "project_facts": {
+            "mode_hint": "existing" if signals["existing"] else "unknown",
+            "architectures": signals["architectures"],
+            "unity": signals["unity"],
+            "context_ready": signals["context_ready"],
+            "source_conflicts": signals["source_conflicts"],
+            "sources": signals["sources"],
+            "repo_root": identity.get("repo_root"),
+            "worktree_root": identity.get("worktree_root"),
+            "branch": identity.get("branch"),
+            "head": identity.get("head"),
+            "trusted_manifest_count": len(identity.get("trusted_markers", [])),
+            "nested_worktree_count": len(identity.get("nested_worktrees", [])),
         },
-        "receipt_required": bool(selected),
-        "questions": questions,
+        "proposal_contract": {
+            "required": ["project_mode", "architecture", "stage", "candidates", "current_action"],
+            "candidate_limit": 2,
+            "deferred_limit": 8,
+            "architectures": sorted(VALID_ARCHITECTURES),
+            "stages": sorted(VALID_STAGES),
+        },
+        "catalog": str((Path(__file__).resolve().parents[1] / "references" / "semantic-routing-catalog.md").resolve()),
     }
 
 
+def _bounded_text_list(raw: Any, limit: int = 8, max_chars: int = 160) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    return [str(item).strip()[:max_chars] for item in raw[:limit] if str(item).strip()]
+
+
+def _candidate_items(raw: Any) -> list[dict[str, str]]:
+    if not isinstance(raw, list):
+        return []
+    result = []
+    for item in raw:
+        if isinstance(item, str):
+            result.append({"skill": item.strip(), "reason": "ChatGPT 根据当前目标与工程证据选择"})
+        elif isinstance(item, dict):
+            result.append({
+                "skill": str(item.get("skill") or "").strip(),
+                "reason": str(item.get("reason") or "ChatGPT 根据当前目标与工程证据选择").strip()[:240],
+            })
+    return [item for item in result if item["skill"]]
+
+
+def _validate_stage(skill: str, stage: str) -> str | None:
+    if skill in DESIGN_SKILLS and stage != "design":
+        return f"{skill} 只能在 design 阶段激活"
+    if skill in IMPLEMENTATION_SKILLS and stage != "development":
+        return f"{skill} 只能在 development 阶段激活"
+    if skill in PLANNING_SKILLS and stage not in {"planning", "design", "review"}:
+        return f"{skill} 与 {stage} 阶段不兼容"
+    if skill in QUALITY_REVIEW_SKILLS and stage not in {"review", "testing", "release"}:
+        return f"{skill} 属于独立审核能力，不能替代当前 {stage} 阶段"
+    if skill == "regression-test-planner" and stage not in {"testing", "review", "release"}:
+        return "regression-test-planner 只能用于测试或审核阶段"
+    if skill == "release-readiness-review" and stage != "release":
+        return "release-readiness-review 只能用于 release 阶段"
+    if skill == "change-ownership-merge" and stage != "merge":
+        return "change-ownership-merge 只能用于 merge 阶段"
+    return None
+
+
+def _validate_architecture(skill: str, architectures: set[str]) -> str | None:
+    if not architectures:
+        return None
+    if skill in WEB_SKILLS and "bs" not in architectures:
+        return f"{skill} 与项目清单中的架构证据冲突"
+    if skill in BACKEND_SKILLS and "backend" not in architectures:
+        return f"{skill} 与项目清单中的服务端证据冲突"
+    if skill in CLIENT_SKILLS and "cs" not in architectures:
+        return f"{skill} 与项目清单中的客户端证据冲突"
+    return None
+
+
+def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str, Any]:
+    """Validate a ChatGPT proposal. Never infer a Skill from request keywords."""
+    root = root.resolve()
+    inspection = inspect_project(root)
+    signals = project_signals(root)
+    if not isinstance(proposal, dict):
+        request_hash = hashlib.sha256(str(proposal or "").encode("utf-8")).hexdigest()[:16] if proposal else None
+        return {
+            **inspection,
+            "guard_decision": "PROPOSAL_REQUIRED",
+            "accepted": False,
+            "reselect_required": True,
+            "selected": [],
+            "deferred": [],
+            "load": [],
+            "max_loaded_atomic_skills": 2,
+            "router_counts_toward_limit": False,
+            "receipt_required": False,
+            "request_fingerprint": request_hash,
+            "diagnostics": [{"code": "MODEL_PROPOSAL_REQUIRED", "message": "由 ChatGPT 先做语义选择，再提交候选给守门器"}],
+        }
+
+    stage = str(proposal.get("stage") or "unknown").strip().lower()
+    architecture = str(proposal.get("architecture") or "unknown").strip().lower()
+    project_mode = str(proposal.get("project_mode") or ("existing" if signals["existing"] else "unknown")).strip().lower()
+    confidence = str(proposal.get("confidence") or "medium").strip().lower()
+    current_action = str(proposal.get("current_action") or "").strip()[:240]
+    candidates = _candidate_items(proposal.get("candidates"))
+    deferred = _candidate_items(proposal.get("deferred"))[:8]
+    diagnostics: list[dict[str, str]] = []
+
+    def error(code: str, message: str) -> None:
+        diagnostics.append({"code": code, "message": message})
+
+    if stage not in VALID_STAGES:
+        error("INVALID_STAGE", f"未知阶段：{stage}")
+    if architecture not in VALID_ARCHITECTURES:
+        error("INVALID_ARCHITECTURE", f"未知架构：{architecture}")
+    if project_mode not in VALID_MODES:
+        error("INVALID_PROJECT_MODE", f"未知项目模式：{project_mode}")
+    if confidence not in VALID_CONFIDENCE:
+        error("INVALID_CONFIDENCE", f"未知置信度：{confidence}")
+    if not current_action:
+        error("MISSING_CURRENT_ACTION", "必须说明当前动作，不能用完整生命周期代替当前阶段")
+    if not candidates:
+        error("EMPTY_CANDIDATES", "ChatGPT 未选择当前阶段的原子 Skill")
+    if len(candidates) > 2:
+        error("ATOMIC_SKILL_LIMIT", "当前阶段最多激活两个原子 Skill")
+
+    all_ids = [item["skill"] for item in candidates + deferred]
+    if len(all_ids) != len(set(all_ids)):
+        error("DUPLICATE_SKILL", "活跃与待执行队列存在重复 Skill")
+    for skill in all_ids:
+        if skill not in PLUGIN_FOR:
+            error("UNKNOWN_SKILL", f"候选 Skill 不在已发布目录中：{skill}")
+
+    fact_architectures = set(signals["architectures"])
+    if fact_architectures and architecture not in {"unknown", "tooling"}:
+        if architecture == "hybrid" and len(fact_architectures) < 2:
+            error("ARCHITECTURE_CONFLICT", f"项目证据仅支持 {sorted(fact_architectures)}，不支持 hybrid")
+        elif architecture != "hybrid" and architecture not in fact_architectures:
+            error("ARCHITECTURE_CONFLICT", f"模型提出 {architecture}，项目证据为 {sorted(fact_architectures)}")
+
+    for item in candidates:
+        skill = item["skill"]
+        if skill not in PLUGIN_FOR:
+            continue
+        stage_problem = _validate_stage(skill, stage)
+        if stage_problem:
+            error("STAGE_SKILL_CONFLICT", stage_problem)
+        architecture_problem = _validate_architecture(skill, fact_architectures)
+        if architecture_problem:
+            error("SKILL_PROJECT_EVIDENCE_CONFLICT", architecture_problem)
+        if signals["source_conflicts"] and skill not in SOURCE_CONFLICT_SAFE:
+            error("SOURCE_IDENTITY_CONFLICT", "检测到嵌套工作目录；只能先选择源码身份或工作目录收敛能力")
+
+    accepted = not diagnostics
+    selected_output = [
+        {
+            "id": item["skill"],
+            "skill": skill_display(item["skill"]),
+            "plugin": PLUGIN_DISPLAY[PLUGIN_FOR[item["skill"]]],
+            "reason": item["reason"],
+        }
+        for item in candidates if accepted
+    ]
+    deferred_output = [
+        {
+            "id": item["skill"],
+            "skill": skill_display(item["skill"]),
+            "plugin": PLUGIN_DISPLAY[PLUGIN_FOR[item["skill"]]],
+            "reason": item["reason"],
+        }
+        for item in deferred if item["skill"] in PLUGIN_FOR
+    ] if accepted else []
+    basis = {
+        "stage": stage,
+        "architecture": architecture,
+        "active": [item["skill"] for item in candidates],
+        "deferred": [item["skill"] for item in deferred],
+        "head": signals["identity"].get("head"),
+    }
+    return {
+        "schema_version": "2.0.0",
+        "routing_authority": "chatgpt-semantic-selection",
+        "guard_role": "constraints-and-evidence-only",
+        "guard_decision": "ACCEPT" if accepted else "REJECT",
+        "accepted": accepted,
+        "reselect_required": not accepted,
+        "project_mode": project_mode,
+        "architecture": architecture,
+        "stage": stage,
+        "current_action": current_action,
+        "selected": selected_output,
+        "deferred": deferred_output,
+        "load": [locate(item["skill"]) for item in candidates] if accepted else [],
+        "max_loaded_atomic_skills": 2,
+        "router_counts_toward_limit": False,
+        "intent": {
+            "negated_terms": _bounded_text_list(proposal.get("negated_terms")),
+            "future_terms": _bounded_text_list(proposal.get("future_terms")),
+            "follow_up_actions": _bounded_text_list(proposal.get("follow_up_actions")),
+        },
+        "phase_transition_required": bool(deferred or proposal.get("future_terms") or proposal.get("follow_up_actions")),
+        "receipt_source": "skill-loader-telemetry",
+        "route_fingerprint": hashlib.sha256(json.dumps(basis, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:16],
+        "next_gate": "完成当前阶段并由 ChatGPT 重新语义选择" if deferred else None,
+        "confidence": confidence,
+        "project_evidence": signals["sources"],
+        "source_identity": inspection["project_facts"],
+        "receipt_required": accepted,
+        "diagnostics": diagnostics,
+    }
+
+
+def _load_proposal(args: argparse.Namespace) -> dict[str, Any] | None:
+    if args.proposal_file:
+        return json.loads(Path(args.proposal_file).read_text(encoding="utf-8"))
+    if args.proposal_json:
+        return json.loads(args.proposal_json)
+    if args.candidate:
+        return {
+            "project_mode": args.project_mode,
+            "architecture": args.architecture,
+            "stage": args.stage,
+            "current_action": args.current_action,
+            "confidence": args.confidence,
+            "candidates": args.candidate,
+            "deferred": args.deferred_skill,
+            "negated_terms": args.negated_term,
+            "future_terms": args.future_term,
+            "follow_up_actions": args.follow_up_action,
+        }
+    return None
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="校验 ChatGPT 的原子 Skill 语义选择；不按关键词代替模型选 Skill")
     parser.add_argument("--root", default=".")
-    parser.add_argument("--request", required=True)
+    parser.add_argument("--inspect", action="store_true")
+    parser.add_argument("--proposal-file")
+    parser.add_argument("--proposal-json")
+    parser.add_argument("--request", help="兼容旧调用；仅生成指纹，不参与 Skill 选择")
+    parser.add_argument("--project-mode", default="unknown")
+    parser.add_argument("--architecture", default="unknown")
+    parser.add_argument("--stage", default="unknown")
+    parser.add_argument("--current-action", default="")
+    parser.add_argument("--confidence", default="medium")
+    parser.add_argument("--candidate", action="append", default=[])
+    parser.add_argument("--deferred-skill", action="append", default=[])
+    parser.add_argument("--negated-term", action="append", default=[])
+    parser.add_argument("--future-term", action="append", default=[])
+    parser.add_argument("--follow-up-action", action="append", default=[])
     args = parser.parse_args()
-    print(json.dumps(route(Path(args.root).resolve(), args.request), ensure_ascii=False, indent=2))
-    return 0
+    root = Path(args.root).resolve()
+    if args.inspect:
+        result = inspect_project(root)
+    else:
+        proposal = _load_proposal(args)
+        result = route(root, proposal if proposal is not None else args.request)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0 if result.get("guard_decision") != "REJECT" else 2
 
 
 if __name__ == "__main__":

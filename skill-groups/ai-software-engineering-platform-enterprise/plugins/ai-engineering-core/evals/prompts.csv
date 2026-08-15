@@ -37,3 +37,7 @@ core-35,false,architecture-decision-challenge,"按已经审核通过的架构修
 core-36,false,architecture-decision-challenge,"解释一下B/S架构是什么"
 core-37,true,plugin-application-receipt,"会话最开始显示当前使用到的插件名和 Skill 名"
 core-38,true,bounded-context-memory,"我会在一个会话里超长处理并经历超多轮上下文压缩，不能丢内容也不能越来越慢"
+core-39,false,cs-client-router,"这不是C/S项目，禁止Android客户端，只修改现有Web页面"
+core-40,false,worktree-task-manager,"不要创建Worktree，只在当前工作目录做只读分析"
+core-41,false,change-ownership-merge,"暂时不要merge和push，先解释当前方案"
+core-42,false,cs-component-implementation,"过去曾被错误识别成桌面客户端，这次不要再按桌面端处理"

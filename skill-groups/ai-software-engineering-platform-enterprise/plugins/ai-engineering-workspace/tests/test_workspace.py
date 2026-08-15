@@ -60,7 +60,7 @@ class WorkspaceTests(unittest.TestCase):
         transition(root, ns(task_id=task_id, to="Development", agent_role="Developer Agent", commit_id=None))
 
     def test_router_forces_frontend_and_backend_for_bs_and_cs(self):
-        data = route("设计 B/S 管理端和 C/S Unity 客户端，共享 NodeTS 后端")
+        data = route("设计 B/S 管理端和 C/S Unity 客户端，共享 NodeTS 后端", proposal={"architecture":"hybrid", "client_families":["unity"]})
         names = {item["lane"] for item in data["lanes"]}
         self.assertEqual("hybrid", data["architecture"])
         self.assertTrue({"bs-frontend", "cs-client", "backend-service", "contract-data", "review", "testing", "documentation", "merge"}.issubset(names))
@@ -69,9 +69,21 @@ class WorkspaceTests(unittest.TestCase):
     def test_router_recognizes_general_cs_families_and_keeps_backend_lane(self):
         for prompt, expected in [("实现Qt QML客户端", "qt"), ("开发WPF桌面程序", "dotnet-desktop"), ("Flutter移动端", "flutter"), ("Tauri客户端", "electron-tauri")]:
             with self.subTest(prompt=prompt):
-                data=route(prompt); names={item["lane"] for item in data["lanes"]}
+                data=route(prompt, proposal={"architecture":"cs", "client_families":[expected]}); names={item["lane"] for item in data["lanes"]}
                 self.assertEqual("cs",data["architecture"]);self.assertIn(expected,data["client_families"])
                 self.assertTrue({"cs-client","backend-service","contract-data"}.issubset(names))
+
+    def test_router_requires_model_proposal_and_does_not_classify_keywords(self):
+        rejected = route("实现Qt QML客户端和NodeTS服务端")
+        self.assertEqual("REJECTED", rejected["status"])
+        self.assertEqual([], rejected["lanes"])
+        self.assertTrue(any("PROPOSAL_REQUIRED" in item for item in rejected["diagnostics"]))
+
+    def test_router_rejects_invalid_model_proposal_without_substitution(self):
+        rejected = route("做一个客户端", proposal={"architecture":"cs", "client_families":["made-up-stack"]})
+        self.assertEqual("REJECTED", rejected["status"])
+        self.assertEqual("unknown", rejected["architecture"])
+        self.assertEqual([], rejected["lanes"])
 
     def test_governance_state_and_human_control_documents(self):
         with tempfile.TemporaryDirectory() as td:

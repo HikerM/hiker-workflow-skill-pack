@@ -109,7 +109,7 @@ quote → create → worker/provider → resource_transfer → result normalizat
 
 ---
 
-## 三、智能软件工程平台 5.12
+## 三、智能软件工程平台 5.13
 
 ### 3.1 设计目标
 
@@ -134,10 +134,10 @@ quote → create → worker/provider → resource_transfer → result normalizat
 - `interruptible-task-control`：管理长期任务的启动、暂停、继续、调整和检查点；用户插入指令时保留已经完成的工作。
 - `context-recovery`：从 `.ai/` 状态和最新检查点恢复目标、决策、分支和下一步，不把旧聊天摘要当作唯一事实来源。
 - `bounded-context-memory`：把关键需求、决定、任务、证据和Git事实持久化，只向会话注入固定大小工作集；近期与里程碑checkpoint分别限额，旧冗余副本收敛到有界索引和哈希链，避免长期使用越来越重。
-- `ai-engineering-router`：唯一轻量自动入口，只检查有限工程标记，并按项目模式、架构和阶段选择最多两个原子 Skill。
+- `ai-engineering-router`：唯一轻量自动入口；ChatGPT读取紧凑中文目录与有限工程证据后做语义选择，确定性脚本只校验最多两个候选、阶段、架构证据、权限和源码身份。
 - `greenfield-project-planning`：从零开发先融合带稳定 ID 的需求、冲突、未知项、验收条件和技术决策 Checkpoint。
 - `brownfield-requirement-reconciliation`：为部分源码建立 `CAP-*` 能力基线，并把 `REQ-*` 对账为新增、修改、替换或移除。
-- `architecture-decision-challenge`：把用户提供的系统、功能、模块或技术架构视为待验证假设，主动构造反例、补齐遗漏、暴露权衡，并形成有界替代方案和人工决策 Checkpoint。
+- `architecture-decision-challenge`：把用户提供的系统、功能、模块或技术架构视为待验证假设，主动构造反例、补齐遗漏、暴露权衡，并形成有界替代方案和自动非阻塞决策 Checkpoint。
 
 `ai-engineering-core` 提供保存和恢复工程状态的脚本。当前 Codex 插件 manifest 不注册已不受支持的 `hooks` 字段，相关脚本由 Skill 或外部编排显式调用。
 

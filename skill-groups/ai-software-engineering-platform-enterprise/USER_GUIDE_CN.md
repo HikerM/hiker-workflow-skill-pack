@@ -200,4 +200,4 @@ REQUIREMENT_DELTA.md
 
 ## 十、全局自动应用与可见回执
 
-个人安装器默认把 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 安全合并到 `~/.codex/AGENTS.md`。软件工程会话第一条助手输出先显示“智能工程轻量路由”，确定性路由后再显示最多两个实际加载的原子 Skill；路由不占原子额度。相同阶段不重复，阶段变化或上下文恢复时重显。工程健康告警与应用回执分开，只在重要风险状态改变时出现。安装完成后，`plugin_activation.status=activated` 与 `verification.ok=true` 只证明文件、缓存和配置一致；还要在新任务读取实际插件路径。若仍是旧缓存，重启桌面端后再次新建任务。
+个人安装器默认把 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 安全合并到 `~/.codex/AGENTS.md`。软件工程会话第一条助手输出先显示“智能工程轻量路由”，ChatGPT完成语义选择、守门校验和Skill完整读取后再显示最多两个实际加载的原子 Skill；路由不占原子额度。相同阶段不重复，阶段变化或上下文恢复时重显。工程健康告警与应用回执分开，只在重要风险状态改变时出现。安装完成后，`plugin_activation.status=activated` 与 `verification.ok=true` 只证明文件、缓存和配置一致；还要在新任务读取实际插件路径。若仍是旧缓存，重启桌面端后再次新建任务。

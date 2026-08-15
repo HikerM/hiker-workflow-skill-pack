@@ -1,60 +1,71 @@
 ---
 name: ai-engineering-router
-description: AI软件工程原子Skill的唯一轻量自动入口。收到从0开始、部分源码二次开发、接管现有项目、B/S、C/S、后端、Unity、插件开发、测试、审核、Git、多会话或发布请求时，先用确定性脚本识别项目模式、架构和阶段，只读取最多两个直接相关的原子Skill，并展示一行中文应用回执；不得扫描或预加载完整Skill目录。
+description: AI软件工程原子Skill的唯一轻量自动入口。收到从0开始、存量源码接管、B/S、C/S、后端、Unity、插件开发、测试、审核、Git、多会话或发布请求时，由ChatGPT结合用户语义和有界项目证据选择当前阶段最多两个原子Skill，再交给确定性守门器校验数量、阶段、架构证据、权限与源码身份；规则不得按关键词替代模型选择，也不得扫描或预加载完整Skill正文。
 ---
 
 # AI 工程轻量路由
 
-## 目标
+## 核心原则
 
-用一个小入口替代大量原子 Skill 同时参与隐式选择。路由阶段只做意图分类和最小项目证据检查，不执行完整仓库扫描。
+由 ChatGPT 负责理解和选择，由脚本负责校验和拒绝。不得把用户原文交给关键词分类器决定原子 Skill；不得在校验失败后由脚本自动换选其他能力。
 
 ## 必须执行
 
-1. 将用户原始请求原样传给 [suite_router.py](../../scripts/suite_router.py)：
+1. 会话第一条助手输出先展示 `已应用：01 智能工程核心｜智能工程轻量路由`。该入口不计入原子 Skill 上限。
+2. 运行只读项目检查，不传用户原文：
 
    ```powershell
-   py -3 <plugin-root>\scripts\suite_router.py --root <repo> --request "<用户请求>"
+   py -3 <plugin-root>\scripts\suite_router.py --root <repo> --inspect
    ```
 
-2. 会话的第一条助手输出必须先展示 `已应用：01 智能工程核心｜智能工程轻量路由`，不得把计划、分析、提问或工具调用放在它前面。该路由入口不计入原子 Skill 数量上限。
-3. 只读取输出 `load` 中的 `SKILL.md`；同一阶段最多两个活跃原子 Skill。不得为“可能有用”而遍历其他 Skill。只有实际完整读取成功的项才能登记为 `loaded`，路由命中不等于已经应用。
-4. 路由完成后，在首次实质动作前展示加载遥测生成的中文应用回执。回执必须来自 `statectl.py route-record` 的 `application_receipt`，不得根据路由候选手写或提前声称已应用。只有阶段、活跃项变化或上下文恢复时才再次展示，避免每轮重复刷屏。
-5. 输出 `deferred` 中的能力不得静默丢失：当前阶段通过门禁后重新路由，按顺序激活下一批；只保存名称、阶段与指纹，不把 Skill 正文长期注入上下文。
-6. 项目已初始化 `.ai` 时，把输出的 `stage`、活跃中文 Skill 名、待执行中文 Skill 名和 `route_fingerprint` 写入有界路由态：
+3. 读取检查结果给出的 [原子 Skill 语义路由目录](../../references/semantic-routing-catalog.md)。只读取这份紧凑元数据，不遍历 Skill 目录，不预读任何原子 `SKILL.md`。
+4. ChatGPT 根据当前用户目标、项目证据和会话状态形成语义提案，至少包括：
+   - `current_action`：本阶段唯一主动作；
+   - `project_mode`：`greenfield`、`brownfield`、`existing` 或 `unknown`；
+   - `architecture`：`bs`、`cs`、`backend`、`hybrid`、`tooling` 或 `unknown`；
+   - `stage`：当前阶段；
+   - `candidates`：最多两个当前原子 Skill ID；
+   - `deferred`：最多八个未来阶段 Skill ID；
+   - `negated_terms`、`future_terms` 和 `follow_up_actions`：按需记录，防止禁止项、示例和未来计划污染当前选择。
+5. 将模型提案交给守门器。优先使用逐项参数，避免把用户原文嵌入 Shell：
 
    ```powershell
-   py -3 <plugin-root>\scripts\statectl.py --root <repo> route-record --stage <stage> --route-fingerprint <fingerprint> --active-skill <名称> --loaded-skill <已完整读取的同名Skill> --deferred-skill <名称>
+   py -3 <plugin-root>\scripts\suite_router.py `
+     --root <repo> `
+     --project-mode existing `
+     --architecture backend `
+     --stage development `
+     --current-action "实现当前服务端功能" `
+     --candidate backend-technology-router `
+     --candidate backend-component-implementation
    ```
 
-7. 按已读取原子 Skill 执行。若原子 Skill 需要项目状态，则只读取它明确要求的状态文件。
-8. 当路由结果的 `phase_transition_required=true`，先完成当前阶段门禁和 Checkpoint，再重新运行路由并登记新阶段；不得把“审核、测试、合并”尾句反向覆盖当前“增强、修复、实现”动作。
+6. 只有 `guard_decision=ACCEPT` 时才完整读取输出 `load` 中的 `SKILL.md`。守门器拒绝时，根据 `diagnostics` 由 ChatGPT 重新选择一次；仍无法通过时保持 `unknown` 并说明缺少的项目事实，不加载猜测能力。
+7. 原子 Skill 完整读取成功后，使用 `statectl.py route-record` 登记真实 `loaded`，再展示它生成的中文 `application_receipt`。路由候选不等于已经应用，不得提前手写原子 Skill 回执。
+8. 当前阶段门禁通过后，由 ChatGPT 根据最新目标和证据重新选择待执行能力；不得让旧路由结果长期控制后续阶段。
 
-## 路由约束
+## 语义选择要求
 
-- 空仓库、无工程证据且用户要求新建产品：先进入 `greenfield-project-planning`，不得直接套脚手架。
-- 已有部分源码、半成品或二次开发且要融合新需求：先进入 `project-bootstrap` 与 `brownfield-requirement-reconciliation`，不得重新套脚手架覆盖现有实现。
-- 用户提供系统架构、功能架构、模块拆分或技术方案思路时，不得把用户方案直接当成批准答案；按阶段进入「架构决策挑战与补全」，主动寻找反例、遗漏、隐性耦合和真正不同的替代方案。
-- 现有仓库首次接管或技术栈变化：进入 `project-bootstrap`。
-- B/S、C/S、Unity、质量、工作区、多会话分别懒加载对应原子 Skill；一阶段最多两个活跃原子 Skill，轻量路由不占额度。
-- 同时涉及浏览器端、客户端或服务端的实现与审核先进入任务分流，不允许因分支顺序只处理其中一端。
-- 跨模块、跨仓库、真实外部执行、部署回滚、同一目标反复修复，或出现新旧实现并存、旧结论失效、范围持续膨胀时，按需进入“长链路变更收敛”；普通局部修改不得额外加载它。
-- 需求同时跨越多个阶段时，先选当前最早未通过门禁的阶段，不把设计、实现、审核、发布一次性全载入。
-- 找不到可靠证据时显式输出 `unknown`，不得默认最新框架或把 Unity 当作所有 C/S。
-- 插件、Skill、Marketplace、Codex扩展或桌面安装任务优先识别为工具链工程，不得因出现“桌面端、审核”而误路由到C/S客户端。
-- `.csproj` 必须依据 Web SDK、ASP.NET Core、WPF、WinForms、WinUI、Avalonia 或 MAUI 等内容证据分类；不得仅凭文件扩展名认定为客户端或服务端。
+- 区分“采用 C/S”“不是 C/S”“禁止 Android”“过去误判成 C/S”“未来可能增加客户端”。只有当前正向目标参与候选选择。
+- 区分当前动作与完整生命周期。例如“实现、测试、审核、推送”当前只选择最早未完成阶段，后续动作进入待执行队列。
+- 用户方案是待验证候选，不是批准答案；架构相关任务按需选择「架构决策挑战与补全」。
+- 已有源码先根据工程证据建立能力基线；从零项目先融合需求；不因出现技术名就生成脚手架。
+- 项目证据与模型提案冲突时服从守门器拒绝，修正模型提案；不得覆盖工程事实。
+- 简单问答、翻译和非工程任务不应进入本入口；如果已误触发，不提交原子候选。
+
+## 守门器职责
+
+守门器只执行确定性约束：候选存在性、最多两个活跃项、待执行队列上限、阶段兼容、Manifest/`.ai` 架构证据、源码身份冲突和安全边界。它不得：
+
+- 按关键词推断架构、阶段或 Skill；
+- 把否定词、示例、历史错误或未来计划当成当前意图；
+- 校验失败后擅自换成另一个 Skill；
+- 读取完整聊天历史或递归扫描源码；
+- 扩大 push、merge、部署、发布或生产写入权限。
 
 ## 性能预算
 
-- 路由脚本不得递归扫描项目源码。
-- 活跃原子 Skill 加载数上限：2；轻量路由不计入该上限。
-- 第三个及之后的匹配项进入有界 `deferred` 队列，完成当前门禁后再加载，禁止静默截断。
-- 超长会话只持久化 `.ai/runtime/skill-routing.json` 中的阶段、活跃名称、待执行名称与路由指纹，不持久化 Skill 正文。
-- 路由输出只保留当前轮需要的信息，不复制整个 Skill 清单或聊天历史。
-- 简单问答、翻译和非工程任务返回空路由，不初始化 `.ai`。
-
-## 禁止
-
-- 不直接修改 `main`、push、merge、发布或部署。
-- 不因已安装某插件就声称本轮已应用。
-- 不把完整需求账本或 checkpoint 历史重复注入会话。
+- 路由只读取一个紧凑目录、浅层 Manifest 和有界 `.ai` 技术栈状态。
+- 当前阶段最多加载两个原子 `SKILL.md`；轻量路由不计入上限。
+- Skill 正文不写入路由状态；只保存阶段、中文活跃名称、待执行名称和指纹。
+- 同一阶段且目标、项目 HEAD 和候选未变化时复用路由指纹，不重复读取目录或回执。

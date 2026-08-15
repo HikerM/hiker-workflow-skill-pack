@@ -17,64 +17,91 @@ ROLE_CONTRACTS = {
     "Document Agent": {"writes": ["documentation", "architecture diagrams", "knowledge base"], "forbidden": ["change runtime behavior without a task"]},
 }
 
+VALID_ARCHITECTURES = {"bs", "cs", "backend", "hybrid", "unknown"}
+VALID_CLIENT_FAMILIES = {
+    "unity", "qt", "dotnet-desktop", "electron-tauri", "flutter", "android",
+    "apple-native", "react-native", "java-desktop", "embedded-hmi", "unspecified",
+}
+
 
 def lane(name: str, role: str, inputs: list[str], outputs: list[str], mode: str, depends: list[str] | None = None) -> dict:
     contract = ROLE_CONTRACTS[role]
-    return {"lane": name, "agent_role": role, "inputs": inputs, "outputs": outputs, "permissions": contract["writes"], "forbidden": contract["forbidden"], "mode": mode, "status": "PLANNED", "depends_on": depends or []}
-
-
-def flatten(value):
-    if isinstance(value, dict):
-        for key, item in value.items():
-            yield str(key); yield from flatten(item)
-    elif isinstance(value, list):
-        for item in value: yield from flatten(item)
-    elif value is not None: yield str(value)
-
-
-def route(text: str, tech_stack: dict | None = None) -> dict:
-    low = text.lower()
-    evidence = " ".join(flatten(tech_stack or {})).lower()
-    explicit_bs = any(x in low for x in ["b/s", "bs架构", "web", "vue", "react", "浏览器", "前端页面", "saas", "cms"])
-    client_markers = {
-        "unity": ["unity", "ugui", "ui toolkit"],
-        "qt": ["qt", "qml", "pyside", "pyqt"],
-        "dotnet-desktop": ["winforms", "wpf", "winui", "avalonia", "maui"],
-        "electron-tauri": ["electron", "tauri"],
-        "flutter": ["flutter"],
-        "android": ["android", "compose"],
-        "apple-native": ["ios", "macos", "swiftui", "uikit", "appkit"],
-        "react-native": ["react native", "react-native"],
-        "java-desktop": ["javafx", "swing"],
-        "embedded-hmi": ["lvgl", "hmi", "嵌入式界面"],
+    return {
+        "lane": name,
+        "agent_role": role,
+        "inputs": inputs,
+        "outputs": outputs,
+        "permissions": contract["writes"],
+        "forbidden": contract["forbidden"],
+        "mode": mode,
+        "status": "PLANNED",
+        "depends_on": depends or [],
     }
-    request_families = [family for family, markers in client_markers.items() if any(x in low for x in markers)]
-    evidence_families = [family for family, markers in client_markers.items() if any(x in evidence for x in markers)]
-    client_families = request_families or evidence_families
-    explicit_cs = any(x in low for x in ["c/s", "cs架构", "桌面", "客户端", "移动端"]) or bool(request_families)
-    explicit_backend = any(x in low for x in ["后端", "服务端", "服务器", "nodets", "nestjs", "express", "fastapi", "django", "spring", "asp.net", "laravel", "数据库", "migration", "api接口", "接口契约"])
-    any_explicit = explicit_bs or explicit_cs or explicit_backend
-    bs = explicit_bs or (not any_explicit and any(x in evidence for x in ["vue", "react", "next.js", "nuxt", "angular", "svelte", "web-node"]))
-    cs = explicit_cs or (not any_explicit and bool(evidence_families))
-    backend = explicit_backend or (not any_explicit and any(x in evidence for x in ["nestjs", "express", "fastapi", "django", "spring boot", "asp.net", "laravel", "rails", "server", "backend"]))
-    if not any((bs, cs, backend)):
-        bs = any(x in low for x in ["前端", "后台页面", "门户"]); cs = "客户端" in low
-    kinds = sum(bool(x) for x in (bs, cs, backend)); architecture = "hybrid" if kinds > 1 else "bs" if bs else "cs" if cs else "backend" if backend else "unknown"
+
+
+def _validated_proposal(proposal: dict | None) -> tuple[dict | None, list[str]]:
+    if not proposal:
+        return None, ["PROPOSAL_REQUIRED: 由 ChatGPT 语义判断 architecture 与 client_families 后再生成工作区通道"]
+    architecture = str(proposal.get("architecture", "")).strip().lower()
+    if architecture not in VALID_ARCHITECTURES:
+        return None, [f"UNKNOWN_ARCHITECTURE: {architecture or '<empty>'}"]
+    raw_families = proposal.get("client_families", [])
+    if not isinstance(raw_families, list):
+        return None, ["INVALID_CLIENT_FAMILIES: client_families 必须是数组"]
+    families = list(dict.fromkeys(str(item).strip().lower() for item in raw_families if str(item).strip()))
+    unknown = sorted(set(families) - VALID_CLIENT_FAMILIES)
+    errors = [f"UNKNOWN_CLIENT_FAMILY: {item}" for item in unknown]
+    if architecture not in {"cs", "hybrid"} and families:
+        errors.append("CLIENT_FAMILY_ARCHITECTURE_CONFLICT: 非 C/S 或混合架构不能声明客户端技术族")
+    if architecture in {"cs", "hybrid"} and not families:
+        families = ["unspecified"]
+    if errors:
+        return None, errors
+    return {"architecture": architecture, "client_families": families}, []
+
+
+def route(text: str, tech_stack: dict | None = None, proposal: dict | None = None) -> dict:
+    """Validate ChatGPT's proposal and expand deterministic execution lanes.
+
+    Request text and shallow tech-stack facts are evidence only. This function
+    must never infer architecture or client family from request keywords.
+    """
+    selected, diagnostics = _validated_proposal(proposal)
+    if not selected:
+        return {
+            "schema_version": "3.0.0",
+            "status": "REJECTED",
+            "request": text,
+            "routing_authority": "chatgpt-semantic-selection",
+            "guard_role": "constraints-and-workflow-expansion-only",
+            "diagnostics": diagnostics,
+            "architecture": "unknown",
+            "client_families": [],
+            "lanes": [],
+        }
+
+    architecture = selected["architecture"]
+    client_families = selected["client_families"]
+    bs = architecture in {"bs", "hybrid"}
+    cs = architecture in {"cs", "hybrid"}
+    backend = architecture in {"bs", "cs", "backend", "hybrid"}
     lanes = [
-        lane("planning", "Planning Agent", ["user request", "PROJECT_STATE.md", "CURRENT_CONTEXT.md", "CHANGELOG.md", "ARCHITECTURE.md", "git status"], ["task breakdown", "acceptance criteria", "technical plan", "estimate"], "main-or-read-only-agent"),
+        lane(
+            "planning",
+            "Planning Agent",
+            ["user request", "PROJECT_STATE.md", "CURRENT_CONTEXT.md", "CHANGELOG.md", "ARCHITECTURE.md", "git status"],
+            ["task breakdown", "acceptance criteria", "technical plan", "estimate"],
+            "main-or-read-only-agent",
+        ),
     ]
-    implementation = []
+    implementation: list[str] = []
     if bs:
-        lanes += [
-            lane("bs-frontend", "Developer Agent", ["approved plan", "UI/design contracts", "API contracts"], ["browser frontend", "frontend tests"], "separate-worktree", ["planning"]),
-        ]
-        implementation += ["bs-frontend"]
+        lanes.append(lane("bs-frontend", "Developer Agent", ["approved plan", "UI/design contracts", "API contracts"], ["browser frontend", "frontend tests"], "separate-worktree", ["planning"]))
+        implementation.append("bs-frontend")
     if cs:
-        lanes += [
-            lane("cs-client", "Developer Agent", ["approved plan", "client family receipt", "client UI and lifecycle contracts", "versioned API contracts"], ["client implementation in existing framework", "client tests"], "separate-worktree", ["planning"]),
-        ]
-        implementation += ["cs-client"]
-    if bs or cs or backend:
+        lanes.append(lane("cs-client", "Developer Agent", ["approved plan", "client family receipt", "client UI and lifecycle contracts", "versioned API contracts"], ["client implementation in existing framework", "client tests"], "separate-worktree", ["planning"]))
+        implementation.append("cs-client")
+    if backend:
         backend_lane = lane("backend-service", "Developer Agent", ["approved plan", "data and API contracts", "detected backend stack and version"], ["server implementation", "backend tests", "compatibility evidence"], "separate-worktree", ["planning"])
         backend_lane["skill_sequence"] = ["服务端技术路由", "接口与事件契约设计或数据库迁移治理", "服务端功能实现", "服务端质量审核"]
         lanes.append(backend_lane)
@@ -86,25 +113,62 @@ def route(text: str, tech_stack: dict | None = None) -> dict:
     if not implementation:
         lanes.append(lane("implementation", "Developer Agent", ["approved plan"], ["implementation", "unit tests"], "worktree-if-writing", ["planning"]))
         implementation = ["implementation"]
-    lanes += [
+    lanes.extend([
         lane("review", "Review Agent", ["diff", "architecture", "ownership", "risk list"], ["independent review report", "PASS or BLOCKED"], "independent-read-only-agent", implementation),
         lane("testing", "Test Agent", ["acceptance criteria", "review result", "build"], ["automated tests", "regression result", "screenshots or logs"], "independent-test-agent", ["review"]),
         lane("documentation", "Document Agent", ["approved implementation", "test evidence"], ["CHANGELOG.md", "ARCHITECTURE.md or justified N/A", "knowledge update"], "serial-after-testing", ["testing"]),
         lane("merge", "Merge Agent", ["review PASS", "test PASS", "closure PASS", "clean branch"], ["merge commit", "task state update"], "serial-gated", ["documentation"]),
-        lane("release-control", "Master Agent", ["merged task", "release evidence", "risk and rollback plan"], ["release decision", "Released state or rollback"], "human-controlled", ["merge"]),
-    ]
+        lane("release-control", "Master Agent", ["merged task", "release evidence", "risk and rollback plan"], ["release decision", "Released state or rollback"], "automatic-checkpoint", ["merge"]),
+    ])
     return {
-        "schema_version": "2.1.0", "request": text, "architecture": architecture, "client_families": client_families or (["unspecified"] if cs else []), "lanes": lanes,
-        "policy": {"control_plane": "Master Agent", "parallel_write": "default maximum two active write tasks; separate Git worktree plus file locks", "same_file_write": "serial", "protected_branches": ["main", "develop", "release"], "human_controls": ["pause", "adjust", "insert", "resume"], "context_isolation": "project_id plus repository root"},
+        "schema_version": "3.0.0",
+        "status": "ACCEPTED",
+        "request": text,
+        "routing_authority": "chatgpt-semantic-selection",
+        "guard_role": "constraints-and-workflow-expansion-only",
+        "architecture": architecture,
+        "client_families": client_families,
+        "evidence_snapshot": tech_stack or {},
+        "diagnostics": [],
+        "lanes": lanes,
+        "policy": {
+            "control_plane": "Master Agent",
+            "parallel_write": "default maximum two active write tasks; separate Git worktree plus file locks",
+            "same_file_write": "serial",
+            "protected_branches": ["main", "develop", "release"],
+            "human_controls": ["pause", "adjust", "insert", "resume"],
+            "context_isolation": "project_id plus repository root",
+        },
     }
 
 
+def _read_proposal(args: argparse.Namespace) -> dict | None:
+    if args.proposal_json:
+        return json.loads(args.proposal_json)
+    if args.proposal_file:
+        return json.loads(Path(args.proposal_file).read_text(encoding="utf-8"))
+    return None
+
+
 def main() -> int:
-    ap = argparse.ArgumentParser(); ap.add_argument("--root", default="."); ap.add_argument("--request", required=True); ap.add_argument("--output", default=".ai/workspace/task-map.json"); args = ap.parse_args()
-    root = Path(args.root).resolve(); stack_path = root / ".ai" / "context" / "tech-stack.json"
-    try: stack = json.loads(stack_path.read_text(encoding="utf-8")) if stack_path.exists() else {}
-    except (OSError, json.JSONDecodeError): stack = {}
-    data = route(args.request, stack); atomic_json(root / args.output, data); print(json.dumps(data, ensure_ascii=False, indent=2)); return 0
+    parser = argparse.ArgumentParser(description="校验 ChatGPT 的工作区语义提案并生成确定性执行通道")
+    parser.add_argument("--root", default=".")
+    parser.add_argument("--request", required=True)
+    parser.add_argument("--proposal-json")
+    parser.add_argument("--proposal-file")
+    parser.add_argument("--output", default=".ai/workspace/task-map.json")
+    args = parser.parse_args()
+    root = Path(args.root).resolve()
+    stack_path = root / ".ai" / "context" / "tech-stack.json"
+    try:
+        stack = json.loads(stack_path.read_text(encoding="utf-8")) if stack_path.exists() else {}
+    except (OSError, json.JSONDecodeError):
+        stack = {}
+    data = route(args.request, stack, _read_proposal(args))
+    atomic_json(root / args.output, data)
+    print(json.dumps(data, ensure_ascii=False, indent=2))
+    return 0 if data["status"] == "ACCEPTED" else 2
 
 
-if __name__ == "__main__": raise SystemExit(main())
+if __name__ == "__main__":
+    raise SystemExit(main())

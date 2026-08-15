@@ -1,6 +1,6 @@
 interface:
   display_name: "智能工程轻量路由"
-  short_description: "只加载当前任务需要的最多两个原子Skill"
-  default_prompt: "使用 $ai-engineering-router 识别项目模式与阶段，只加载最小原子Skill并展示应用回执。"
+  short_description: "由模型语义选择原子Skill，再执行证据与权限守门"
+  default_prompt: "使用 $ai-engineering-router 由ChatGPT先做语义选择，再校验并加载最多两个原子Skill。"
 policy:
   allow_implicit_invocation: true

@@ -18,86 +18,119 @@ from statectl import checkpoint, record_routing, update_active
 from corelib import atomic_write_json
 from requirements_fusion import init as init_requirements, merge as merge_requirements, validate as validate_requirements
 from brownfield_reconcile import initialize as init_brownfield, set_baseline, reconcile, validate as validate_brownfield
-from suite_router import route
+from suite_router import inspect_project, route
+
+
+def model_proposal(*skills: str, stage: str = "development", architecture: str = "unknown", mode: str = "existing", **extra):
+    data = {
+        "project_mode": mode,
+        "architecture": architecture,
+        "stage": stage,
+        "current_action": extra.pop("current_action", "处理当前阶段目标"),
+        "confidence": extra.pop("confidence", "high"),
+        "candidates": list(skills),
+    }
+    data.update(extra)
+    return data
 
 
 class CoreTests(unittest.TestCase):
-    def test_router_receipt_wording_and_atomic_quota_contract(self):
+    def test_router_requires_chatgpt_proposal_and_never_keyword_selects(self):
         with tempfile.TemporaryDirectory() as td:
-            data = route(Path(td), "会话最开始显示使用到的插件名和 Skill 名")
-            self.assertEqual(["插件应用回执"], [item["skill"] for item in data["selected"]])
+            root = Path(td)
+            for request in (
+                "这不是C/S项目，禁止Android，只修改Web页面",
+                "不要创建Worktree，也不要merge",
+                "解释为什么插件选择Skill会走偏",
+            ):
+                data = route(root, request)
+                self.assertEqual("PROPOSAL_REQUIRED", data["guard_decision"])
+                self.assertEqual([], data["selected"])
+                self.assertEqual("chatgpt-semantic-selection", data["routing_authority"])
+
+    def test_router_accepts_model_candidates_and_keeps_bounded_queue(self):
+        with tempfile.TemporaryDirectory() as td:
+            proposal = model_proposal(
+                "multi-agent-project-governance", "workspace-task-router",
+                stage="governance", architecture="hybrid",
+                deferred=["regression-test-planner", "full-change-risk-review", "release-readiness-review"],
+                future_terms=["测试", "审核", "发布"],
+            )
+            data = route(Path(td), proposal)
+            self.assertEqual("ACCEPT", data["guard_decision"])
+            self.assertEqual(2, len(data["selected"]))
+            self.assertEqual(3, len(data["deferred"]))
+            self.assertLessEqual(len(data["load"]), 2)
+            self.assertTrue(data["phase_transition_required"])
             self.assertEqual(2, data["max_loaded_atomic_skills"])
             self.assertFalse(data["router_counts_toward_limit"])
 
-    def test_router_defers_third_skill_instead_of_dropping_it(self):
+    def test_router_rejects_more_than_two_candidates_without_substitution(self):
         with tempfile.TemporaryDirectory() as td:
-            data = route(Path(td), "大型项目多Agent跨模块实现、测试并发布")
-            self.assertEqual(2, len(data["selected"]))
-            self.assertTrue(data["deferred"])
-            self.assertTrue(data["next_gate"])
-            self.assertLessEqual(len(data["load"]), 2)
+            proposal = model_proposal(
+                "bounded-context-memory", "context-recovery", "interruptible-task-control",
+                stage="governance",
+            )
+            data = route(Path(td), proposal)
+            self.assertEqual("REJECT", data["guard_decision"])
+            self.assertEqual([], data["selected"])
+            self.assertEqual([], data["load"])
+            self.assertIn("ATOMIC_SKILL_LIMIT", {item["code"] for item in data["diagnostics"]})
 
-    def test_ultra_long_single_session_routes_to_bounded_memory(self):
+    def test_model_selected_semantic_skills_keep_chinese_receipts(self):
+        cases = (
+            ("plugin-application-receipt", "governance", "插件应用回执"),
+            ("bounded-context-memory", "governance", "有界上下文记忆"),
+            ("architecture-decision-challenge", "planning", "架构决策挑战与补全"),
+            ("interaction-conflict-governance", "review", "交互状态与冲突治理"),
+            ("long-chain-change-convergence", "governance", "长链路变更收敛"),
+            ("greenfield-project-planning", "planning", "0→1需求融合与选型"),
+        )
         with tempfile.TemporaryDirectory() as td:
-            data = route(Path(td), "我经常一个会话超长处理，经历超多轮上下文压缩，也不能丢内容")
-            self.assertIn("有界上下文记忆", [item["skill"] for item in data["selected"]])
+            for skill, stage, display in cases:
+                data = route(Path(td), model_proposal(skill, stage=stage, mode="greenfield" if skill == "greenfield-project-planning" else "unknown"))
+                self.assertTrue(data["accepted"], data["diagnostics"])
+                self.assertEqual(display, data["selected"][0]["skill"])
+                self.assertIsNone(__import__("re").search(r"[A-Za-z]", data["selected"][0]["skill"]))
+                self.assertIsNone(__import__("re").search(r"[A-Za-z]", data["selected"][0]["plugin"]))
 
-    def test_architecture_idea_is_challenged_without_expanding_normal_requests(self):
+    def test_router_preserves_negated_and_future_terms_without_interpreting_them(self):
         with tempfile.TemporaryDirectory() as td:
-            root = Path(td)
-            proposal = route(root, "我提供了系统架构思路，请找出毛病、遗漏并给出更好的替代方案")
-            names = [item["skill"] for item in proposal["selected"]]
-            self.assertIn("架构决策挑战与补全", names)
-            self.assertLessEqual(len(proposal["load"]), 2)
-            ordinary = route(root, "解释一下什么是B/S架构")
-            self.assertNotIn("架构决策挑战与补全", [item["skill"] for item in ordinary["selected"]])
+            data = route(Path(td), model_proposal(
+                "web-component-implementation", stage="development", architecture="bs",
+                negated_terms=["不是C/S", "禁止Android", "不要Worktree"],
+                future_terms=["完成后测试和发布"],
+            ))
+            self.assertTrue(data["accepted"])
+            self.assertEqual(["不是C/S", "禁止Android", "不要Worktree"], data["intent"]["negated_terms"])
+            self.assertEqual(["浏览器端组件与页面实现"], [item["skill"] for item in data["selected"]])
 
-    def test_router_lazily_selects_interaction_conflict_governance(self):
-        with tempfile.TemporaryDirectory() as td:
-            data=route(Path(td),"检查大型项目的下拉框、弹窗、快捷键和请求乱序交互冲突")
-            self.assertEqual(["交互状态与冲突治理"],[x["skill"] for x in data["selected"]])
-            self.assertLessEqual(len(data["load"]),2)
-
-    def test_router_escalates_generic_long_chain_without_case_specific_terms(self):
-        with tempfile.TemporaryDirectory() as td:
-            root = Path(td)
-            data = route(root, "这个跨仓库复杂链路已经多轮修复并回滚，继续修改测试后再上线")
-            names = [item["skill"] for item in data["selected"]]
-            self.assertEqual("长链路变更收敛", names[0])
-            self.assertLessEqual(len(data["load"]), 2)
-            ordinary = route(root, "修改一个本地按钮文案")
-            self.assertNotIn("长链路变更收敛", [item["skill"] for item in ordinary["selected"]])
-    def test_greenfield_router_prefers_requirements_before_scaffold(self):
-        with tempfile.TemporaryDirectory() as td:
-            data = route(Path(td), "从0开始开发一个自定义B/S和C/S教学系统")
-            self.assertEqual("greenfield", data["project_mode"])
-            self.assertEqual("0→1需求融合与选型", data["selected"][0]["skill"])
-            self.assertLessEqual(len(data["load"]), 2)
-            common = route(Path(td), "帮我开发一个通用业务管理系统")
-            self.assertEqual("0→1需求融合与选型", common["selected"][0]["skill"])
-
-    def test_router_lazily_loads_cs_version_router(self):
-        with tempfile.TemporaryDirectory() as td:
-            root = Path(td); (root / "App.csproj").write_text("<Project />", encoding="utf-8")
-            data = route(root, "实现这个WPF客户端页面，识别现有框架和版本")
-            self.assertEqual("cs", data["architecture"])
-            self.assertEqual(["客户端技术路由", "客户端组件实现"], [x["skill"] for x in data["selected"]])
-            self.assertEqual(["03 客户端工程", "03 客户端工程"], [x["plugin"] for x in data["selected"]])
-
-    def test_brownfield_router_reconciles_before_implementation(self):
+    def test_router_accepts_brownfield_reconciliation_selected_by_model(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); (root / "package.json").write_text('{"name":"partial-app"}', encoding="utf-8")
-            data = route(root, "已有一部分工程源码，继续融合自定义需求")
-            self.assertEqual("brownfield", data["project_mode"])
-            self.assertEqual(["项目智能初始化", "存量源码需求对账"], [x["skill"] for x in data["selected"]])
-            self.assertLessEqual(len(data["load"]), 2)
+            data = route(root, model_proposal(
+                "project-bootstrap", "brownfield-requirement-reconciliation",
+                stage="planning", mode="brownfield",
+            ))
+            self.assertTrue(data["accepted"], data["diagnostics"])
+            self.assertEqual(["项目智能初始化", "存量源码需求对账"], [item["skill"] for item in data["selected"]])
 
-    def test_router_detects_nested_existing_project_and_backend(self):
+    def test_router_checks_manifest_architecture_not_prompt_keywords(self):
         with tempfile.TemporaryDirectory() as td:
-            root=Path(td);nested=root/"apps/api";nested.mkdir(parents=True);(nested/"package.json").write_text(json.dumps({"dependencies":{"express":"5.0.0"}}),encoding="utf-8")
-            existing=route(root,"开发一个自定义服务");self.assertNotEqual("greenfield",existing["project_mode"])
-            backend=route(root,"修改现有NodeTS后端核心服务");names=[x["skill"] for x in backend["selected"]]
-            self.assertIn("服务端技术路由",names);self.assertIn("服务端功能实现",names)
+            root = Path(td); nested = root / "apps/api"; nested.mkdir(parents=True)
+            (nested / "package.json").write_text(json.dumps({"dependencies": {"express": "5.0.0"}}), encoding="utf-8")
+            accepted = route(root, model_proposal(
+                "backend-technology-router", "backend-component-implementation",
+                stage="development", architecture="backend",
+            ))
+            self.assertTrue(accepted["accepted"], accepted["diagnostics"])
+            rejected = route(root, model_proposal(
+                "cs-client-router", "cs-component-implementation",
+                stage="development", architecture="cs",
+                negated_terms=["禁止把服务端误判为客户端"],
+            ))
+            self.assertFalse(rejected["accepted"])
+            self.assertIn("ARCHITECTURE_CONFLICT", {item["code"] for item in rejected["diagnostics"]})
 
     def test_router_ignores_nested_worktree_manifests_and_blocks_source_conflict(self):
         with tempfile.TemporaryDirectory() as td:
@@ -110,84 +143,25 @@ class CoreTests(unittest.TestCase):
             nested = root / "old-worktree"
             subprocess.run(["git", "worktree", "add", "-b", "feature/old", str(nested)], cwd=root, check=True, stdout=subprocess.PIPE)
             (nested / "legacy" ).mkdir(); (nested / "legacy/package.json").write_text(json.dumps({"dependencies": {"express": "5"}}), encoding="utf-8")
-            data = route(root, "修改当前前端页面")
-            self.assertEqual("多工作目录任务管理", data["selected"][0]["skill"])
+            blocked = route(root, model_proposal("web-component-implementation", stage="development", architecture="bs"))
+            self.assertFalse(blocked["accepted"])
+            data = route(root, model_proposal("worktree-safe-convergence", stage="governance", architecture="bs"))
+            self.assertTrue(data["accepted"], data["diagnostics"])
+            self.assertEqual("工作目录安全收敛", data["selected"][0]["skill"])
             self.assertEqual(1, data["source_identity"]["nested_worktree_count"])
             self.assertTrue(all("old-worktree" not in path for path in data["project_evidence"]))
 
-    def test_worktree_pileup_routes_to_safe_convergence(self):
-        with tempfile.TemporaryDirectory() as td:
-            data = route(Path(td), "清理长期堆积的历史 Worktree")
-            self.assertEqual("工作目录安全收敛", data["selected"][0]["skill"])
-
-    def test_plugin_enhancement_is_not_misrouted_to_cs_desktop(self):
-        with tempfile.TemporaryDirectory() as td:
-            root = Path(td); (root / ".git").mkdir()
-            data = route(root, "增强 然后审核 推送仓库 本地chatgpt桌面端重新安装生效")
-            names = [item["skill"] for item in data["selected"]]
-            self.assertEqual("tooling", data["architecture"])
-            self.assertIn("完整变更风险评估", names)
-            self.assertIn("代码所有权与合并控制", names)
-            self.assertNotIn("客户端质量审核", names)
-
-    def test_backend_routes_to_atomic_backend_skills(self):
-        with tempfile.TemporaryDirectory() as td:
-            root = Path(td)
-            (root / "package.json").write_text(json.dumps({"dependencies": {"fastify": "5.2.0"}}), encoding="utf-8")
-            data = route(root, "修改已有NodeTS服务端功能并保持接口兼容")
-            names = [item["skill"] for item in data["selected"]]
-            self.assertEqual(["服务端技术路由", "服务端功能实现"], names)
-            self.assertTrue(all(item["plugin"] == "02 浏览器端与服务端工程" for item in data["selected"]))
-
-    def test_router_distinguishes_web_api_desktop_and_react_native(self):
-        with tempfile.TemporaryDirectory() as td:
-            root = Path(td)
-            (root / "Api.csproj").write_text('<Project Sdk="Microsoft.NET.Sdk.Web"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>', encoding="utf-8")
-            api = route(root, "修改登录逻辑")
-            self.assertEqual("backend", api["architecture"])
-            self.assertEqual(["服务端技术路由", "服务端功能实现"], [x["skill"] for x in api["selected"]])
-        with tempfile.TemporaryDirectory() as td:
-            root = Path(td)
-            (root / "package.json").write_text(json.dumps({"dependencies": {"react": "19.0.0", "react-native": "0.80.0"}}), encoding="utf-8")
-            mobile = route(root, "修改登录逻辑")
-            self.assertEqual("cs", mobile["architecture"])
-            self.assertEqual(["客户端技术路由", "客户端组件实现"], [x["skill"] for x in mobile["selected"]])
-
-    def test_router_handles_fastify_hybrid_and_plugin_diagnostics(self):
-        with tempfile.TemporaryDirectory() as td:
-            root = Path(td)
-            (root / "package.json").write_text(json.dumps({"dependencies": {"fastify": "5.2.0"}}), encoding="utf-8")
-            data = route(root, "修改登录逻辑")
-            self.assertEqual("backend", data["architecture"])
-            self.assertEqual(["服务端技术路由", "服务端功能实现"], [x["skill"] for x in data["selected"]])
-        with tempfile.TemporaryDirectory() as td:
-            root = Path(td)
-            (root / "package.json").write_text(json.dumps({"dependencies": {"react": "19.0.0", "express": "5.1.0"}}), encoding="utf-8")
-            data = route(root, "修改登录功能，包含前端页面和后端接口")
-            self.assertEqual("hybrid", data["architecture"])
-            self.assertEqual(["任务分流与会话规划"], [x["skill"] for x in data["selected"]])
-            self.assertEqual("medium", data["confidence"])
-        for request in ("检查桌面端插件为什么选择很慢", "Skill 是否会走偏和变慢"):
-            data = route(Path(td), request)
-            self.assertEqual("tooling", data["architecture"])
-            self.assertEqual("完整变更风险评估", data["selected"][0]["skill"])
-
-    def test_router_selects_master_governance_for_session_runtime_sprawl(self):
-        with tempfile.TemporaryDirectory() as td:
-            root = Path(td)
-            for request in (
-                "总控每次派发任务都创建新会话和Worktree，导致会话堆积和线程没关闭",
-                "让总控复用固定角色槽位并在终态自动验证运行时释放",
-            ):
-                data = route(root, request)
-                self.assertEqual("大型工程多智能体总控", data["selected"][0]["skill"])
-
-    def test_router_receipt_uses_chinese_names_without_consuming_functional_slot(self):
-        with tempfile.TemporaryDirectory() as td:
-            data=route(Path(td),"大型项目风险审核，并告诉我用了什么插件")
-            self.assertEqual(2,len(data["selected"]));self.assertEqual("完整变更风险评估",data["selected"][0]["skill"])
-            for item in data["selected"]:
-                self.assertIsNone(__import__("re").search(r"[A-Za-z]",item["skill"]));self.assertIsNone(__import__("re").search(r"[A-Za-z]",item["plugin"]))
+    def test_inspection_distinguishes_web_backend_and_client_manifests(self):
+        cases = (
+            ({"dependencies": {"react": "19.0.0", "express": "5.1.0"}}, {"bs", "backend"}),
+            ({"dependencies": {"react": "19.0.0", "react-native": "0.80.0"}}, {"cs"}),
+            ({"dependencies": {"fastify": "5.2.0"}}, {"backend"}),
+        )
+        for package, expected in cases:
+            with tempfile.TemporaryDirectory() as td:
+                root = Path(td); (root / "package.json").write_text(json.dumps(package), encoding="utf-8")
+                facts = set(inspect_project(root)["project_facts"]["architectures"])
+                self.assertEqual(expected, facts)
 
     def test_brownfield_baseline_and_delta_are_evidence_backed(self):
         with tempfile.TemporaryDirectory() as td:
@@ -345,21 +319,20 @@ class CoreTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "exactly match"):
                 record_routing(root, "testing", ["回归测试规划"], [], loaded_skills=["完整变更风险评估"])
 
-    def test_router_primary_action_beats_risk_and_validation_qualifiers(self):
+    def test_model_proposal_separates_current_stage_from_follow_up_actions(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             (root / "package.json").write_text(json.dumps({"dependencies": {"express": "5.0.0"}}), encoding="utf-8")
-            develop = route(root, "开发 PostgreSQL 迁移风险修复")
+            develop = route(root, model_proposal(
+                "backend-technology-router", "database-migration-governance",
+                stage="development", architecture="backend",
+                current_action="修复数据库迁移",
+                follow_up_actions=["testing", "review", "release"],
+            ))
             self.assertEqual("development", develop["stage"])
-            self.assertEqual("development", develop["intent"]["primary_action"])
             self.assertEqual(["服务端技术路由", "数据库迁移治理"], [item["skill"] for item in develop["selected"]])
-            repair = route(root, "修复 PostgreSQL 数据库迁移并验证回滚")
-            self.assertEqual("development", repair["stage"])
-            self.assertIn("testing", repair["intent"]["follow_up_actions"])
-            review = route(root, "审核 PostgreSQL 迁移风险")
-            self.assertEqual("review", review["stage"])
-            verify = route(root, "验证 PostgreSQL 迁移回滚")
-            self.assertEqual("testing", verify["stage"])
+            self.assertEqual(["testing", "review", "release"], develop["intent"]["follow_up_actions"])
+            self.assertTrue(develop["phase_transition_required"])
 
     def test_router_uses_structured_client_evidence_not_manifest_substrings(self):
         with tempfile.TemporaryDirectory() as td:
@@ -368,23 +341,30 @@ class CoreTests(unittest.TestCase):
                 "description": "Web service can send links to Android clients",
                 "dependencies": {"vue": "3.5.0", "express": "5.0.0"},
             }), encoding="utf-8")
-            data = route(root, "实现当前功能")
-            self.assertNotEqual("cs", data["architecture"])
-            self.assertNotIn("客户端技术路由", [item["skill"] for item in data["selected"]])
+            facts = inspect_project(root)["project_facts"]
+            self.assertNotIn("cs", facts["architectures"])
+            data = route(root, model_proposal("cs-client-router", "cs-component-implementation", stage="development", architecture="cs"))
+            self.assertFalse(data["accepted"])
+            self.assertEqual([], data["selected"])
 
     def test_router_declares_loader_telemetry_and_phase_handoff(self):
         with tempfile.TemporaryDirectory() as td:
-            data = route(Path(td), "修复接口并验证回归")
+            data = route(Path(td), model_proposal(
+                "backend-component-implementation", stage="development", architecture="backend",
+                future_terms=["完成后验证回归"], follow_up_actions=["testing"],
+            ))
             self.assertEqual("skill-loader-telemetry", data["receipt_source"])
             self.assertTrue(data["phase_transition_required"])
-            self.assertEqual("development", data["intent"]["primary_action"])
 
-    def test_router_understands_completed_qualifiers_and_governance_actions(self):
+    def test_router_rejects_stage_skill_conflicts_instead_of_rewriting_stage(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            self.assertEqual("development", route(root, "按已审核设计实现Avalonia设置窗口")["stage"])
-            self.assertEqual("merge", route(root, "检查feature/web合并main的冲突和所有权")["stage"])
-            self.assertEqual("release", route(root, "根据真实测试和构建证据审核发布")["stage"])
-            self.assertEqual("review", route(root, "分析feature分支相对main的风险")["stage"])
+            wrong = route(root, model_proposal("release-readiness-review", stage="development"))
+            self.assertFalse(wrong["accepted"])
+            self.assertIn("STAGE_SKILL_CONFLICT", {item["code"] for item in wrong["diagnostics"]})
+            merge = route(root, model_proposal("change-ownership-merge", stage="merge"))
+            self.assertTrue(merge["accepted"], merge["diagnostics"])
+            release = route(root, model_proposal("release-readiness-review", stage="release"))
+            self.assertTrue(release["accepted"], release["diagnostics"])
 
 if __name__ == "__main__": unittest.main()

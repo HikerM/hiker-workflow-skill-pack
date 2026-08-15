@@ -11,11 +11,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ROUTER = ROOT / "plugins" / "ai-engineering-core" / "scripts" / "suite_router.py"
-PROMPTS = (
-    "修改现有登录功能",
-    "修改登录功能，包含前端页面和后端接口",
-    "检查桌面端插件为什么选择很慢",
-    "大型项目跨多会话开发，上下文压缩不能丢失决定",
+PROPOSALS = (
+    ("backend", "development", "backend-component-implementation"),
+    ("hybrid", "governance", "workspace-task-router"),
+    ("tooling", "review", "full-change-risk-review"),
+    ("unknown", "governance", "bounded-context-memory"),
 )
 
 
@@ -30,7 +30,13 @@ def benchmark(runs: int, max_p95_ms: float) -> dict:
         root = Path(td); (root / "package.json").write_text('{"dependencies":{"react":"19","fastify":"5"}}', encoding="utf-8")
         for index in range(runs):
             start = time.perf_counter()
-            result = subprocess.run([sys.executable, "-X", "utf8", str(ROUTER), "--root", str(root), "--request", PROMPTS[index % len(PROMPTS)]], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=10)
+            architecture, stage, skill = PROPOSALS[index % len(PROPOSALS)]
+            result = subprocess.run([
+                sys.executable, "-X", "utf8", str(ROUTER), "--root", str(root),
+                "--project-mode", "existing", "--architecture", architecture,
+                "--stage", stage, "--current-action", "基准测试当前阶段",
+                "--candidate", skill,
+            ], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=10)
             if result.returncode: raise RuntimeError(result.stderr.decode("utf-8", errors="replace"))
             samples.append((time.perf_counter() - start) * 1000)
     p95 = percentile(samples, .95)

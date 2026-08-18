@@ -1,6 +1,0 @@
-interface:
-  display_name: "Agent架构咨询"
-  short_description: "按需审核系统与Agent架构"
-  default_prompt: "使用 $agent-architecture-consultant 审核当前架构问题。"
-policy:
-  allow_implicit_invocation: false

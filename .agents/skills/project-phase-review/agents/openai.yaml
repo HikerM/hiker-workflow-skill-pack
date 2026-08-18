@@ -1,6 +1,0 @@
-interface:
-  display_name: "项目阶段复核"
-  short_description: "按需判断项目阶段门禁"
-  default_prompt: "使用 $project-phase-review 复核当前项目阶段。"
-policy:
-  allow_implicit_invocation: false

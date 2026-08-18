@@ -7,7 +7,7 @@ description: 在新会话、Agent接管或上下文压缩后，从项目身份�
 
 ## 恢复顺序
 
-1. 确认当前 Git 根目录与 `.ai/governance/project-state.json` 的 `project_id`；
+1. 运行 `state_consistency.py`，确认当前 Git 根目录、源码身份哈希、HEAD、Manifest 哈希与 `.ai/governance/project-state.json` 的 `project_id`；
 2. 当前任务 `.ai/tasks/<TASK-ID>.json`、锁定决定和控制状态，只读取当前字段与最近事件；
 3. 当前 Git 分支、HEAD、status、diff 与 Worktree；
 4. `PROJECT_STATE.md` 与 `CURRENT_CONTEXT.md` 的有界工作集；
@@ -25,6 +25,7 @@ description: 在新会话、Agent接管或上下文压缩后，从项目身份�
 python3 <plugin-root>/scripts/statectl.py --root . validate
 python3 <plugin-root>/scripts/statectl.py --root . status
 python3 <plugin-root>/scripts/statectl.py --root . memory-status
+python3 <plugin-root>/scripts/state_consistency.py --root .
 ```
 
 ## 恢复验证
@@ -42,3 +43,5 @@ python3 <plugin-root>/scripts/statectl.py --root . memory-status
 - 当前阶段、活跃原子 Skill、待执行 Skill 与路由指纹。
 
 任何关键状态或项目身份冲突时标记 `BLOCKED_CONTEXT_CONFLICT`，不得自行选择旧聊天或另一仓库的方案覆盖正式状态。存在新版多Agent治理状态时，以其任务状态机为主，旧版 `task.json` 仅作迁移线索。恢复时先再次显示轻量路由回执；路由指纹与当前请求不一致时重新计算，不得照搬压缩前的原子 Skill。
+
+恢复按 L1–L4 影响范围渐进执行。不得为了“确保一致”删除整个 `.ai` 或重建全仓；只有当前候选、契约、图谱或证据被源码变化实际影响时才失效。若发现同一职责的新旧实现并存，交给「长链路变更收敛」登记唯一权威实现和退出条件。

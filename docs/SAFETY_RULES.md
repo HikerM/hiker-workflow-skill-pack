@@ -1,34 +1,10 @@
-# Safety Rules
+# 安全规则
 
-## Write Safety
-
-- DryRun is the default for install and uninstall.
-- `-Apply` is required for writes.
-- Existing skills are skipped unless `-Force` is set.
-- `AGENTS.md` should be merged with `-MergeAgents`; avoid overwrite.
-
-## Engineering Safety
-
-- Do not default to DB writes, production data mutation, real provider calls, billing actions, service restarts, deployments, push, merge, force push, or history rewrites.
-- Do not treat a single commit as completion.
-- Do not claim behavior is verified without command output, logs, responses, screenshots, DB/queue/provider/billing state, or explicit limitation.
-
-## Unity Safety
-
-- Confirm `Assets`, `Packages/manifest.json`, and `ProjectSettings`.
-- Check git status and Unity Editor state before changes.
-- Preserve `.meta`, GUIDs, prefab references, serialized fields, and scene links.
-- Verify console or tests after changes.
-
-## NodeTs Safety
-
-- Keep quote -> create -> result as the canonical flow.
-- Keep provider-specific data behind adapters and normalization.
-- Keep frontend dependent on canonical API responses.
-- Verify billing reservation, settlement, and release separately.
-
-## Design Safety
-
-- Preserve original text, page order, card order, aspect ratio, and file count.
-- Generate actual output files and check representative outputs.
-- Do not fabricate download links or paths.
+- 自动应用不扩大权限；未经明确授权不得 push、merge、部署、发布、写生产数据、强制清理 Worktree 或直接修改 main。
+- 不把未执行的测试、未打开的隐藏界面、未运行的平台构建或计划中的验证写成通过。
+- 不用 `.ai`、旧聊天、旧图谱或旧候选覆盖当前 Git、Manifest、锁文件、源码和真实测试证据。
+- 不删除整个 `.ai` 解决漂移；按 L1–L4 影响范围恢复，并保留需求、任务、决定和证据原件。
+- 同一能力只保留一个权威活动实现和一个权威状态写入者；迁移必须有退出条件和删除 Gate。
+- 正式运行路径不得默认启用 Demo、Mock 或 Fixture，不得向用户暴露占位数据、本机路径、堆栈和数据库内部错误。
+- 公开仓库、插件、模板、Eval和发布包不得包含个人、公司、真实项目、会话、凭据或本机路径；唯一允许的个人标识为 Hiker。
+- 桌面软件等价重建只处理已授权外部行为，不绕过许可证、登录、DRM或复制未授权资产。

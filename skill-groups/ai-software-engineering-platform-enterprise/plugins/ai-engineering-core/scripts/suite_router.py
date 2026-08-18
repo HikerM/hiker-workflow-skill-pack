@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from source_identity import context_fresh, identify
+from context_budget import build_context_plan
+from state_consistency import assess as assess_state_consistency
 
 
 # Keep this literal mapping: the release audit uses it as the single coverage map.
@@ -274,6 +276,8 @@ def inspect_project(root: Path) -> dict[str, Any]:
             "architectures": sorted(VALID_ARCHITECTURES),
             "stages": sorted(VALID_STAGES),
         },
+        "context_budget": build_context_plan(root, "unknown"),
+        "state_consistency": assess_state_consistency(root),
         "catalog": str((Path(__file__).resolve().parents[1] / "references" / "semantic-routing-catalog.md").resolve()),
     }
 
@@ -431,6 +435,7 @@ def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str,
         "deferred": [item["skill"] for item in deferred],
         "head": signals["identity"].get("head"),
     }
+    context_signals = set(_bounded_text_list(proposal.get("risk_signals")))
     return {
         "schema_version": "2.0.0",
         "routing_authority": "chatgpt-semantic-selection",
@@ -457,6 +462,7 @@ def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str,
         "route_fingerprint": hashlib.sha256(json.dumps(basis, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:16],
         "next_gate": "完成当前阶段并由 ChatGPT 重新语义选择" if deferred else None,
         "confidence": confidence,
+        "context_budget": build_context_plan(root, stage, signals=context_signals),
         "project_evidence": signals["sources"],
         "source_identity": inspection["project_facts"],
         "receipt_required": accepted,

@@ -16,6 +16,7 @@ description: 接管已有代码仓库或技术栈发生变化时，从锁文件�
 
 1. 先运行脚本 [detect_project.py](../../scripts/detect_project.py)，不要凭文件名猜技术栈。
 2. 再运行 [bootstrap_project.py](../../scripts/bootstrap_project.py) 写入统一 `.ai` 状态。
+   初始化同时建立不含远程地址和本机路径的源码溯源指纹；已有 `.ai` 与当前源码不一致时按影响级别修复派生状态，不覆盖需求、任务、决定或验收证据。
 3. 输出并核对：
    - 项目根和 Git 根；
    - 每个子项目路径；
@@ -45,3 +46,4 @@ py -3 <plugin-root>\scripts\bootstrap_project.py --root .
 - 已有 `.ai` 数据未被无理由覆盖；
 - 未将“无法确定”写成确定事实。
 - 未把任一B/S或C/S技术、版本或最新版写成默认答案。
+- `.ai/governance/source-provenance.json` 与当前源码身份一致，且没有把用户、公司或项目敏感信息复制进插件资产。

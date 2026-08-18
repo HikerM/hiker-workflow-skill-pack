@@ -22,5 +22,7 @@ description: 结合任务闭环、风险、构建、测试、截图或日志、�
 - `PROJECT_STATE.md`、`CHANGELOG.md` 与 `ARCHITECTURE.md` 同步；
 - 发布验证、数据库/API兼容与回滚证据为 PASS；
 - 当前项目 ID 与所有证据一致，未混入其他仓库上下文。
+- `delivery_hygiene.py --mode release` 为 PASS：无默认启用的 Demo/Mock/Fixture，无用户可见占位数据、样例身份、本机路径、堆栈或数据库内部错误。
+- 对存在新旧实现、迁移入口或多写入者的能力，`implementation_guard.py` 为 PASS，且只保留一个权威活动实现和一个权威状态写入者。
 
 缺少执行证据时只能写“未验证”，不能把计划状态当成通过状态。

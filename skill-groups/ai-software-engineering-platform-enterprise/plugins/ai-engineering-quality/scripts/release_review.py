@@ -2,6 +2,7 @@ from __future__ import annotations
 import argparse,json
 from pathlib import Path
 from qualitylib import git_root,load_json,now,repo_ai,write_json
+from delivery_hygiene import audit as delivery_hygiene_audit
 
 def status_of(path:Path)->str:
     data=load_json(path,{}) or {};return str(data.get("status") or data.get("result") or "MISSING").upper()
@@ -32,10 +33,13 @@ def review(root:Path,task_id:str|None=None)->dict:
     evidence_payloads=[load_json(evidence_dir/name,{}) or {} for name in ("tests.json","build.json","migration.json","rollback.json")]
     mismatched=[x.get("project_id") for x in [risk,plan,*evidence_payloads] if x.get("project_id") and x.get("project_id")!=project.get("project_id")]
     if mismatched:blockers.append("发布证据混入其他项目上下文")
+    hygiene=delivery_hygiene_audit(root,"release")
+    if not hygiene["ok"]:blockers.append("正式交付仍包含占位、演示、Mock或内部诊断残留")
+    elif hygiene["status"]=="WARN":warnings.append("正式交付存在需要确认的界面文案或内部信息残留")
     if level in {"HIGH","CRITICAL"}:warnings.append(f"当前风险等级为 {level}")
     if risk.get("evidence_gaps"):warnings.extend(risk["evidence_gaps"])
     result="BLOCKED" if blockers else ("PASS_WITH_WARNINGS" if warnings else "PASS")
-    return {"schema_version":2,"generated_at":now(),"result":result,"task_id":safe_task or None,"project_id":project.get("project_id"),"risk_level":level,"evidence":{"tests":tests,"build":build,"migration":migration,"rollback":rollback},"blockers":blockers,"warnings":warnings}
+    return {"schema_version":2,"generated_at":now(),"result":result,"task_id":safe_task or None,"project_id":project.get("project_id"),"risk_level":level,"evidence":{"tests":tests,"build":build,"migration":migration,"rollback":rollback},"delivery_hygiene":hygiene,"blockers":blockers,"warnings":warnings}
 def main()->int:
     ap=argparse.ArgumentParser();ap.add_argument("--root",default=".");ap.add_argument("--task-id",required=True);a=ap.parse_args();root=git_root(Path(a.root));data=review(root,a.task_id);out=repo_ai(root)/"evidence"/"release";write_json(out/"latest.json",data);(out/"latest.md").write_text("# 发布就绪审核\n\n"+f"结果：**{data['result']}**\n\n## 阻断\n"+"\n".join(f"- {x}" for x in data["blockers"])+"\n\n## 警告\n"+"\n".join(f"- {x}" for x in data["warnings"])+"\n",encoding="utf-8");print(json.dumps(data,ensure_ascii=False,indent=2));return 1 if data["result"]=="BLOCKED" else 0
 if __name__=="__main__":raise SystemExit(main())

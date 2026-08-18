@@ -17,6 +17,7 @@ description: 为长期、多会话、多Agent或频繁上下文压缩的软件�
 4. 压缩账本：`.ai/runtime/checkpoint-ledger.json`，记录被收敛快照的数量、时间、摘要索引和哈希链。
 5. Skill 路由态：`.ai/runtime/skill-routing.json`，只保存当前阶段、最多两个活跃原子 Skill、待执行名称和路由指纹，不保存 Skill 正文。
 6. 冷归档：`.ai/archive/` 保存压缩后的历史恢复包和只追加索引；日常启动、路由和状态渲染不得扫描冷归档。
+7. 源码溯源：`.ai/governance/source-provenance.json` 只保存仓库身份哈希、HEAD、分支、工作区状态和工程清单哈希，不保存远程地址或本机绝对路径。
 
 聊天内容不是永久事实。任何会影响实现的新增需求、决定、完成项和风险，必须先写入第一层，之后才允许压缩或交接。
 
@@ -31,10 +32,15 @@ description: 为长期、多会话、多Agent或频繁上下文压缩的软件�
 - 新会话按“项目身份 → Task/决定 → Git → 正式文档 → 最新checkpoint → 聊天摘要”恢复；
 - 只加载当前任务、当前技术栈和当前阶段需要的文件。不得预载所有历史、所有Skill、所有任务或完整知识图谱；
 - 每个阶段最多保留两个活跃原子 Skill；轻量路由不计入额度，待执行 Skill 只保存名称并在门禁通过后重新路由。
+- 每次路由先运行 `context_budget.py`。小型项目最多读取12个源码文件，标准项目40个，大型项目80个；达到上限必须按模块或风险分片，不能自动扩大成全仓扫描。
+- 每次接管和压缩恢复先运行 `state_consistency.py`。L1只重建受影响热索引，L2重建受影响模块和契约基线，L3使候选、图谱与审核测试证据失效，L4隔离旧 `.ai` 派生状态并重新建立项目身份。修复只归档旧溯源，不删除需求、任务、决定或证据原件。
+- `.ai` 与源码不一致时，Git、Manifest、锁文件、测试和当前源码优先；`.ai` 是有来源约束的工程记忆，不是不可质疑的第二套源码。
 - 用户可查看：
 
 ```bash
 python3 <plugin-root>/scripts/statectl.py --root . memory-status
+python3 <plugin-root>/scripts/context_budget.py --root . --stage development
+python3 <plugin-root>/scripts/state_consistency.py --root .
 ```
 
 ## 与04插件协作

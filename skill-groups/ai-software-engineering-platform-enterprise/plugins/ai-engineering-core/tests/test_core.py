@@ -16,6 +16,8 @@ from detect_project import detect
 from runtime_control import classify
 from statectl import checkpoint, record_routing, update_active
 from corelib import atomic_write_json
+from context_budget import build_context_plan
+from state_consistency import assess as assess_state_consistency, repair as repair_state_consistency
 from requirements_fusion import init as init_requirements, merge as merge_requirements, validate as validate_requirements
 from brownfield_reconcile import initialize as init_brownfield, set_baseline, reconcile, validate as validate_brownfield
 from suite_router import inspect_project, route
@@ -136,8 +138,8 @@ class CoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td) / "repo"; root.mkdir()
             subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, stdout=subprocess.PIPE)
-            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=root, check=True)
-            subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "hiker"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Hiker"], cwd=root, check=True)
             (root / "package.json").write_text(json.dumps({"dependencies": {"vue": "3.5.0"}}), encoding="utf-8")
             subprocess.run(["git", "add", "."], cwd=root, check=True); subprocess.run(["git", "commit", "-m", "init"], cwd=root, check=True, stdout=subprocess.PIPE)
             nested = root / "old-worktree"
@@ -227,6 +229,69 @@ class CoreTests(unittest.TestCase):
     def test_checkpoint_label_cannot_escape_directory(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);(root/".ai/runtime").mkdir(parents=True);(root/".ai/schema.json").write_text(json.dumps({"version":"1.0.0"}));p=checkpoint(root,"../../outside",event="manual");self.assertTrue(os.path.samefile(p.parent,root/".ai/runtime/checkpoints"));self.assertNotIn("..",p.name)
+
+    def test_context_budget_scales_without_loading_history_or_skill_bodies(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, stdout=subprocess.PIPE)
+            (root / "README.md").write_text("# Hiker\n", encoding="utf-8")
+            subprocess.run(["git", "add", "README.md"], cwd=root, check=True)
+            plan = build_context_plan(root, "development", [f"src/f{i}.ts" for i in range(20)])
+            self.assertEqual("small", plan["scale"]["mode"])
+            self.assertEqual(2, plan["budget"]["max_active_skills"])
+            self.assertEqual(12, len(plan["working_set"]["changed_paths"]))
+            self.assertIn("all-skill-bodies", plan["working_set"]["never_default_scan"])
+            upgraded = build_context_plan(root, "review", [], {"public-surface"})
+            self.assertEqual("standard", upgraded["scale"]["mode"])
+
+    def test_context_budget_uses_bounded_task_index_for_long_running_projects(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, stdout=subprocess.PIPE)
+            (root / ".ai/runtime").mkdir(parents=True)
+            (root / ".ai/runtime/task-index.json").write_text(json.dumps({"closed_count": 1000}), encoding="utf-8")
+            plan = build_context_plan(root, "governance")
+            self.assertEqual("large", plan["scale"]["mode"])
+            self.assertEqual("bounded-index-only", plan["budget"]["history_scope"])
+
+    def test_state_consistency_repairs_incremental_and_material_drift(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, stdout=subprocess.PIPE)
+            subprocess.run(["git", "config", "user.email", "hiker"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Hiker"], cwd=root, check=True)
+            (root / "README.md").write_text("# Hiker\n", encoding="utf-8")
+            (root / "package.json").write_text('{"name":"hiker"}', encoding="utf-8")
+            subprocess.run(["git", "add", "README.md", "package.json"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-m", "feat: initialize"], cwd=root, check=True, stdout=subprocess.PIPE)
+            first = repair_state_consistency(root)
+            self.assertTrue(first["repaired"])
+            self.assertTrue(assess_state_consistency(root)["ok"])
+
+            (root / "README.md").write_text("# Hiker\n\nupdated\n", encoding="utf-8")
+            subprocess.run(["git", "add", "README.md"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-m", "docs: update"], cwd=root, check=True, stdout=subprocess.PIPE)
+            self.assertEqual("L1", assess_state_consistency(root)["recovery_level"])
+            repair_state_consistency(root)
+
+            (root / "package.json").write_text('{"name":"hiker","version":"2"}', encoding="utf-8")
+            subprocess.run(["git", "add", "package.json"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-m", "feat: update manifest"], cwd=root, check=True, stdout=subprocess.PIPE)
+            self.assertEqual("L2", assess_state_consistency(root)["recovery_level"])
+
+    def test_state_consistency_detects_local_repository_identity_drift_without_remote(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            first = base / "first"; second = base / "second"; first.mkdir(); second.mkdir()
+            for root in (first, second):
+                subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, stdout=subprocess.PIPE)
+            repair_state_consistency(first)
+            stored = json.loads((first / ".ai/governance/source-provenance.json").read_text(encoding="utf-8"))
+            (second / ".ai/governance").mkdir(parents=True)
+            (second / ".ai/governance/source-provenance.json").write_text(json.dumps(stored), encoding="utf-8")
+            report = assess_state_consistency(second)
+            self.assertEqual("L4", report["recovery_level"])
+            self.assertEqual("PROJECT_IDENTITY_DRIFT", report["status"])
     def test_detect_monorepo(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

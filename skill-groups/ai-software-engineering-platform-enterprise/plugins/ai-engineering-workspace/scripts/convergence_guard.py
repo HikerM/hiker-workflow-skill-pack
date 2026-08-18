@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from workspacelib import atomic_json, repo_root, safe_id, state_lock
+from implementation_guard import validate_registry
 
 
 SCHEMA_VERSION = "1.0.0"
@@ -796,6 +797,14 @@ def main() -> int:
             save_task(root, task)
             phase = args.phase if args.command == "status" else "status"
             report = health_report(state, phase)
+            implementation_report = validate_registry(root)
+            if not implementation_report["ok"]:
+                report["ok"] = False
+                report["severity"] = "BLOCKED"
+                report["blockers"].extend(
+                    f"实现唯一性门禁：{item['message']}" for item in implementation_report["errors"]
+                )
+                report["actions"].append("收敛为一个权威活动实现和一个权威状态写入者")
         print(json.dumps({"ok": report["ok"], "result": report, "operation": operation_result, "state": state}, ensure_ascii=False, indent=2))
         return 0 if args.command != "status" or report["ok"] else 2
     except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:

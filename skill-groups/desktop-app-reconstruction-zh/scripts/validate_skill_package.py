@@ -347,7 +347,7 @@ def validate_root(root: Path, *, run_self_test: bool = False) -> dict[str, Any]:
     issues.extend(metadata_issues); warnings.extend(metadata_warnings)
     details["agent_metadata"] = metadata
     if metadata.get("policy", {}).get("allow_implicit_invocation") is not False:
-        issues.append("第三组顶层桌面重建路由必须关闭隐式调用，只允许手动选择")
+        issues.append("桌面重建顶层路由必须关闭隐式调用，只允许手动选择")
 
     ref_issues, ref_warnings = validate_references(root, skill_text)
     issues.extend(ref_issues); warnings.extend(ref_warnings)

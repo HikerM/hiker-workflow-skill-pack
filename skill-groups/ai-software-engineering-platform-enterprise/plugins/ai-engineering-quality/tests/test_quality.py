@@ -14,10 +14,11 @@ from interaction_guard import evaluate as interaction_evaluate, run as interacti
 from audit_skill_coherence import audit as coherence_audit
 from harness_preflight import preflight
 from handoff_redactor import redact_text, scan as redaction_scan
+from delivery_hygiene import audit as delivery_hygiene_audit
 
-def git(root,*args,check=True):return subprocess.run(["git",*args],cwd=root,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=check)
+def git(root,*args,check=True):return subprocess.run(["git",*args],cwd=root,text=True,encoding="utf-8",errors="replace",stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=check)
 def repo(root:Path):
-    git(root,"init","-b","main");git(root,"config","user.email","test@example.com");git(root,"config","user.name","Test");(root/"README.md").write_text("init\n");git(root,"add",".");git(root,"commit","-m","init")
+    git(root,"init","-b","main");git(root,"config","user.email","hiker");git(root,"config","user.name","Hiker");(root/"README.md").write_text("init\n");git(root,"add",".");git(root,"commit","-m","init")
 
 class QualityTests(unittest.TestCase):
     def test_skill_coherence_audits_every_skill_and_detects_receipt_distortion(self):
@@ -149,4 +150,19 @@ class QualityTests(unittest.TestCase):
             source=Path(td)/"thread.txt";source.write_text("password: secret123",encoding="utf-8")
             raw=redaction_scan(source,None);self.assertEqual("BLOCK",raw["result"]);self.assertFalse(raw["export_allowed"])
             target=Path(td)/"safe.txt";safe=redaction_scan(source,target);self.assertTrue(safe["export_allowed"]);self.assertNotIn("secret123",target.read_text(encoding="utf-8"))
+
+    def test_delivery_hygiene_blocks_runtime_demo_defaults(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);repo(root);source=root/"src";source.mkdir();(source/"config.ts").write_text("export const DEMO_MODE = true;\n",encoding="utf-8")
+            result=delivery_hygiene_audit(root,"changed")
+            self.assertFalse(result["ok"]);self.assertIn("DEMO_DEFAULT_ENABLED",{item["code"] for item in result["findings"]})
+
+    def test_delivery_hygiene_release_blocks_user_visible_internal_details_and_ignores_tests(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);repo(root);(root/"src").mkdir();(root/"src/ErrorView.tsx").write_text('export const message = "stack trace at Service.run(app.ts:10)";\n',encoding="utf-8")
+            (root/"tests").mkdir();(root/"tests/demo.ts").write_text("export const DEMO_MODE = true;\n",encoding="utf-8")
+            git(root,"add",".");git(root,"commit","-m","feat: add view")
+            result=delivery_hygiene_audit(root,"release")
+            self.assertFalse(result["ok"]);self.assertIn("STACK_TRACE_EXPOSURE",{item["code"] for item in result["findings"]})
+            self.assertFalse(any(item["path"].startswith("tests/") for item in result["findings"]))
 if __name__=="__main__":unittest.main()

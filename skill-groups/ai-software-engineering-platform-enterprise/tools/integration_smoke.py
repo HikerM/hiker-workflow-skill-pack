@@ -14,7 +14,7 @@ def main()->int:
     checks=[]
     coherence=coherence_audit(ROOT);checks.append(("skill-coherence",coherence.get("ok") is True and coherence.get("skill_count")==42))
     with tempfile.TemporaryDirectory() as td:
-        root=Path(td)/"repo";root.mkdir();git(root,"init","-b","main");git(root,"config","user.email","test@example.com");git(root,"config","user.name","Smoke")
+        root=Path(td)/"repo";root.mkdir();git(root,"init","-b","main");git(root,"config","user.email","hiker");git(root,"config","user.name","Hiker")
         (root/"package.json").write_text(json.dumps({"name":"smoke","packageManager":"pnpm@9","dependencies":{"vue":"3.5.1"},"devDependencies":{"typescript":"5.7.0"},"scripts":{"lint":"eslint .","test":"vitest run","build":"vite build"}}));(root/"src").mkdir();(root/"src/a.ts").write_text("export const a=1\n");git(root,"add",".");git(root,"commit","-m","chore: initialize smoke repository");git(root,"branch","develop");git(root,"branch","release")
         run([sys.executable,str(CORE/"bootstrap_project.py"),"--root",str(root)],root);checks.append(("bootstrap",(root/".ai/context/tech-stack.json").exists()))
         run([sys.executable,str(CORE/"statectl.py"),"--root",str(root),"task-start","--id","REQ-SMOKE-001","--goal","smoke","--scope","src"],root)
@@ -45,7 +45,7 @@ def main()->int:
         expected_ids={f"{name}@personal-ai-engineering-marketplace" for name in ["ai-engineering-core","ai-engineering-web","ai-engineering-unity","ai-engineering-workspace","ai-engineering-quality"]}
         valid_sections=all(len(re.findall(rf'(?m)^\[plugins\."{re.escape(name)}"\]\r?\nenabled = true$',config))==1 for name in expected_ids)
         checks.append(("config-activation-fallback",enabled["status"]=="unchanged" and enabled_again["status"]=="unchanged" and valid_sections))
-        agents=(fake_home/".codex/AGENTS.md").read_text(encoding="utf-8") if inst.returncode==0 else "";forbidden_group_terms=("第一组","第二组","第三组","组别")
+        agents=(fake_home/".codex/AGENTS.md").read_text(encoding="utf-8") if inst.returncode==0 else "";forbidden_group_terms=("项目：","模式：","触发原因：","组别：")
         checks.append(("global-auto-application","keep me" in agents and agents.count("<!-- ai-engineering-global-governance start -->")==1 and "已应用：01 智能工程核心｜智能工程轻量路由" in agents and "轻量路由不计入该上限" in agents and not any(term in agents for term in forbidden_group_terms) and "ai-engineering-router" not in agents and "bounded-context-memory" not in agents))
         core_cache=fake_home/".codex/plugins/cache/personal-ai-engineering-marketplace/ai-engineering-core"
         for stale in ("5.3.0+codex.stale-a","5.4.0+codex.stale-b"):(core_cache/stale).mkdir(parents=True)

@@ -5,6 +5,7 @@ from change_set import collect
 from architecture_guard import evaluate as architecture_evaluate, safe_id
 from graph_store import impact
 from qualitylib import git_root,head,load_json,matches_any,markdown_table,now,posix,repo_ai,worktree_fingerprint,write_json
+from delivery_hygiene import audit as delivery_hygiene_audit
 
 PLUGIN=Path(__file__).resolve().parents[1]
 def policy(root:Path,explicit:str|None)->dict:
@@ -60,6 +61,11 @@ def review(root:Path,mode:str="all-local",base:str|None=None,target:str|None=Non
         for message in architecture_guard.get("warnings",[]):
             findings.append({"severity":"MEDIUM","type":"architecture-guard","evidence":message})
         if architecture_guard.get("result")=="BLOCKED":score=max(score,45);tags.add("architecture-guard")
+    delivery_hygiene=delivery_hygiene_audit(root,"changed")
+    for item in delivery_hygiene.get("findings",[]):
+        severity="HIGH" if item.get("severity")=="block" else "MEDIUM"
+        findings.append({"severity":severity,"type":"delivery-hygiene","path":item.get("path"),"evidence":item.get("code")})
+    if not delivery_hygiene.get("ok",True):score=max(score,45);tags.add("delivery-hygiene")
     thresholds=th;level="LOW"
     if score>=int(thresholds.get("critical",75)):level="CRITICAL"
     elif score>=int(thresholds.get("high",45)):level="HIGH"
@@ -81,7 +87,7 @@ def review(root:Path,mode:str="all-local",base:str|None=None,target:str|None=Non
     elif graph_info.get("stale"):gaps.append("工程图谱已过期")
     if unknown_lines:gaps.append(f"{unknown_lines} 个二进制或未知行数文件")
     task=load_json(repo_ai(root)/"tasks"/f"{safe_id(task_id)}.json",{}) if task_id else {}
-    return {"schema_version":2,"generated_at":now(),"repository":str(root),"project_id":task.get("project_id") if isinstance(task,dict) else None,"task_id":safe_id(task_id) if task_id else None,"head":head(root),"worktree_fingerprint":worktree_fingerprint(root),"change_mode":mode,"risk":{"score":score,"level":level,"confidence":confidence,"tags":sorted(tags)},"summary":{"files":len(kept),"ignored_generated":len(ignored),"changed_lines":line_total,"unknown_line_files":unknown_lines},"changes":kept,"ignored":ignored,"findings":findings,"ownership":{"uncovered":uncovered},"graph":graph_info,"architecture_guard":architecture_guard,"evidence_gaps":gaps,"controls":{"auto_merge":False,"recommendation":"先执行回归计划并补齐关键证据" if level in {"HIGH","CRITICAL"} else "按风险范围执行验证"}}
+    return {"schema_version":2,"generated_at":now(),"repository":str(root),"project_id":task.get("project_id") if isinstance(task,dict) else None,"task_id":safe_id(task_id) if task_id else None,"head":head(root),"worktree_fingerprint":worktree_fingerprint(root),"change_mode":mode,"risk":{"score":score,"level":level,"confidence":confidence,"tags":sorted(tags)},"summary":{"files":len(kept),"ignored_generated":len(ignored),"changed_lines":line_total,"unknown_line_files":unknown_lines},"changes":kept,"ignored":ignored,"findings":findings,"ownership":{"uncovered":uncovered},"graph":graph_info,"architecture_guard":architecture_guard,"delivery_hygiene":delivery_hygiene,"evidence_gaps":gaps,"controls":{"auto_merge":False,"recommendation":"先执行回归计划并补齐关键证据" if level in {"HIGH","CRITICAL"} else "按风险范围执行验证"}}
 
 def to_md(data:dict)->str:
     r=data["risk"];rows=[[f.get("severity"),f.get("type"),f.get("path") or ", ".join(f.get("paths",[])[:3]),f.get("evidence")] for f in data["findings"]]

@@ -1,6 +1,0 @@
-interface:
-  display_name: "Hiker工作流路由"
-  short_description: "轻量选择一个最匹配的工程守护Skill"
-  default_prompt: "使用 $hiker-workflow-router 选择最小必要的一个Hiker原子Skill，并显示路由收据。"
-policy:
-  allow_implicit_invocation: false

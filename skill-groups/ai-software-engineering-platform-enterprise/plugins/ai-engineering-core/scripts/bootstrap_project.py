@@ -7,6 +7,7 @@ from pathlib import Path
 from corelib import SCHEMA_VERSION, ai_root, atomic_write_json, atomic_write_text, git_info, read_json, utc_now
 from context_memory import ensure_memory_policy
 from detect_project import detect
+from state_consistency import assess as assess_state_consistency, repair as repair_state_consistency
 
 DEFAULT_POLICY = {
     "schema_version": "1.0.0",
@@ -60,6 +61,8 @@ def initialize(root: Path, force: bool = False) -> dict:
     (ai / "runtime" / "checkpoints").mkdir(parents=True, exist_ok=True)
     ensure_memory_policy(root)
     (ai / "logs").mkdir(parents=True, exist_ok=True)
+    if not assess_state_consistency(root)["ok"]:
+        repair_state_consistency(root)
     return detected
 
 

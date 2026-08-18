@@ -1,6 +1,0 @@
-interface:
-  display_name: "证据优先测试"
-  short_description: "按需设计可验证测试证据"
-  default_prompt: "使用 $evidence-first-testing 规划当前测试证据。"
-policy:
-  allow_implicit_invocation: false

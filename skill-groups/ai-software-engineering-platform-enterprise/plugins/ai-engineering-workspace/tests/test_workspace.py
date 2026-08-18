@@ -39,6 +39,7 @@ from workspacelib import common_dir, read_json, safe_branch, state_lock
 from dispatch_guard import classify_observation, environment_plan, status_fingerprint
 from candidate_guard import freeze as candidate_freeze, verify as candidate_verify
 from session_pool import bind as session_bind, complete as session_complete, plan as session_plan, release_ack as session_release_ack, status as session_status
+from implementation_guard import validate_registry
 
 
 def ns(**values): return argparse.Namespace(**values)
@@ -49,7 +50,7 @@ def git(root, *args): return subprocess.run(["git", *args], cwd=root, text=True,
 
 class WorkspaceTests(unittest.TestCase):
     def repo(self, root: Path):
-        git(root, "init", "-b", "main"); git(root, "config", "user.email", "test@example.com"); git(root, "config", "user.name", "Test")
+        git(root, "init", "-b", "main"); git(root, "config", "user.email", "hiker"); git(root, "config", "user.name", "Hiker")
         (root / "a.txt").write_text("a\n", encoding="utf-8"); git(root, "add", "."); git(root, "commit", "-m", "chore: initialize repository"); git(root, "branch", "develop"); git(root, "branch", "release")
 
     def governance(self, root: Path, task_id="KG-001", branch="feature/KG-001-login"):
@@ -455,6 +456,40 @@ class WorkspaceTests(unittest.TestCase):
         record_progress(state, "business", "完成首个业务源码切片", "运行真实集成验证")
         self.assertTrue(state["delivery_progress"]["business_source_started"])
         self.assertEqual(0, state["delivery_progress"]["consecutive_governance_only_cycles"])
+
+    def test_implementation_registry_is_optional_and_blocks_multiple_writers(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            self.assertEqual("NOT_APPLICABLE", validate_registry(root)["status"])
+            report = validate_registry(root, {"capabilities": [{
+                "id": "CAP-001",
+                "implementations": [
+                    {"path": "src/current", "status": "active", "authoritative": True, "writes_canonical_state": True},
+                    {"path": "src/next", "status": "transitional", "authoritative": False, "writes_canonical_state": True},
+                ],
+                "migration": {"target": "src/next", "exit_conditions": ["等价回归通过"]},
+            }]})
+            self.assertFalse(report["ok"])
+            self.assertIn("MULTIPLE_CANONICAL_WRITERS", {item["code"] for item in report["errors"]})
+
+    def test_implementation_registry_allows_bounded_migration_and_rejects_deprecated_writer(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            valid = validate_registry(root, {"capabilities": [{
+                "id": "CAP-API",
+                "implementations": [
+                    {"path": "src/api-v1", "status": "transitional", "authoritative": False, "writes_canonical_state": False, "entrypoints": ["/api/v1"]},
+                    {"path": "src/api-v2", "status": "active", "authoritative": True, "writes_canonical_state": True, "entrypoints": ["/api/v2"]},
+                ],
+                "migration": {"target": "src/api-v2", "exit_conditions": ["旧客户端迁移完成", "删除旧入口"]},
+            }]})
+            self.assertTrue(valid["ok"], valid["errors"])
+            invalid = validate_registry(root, {"capabilities": [{
+                "id": "CAP-OLD",
+                "implementations": [{"path": "src/old", "status": "deprecated", "authoritative": False, "writes_canonical_state": True, "accepts_new_work": True}],
+            }]})
+            self.assertFalse(invalid["ok"])
+            self.assertTrue({"DEPRECATED_WRITER", "DEPRECATED_ACCEPTS_NEW_WORK"} <= {item["code"] for item in invalid["errors"]})
 
 
 if __name__ == "__main__": unittest.main()

@@ -1,6 +1,0 @@
-interface:
-  display_name: "Unity Codex守护"
-  short_description: "按需守护Unity工程变更"
-  default_prompt: "使用 $unity-codex-guardrails 审核当前Unity变更。"
-policy:
-  allow_implicit_invocation: false

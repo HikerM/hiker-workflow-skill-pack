@@ -1,9 +1,9 @@
 {
   "name": "ai-engineering-workspace",
-  "version": "5.13.0+codex.20260815211823",
+  "version": "5.14.0+codex.20260818144314",
   "description": "\u5927\u578bB/S\u4e0eC/S\u5de5\u7a0b\u7684\u9636\u6bb5\u8def\u7531\u3001\u4efb\u52a1\u9632\u91cd\u3001\u5019\u9009\u51bb\u7ed3\u3001\u957f\u94fe\u8def\u8bca\u65ad\u3001Git\u4e0e\u9a8c\u6536\u95ed\u73af\u6cbb\u7406",
   "author": {
-    "name": "AI Engineering Toolkit"
+    "name": "Hiker"
   },
   "license": "UNLICENSED",
   "keywords": [
@@ -17,7 +17,7 @@
     "displayName": "04 \u5de5\u4f5c\u533a\u4e0e\u591a\u4f1a\u8bdd\u534f\u4f5c",
     "shortDescription": "\u591aAgent\u3001\u9879\u76ee\u72b6\u6001\u3001\u957f\u94fe\u8def\u6536\u655b\u3001\u6587\u4ef6\u9501\u4e0eGit\u95e8\u7981",
     "longDescription": "\u4ee5\u8f7b\u91cf\u8def\u7531\u548c\u4e03\u7c7b\u89d2\u8272\u957f\u671f\u7ba1\u7406\u5927\u578bB/S\u53ca\u591a\u6280\u672f\u6808C/S\u5de5\u7a0b\uff1b\u63d0\u4f9b\u6709\u754c\u9879\u76ee\u72b6\u6001\u3001Task ID\u3001Context Snapshot\u3001\u591a\u4ed3\u5e93\u9694\u79bb\u3001\u6587\u4ef6\u9501\u3001\u5206\u652f\u6cbb\u7406\u3001\u5408\u5e76\u95e8\u7981\u4e0e\u529f\u80fd\u95ed\u73af\u3002",
-    "developerName": "AI Engineering Toolkit",
+    "developerName": "Hiker",
     "category": "Productivity",
     "capabilities": [
       "Read",

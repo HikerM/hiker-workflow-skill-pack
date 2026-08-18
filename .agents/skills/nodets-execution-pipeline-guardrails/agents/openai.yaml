@@ -1,6 +1,0 @@
-interface:
-  display_name: "NodeTs执行链守护"
-  short_description: "按需守护NodeTs执行链路"
-  default_prompt: "使用 $nodets-execution-pipeline-guardrails 审核当前NodeTs链路。"
-policy:
-  allow_implicit_invocation: false

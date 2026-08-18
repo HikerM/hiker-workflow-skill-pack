@@ -1,9 +1,9 @@
 {
   "name": "ai-engineering-unity",
-  "version": "5.13.0+codex.20260815211823",
+  "version": "5.14.0+codex.20260818144314",
   "description": "\u901a\u7528C/S\u5ba2\u6237\u7aef\u8def\u7531\u3001\u8bbe\u8ba1\u3001\u5b9e\u73b0\u4e0e\u5ba1\u6838\uff0c\u542bUnity\u4e13\u9879\u80fd\u529b",
   "author": {
-    "name": "AI Engineering Toolkit"
+    "name": "Hiker"
   },
   "license": "UNLICENSED",
   "keywords": [
@@ -17,7 +17,7 @@
     "displayName": "03 \u5ba2\u6237\u7aef\u5de5\u7a0b",
     "shortDescription": "\u591a\u6280\u672f\u6808C/S\u5ba2\u6237\u7aef\u5de5\u7a0b\u4e0eUnity\u4e13\u9879\u80fd\u529b",
     "longDescription": "\u4ee5\u8f7b\u91cf\u8def\u7531\u6309\u9700\u652f\u6301Unity\u3001Qt\u3001.NET\u684c\u9762\u3001Electron/Tauri\u3001Flutter\u3001Android\u3001Apple\u539f\u751f\u3001React Native\u3001Java\u684c\u9762\u548c\u5d4c\u5165\u5f0fHMI\uff1b\u8986\u76d6\u8bbe\u8ba1\u7cfb\u7edf\u3001\u7ec4\u4ef6\u5b9e\u73b0\u3001\u5ba2\u6237\u7aef\u751f\u547d\u5468\u671f\u3001API\u5951\u7ea6\u548c\u72ec\u7acb\u8d28\u91cf\u5ba1\u6838\u3002",
-    "developerName": "AI Engineering Toolkit",
+    "developerName": "Hiker",
     "category": "Productivity",
     "capabilities": [
       "Read",

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import hashlib
+import contextlib
 import json
 import os
 import subprocess
 import tempfile
+import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 SCHEMA_VERSION = "1.0.0"
 
@@ -78,6 +81,80 @@ def read_json(path: Path, default: Any = None) -> Any:
         return json.loads(path.read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         return default
+
+
+def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+_LOCK_LOCAL = threading.local()
+_PROCESS_LOCKS_GUARD = threading.Lock()
+_PROCESS_LOCKS: dict[str, threading.RLock] = {}
+
+
+def _process_lock(key: str) -> threading.RLock:
+    with _PROCESS_LOCKS_GUARD:
+        return _PROCESS_LOCKS.setdefault(key, threading.RLock())
+
+
+@contextlib.contextmanager
+def state_lock(project_root: Path, timeout: float = 15.0, stale_after: float = 120.0) -> Iterator[None]:
+    """Serialize small .ai state transactions; re-entrant inside one thread."""
+    lock = ai_root(project_root) / "runtime" / "core-state.lock"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    key = str(lock.resolve()).casefold()
+    process_lock = _process_lock(key)
+    process_lock.acquire()
+    try:
+        held = getattr(_LOCK_LOCAL, "held", {})
+        if held.get(key, 0):
+            held[key] += 1
+            _LOCK_LOCAL.held = held
+            try:
+                yield
+            finally:
+                held[key] -= 1
+            return
+        started = time.time()
+        fd: int | None = None
+        while True:
+            try:
+                fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                os.write(fd, json.dumps({"pid": os.getpid(), "created": time.time()}).encode("utf-8"))
+                break
+            except FileExistsError:
+                info = read_json(lock, {}) or {}
+                age = time.time() - float(info.get("created", lock.stat().st_mtime))
+                owner = int(info.get("pid", 0) or 0)
+                if age > stale_after and not _pid_alive(owner):
+                    try:
+                        lock.unlink()
+                        continue
+                    except FileNotFoundError:
+                        continue
+                if time.time() - started > timeout:
+                    raise TimeoutError(f"core state lock timeout; owner pid={owner}, age={round(age, 1)}s")
+                time.sleep(0.05)
+        held[key] = 1
+        _LOCK_LOCAL.held = held
+        try:
+            yield
+        finally:
+            held.pop(key, None)
+            if fd is not None:
+                os.close(fd)
+            try:
+                lock.unlink()
+            except FileNotFoundError:
+                pass
+    finally:
+        process_lock.release()
 
 
 def append_jsonl(path: Path, record: dict[str, Any]) -> None:

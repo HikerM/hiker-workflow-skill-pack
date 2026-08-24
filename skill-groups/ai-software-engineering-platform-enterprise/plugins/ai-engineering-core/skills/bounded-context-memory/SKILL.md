@@ -12,7 +12,7 @@ description: 为长期、多会话、多Agent或频繁上下文压缩的软件�
 ## 记忆分层
 
 1. 永久事实：`PROJECT_STATE.md`、`.ai/tasks/*.json`、锁定决定、`CHANGELOG.md`、`ARCHITECTURE.md`、测试证据和Git历史；
-2. 当前工作集：`CURRENT_CONTEXT.md` 与 `.ai/runtime/active-context.md`，只保留当前目标、最近进展、待办、风险、决定和禁止事项；
+2. 当前工作集：`CURRENT_CONTEXT.md` 只保存总控摘要，`.ai/runtime/task-contexts/<Task-ID>.md` 保存绑定Task与所有权通道的上下文；`.ai/runtime/active-context.md` 兼容未启用工作区治理的任务；
 3. 恢复点：`.ai/runtime/checkpoints/`，分近期快照与里程碑快照；
 4. 压缩账本：`.ai/runtime/checkpoint-ledger.json`，记录被收敛快照的数量、时间、摘要索引和哈希链。
 5. Skill 路由态：`.ai/runtime/skill-routing.json`，只保存当前阶段、最多两个活跃原子 Skill、待执行名称和路由指纹，不保存 Skill 正文。
@@ -32,6 +32,10 @@ description: 为长期、多会话、多Agent或频繁上下文压缩的软件�
 - 新会话按“项目身份 → Task/决定 → Git → 正式文档 → 最新checkpoint → 聊天摘要”恢复；
 - 只加载当前任务、当前技术栈和当前阶段需要的文件。不得预载所有历史、所有Skill、所有任务或完整知识图谱；
 - 每个阶段最多保留两个活跃原子 Skill；轻量路由不计入额度，待执行 Skill 只保存名称并在门禁通过后重新路由。
+- 长期总控每个有界纪元运行 `session_epoch.py status/record`。默认20个实质轮次、40次工具调用、60000字符工具输出或1次压缩即触发强制轮换；达到任一阈值后当前纪元不得继续实质执行，必须先Checkpoint，再由唯一新总控纪元接管。不得按每个Task创建总控，也不得让一个总控永久累计聊天。
+- 预计产生大输出的构建、测试和审计使用 `bounded_run.py`：完整脱敏输出写入 `.ai/evidence/tool-output/`，会话只接收退出码、首尾摘要、路径和指纹。字符预算必须由执行包装器约束，不能只写在路由建议中。
+- 插件只能限制启动注入和持久状态，不能删除已经进入桌面任务的聊天历史；因此会话纪元轮换是桌面稳定性硬门禁，不得依赖同一任务第二次自动压缩，也不得用继续压缩冒充轮换。已开始出现工具调用结果丢失、持久化序号不一致或恢复失败的桌面任务不能靠Skill修复历史，必须从最新Checkpoint开新纪元接管。
+- 插件不得通过 `SessionStart`、`UserPromptSubmit`、`PreCompact`、`Stop`、`SessionEnd`或子Agent生命周期Hook自动运行脚本。这些高频Hook会增加中途工具输出丢失、重入写入和桌面任务无法收尾的风险；状态恢复、Checkpoint和轮换脚本只能由当前Skill在明确阶段边界内显式调用。
 - 每次路由先运行 `context_budget.py`。小型项目最多读取12个源码文件，标准项目40个，大型项目80个；达到上限必须按模块或风险分片，不能自动扩大成全仓扫描。
 - 每次接管和压缩恢复先运行 `state_consistency.py`。L1只重建受影响热索引，L2重建受影响模块和契约基线，L3使候选、图谱与审核测试证据失效，L4隔离旧 `.ai` 派生状态并重新建立项目身份。修复只归档旧溯源，不删除需求、任务、决定或证据原件。
 - `.ai` 与源码不一致时，Git、Manifest、锁文件、测试和当前源码优先；`.ai` 是有来源约束的工程记忆，不是不可质疑的第二套源码。
@@ -41,6 +45,8 @@ description: 为长期、多会话、多Agent或频繁上下文压缩的软件�
 python3 <plugin-root>/scripts/statectl.py --root . memory-status
 python3 <plugin-root>/scripts/context_budget.py --root . --stage development
 python3 <plugin-root>/scripts/state_consistency.py --root .
+python3 <plugin-root>/scripts/session_epoch.py --root . status
+python3 <plugin-root>/scripts/bounded_run.py --root . --evidence-id TEST-001 -- <测试命令>
 ```
 
 ## 与04插件协作

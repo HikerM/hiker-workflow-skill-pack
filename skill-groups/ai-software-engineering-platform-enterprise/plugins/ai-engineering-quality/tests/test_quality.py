@@ -8,7 +8,7 @@ from architecture_guard import evaluate as architecture_evaluate
 from graph_store import connect,impact,index
 from qualitylib import glob_match,worktree_fingerprint
 from risk_review import review
-from release_review import review as release_review
+from release_review import plan_fingerprint, review as release_review
 from test_plan import plan
 from interaction_guard import evaluate as interaction_evaluate, run as interaction_run
 from audit_skill_coherence import audit as coherence_audit
@@ -124,6 +124,21 @@ class QualityTests(unittest.TestCase):
             by={item["path"]:item for item in data["file_growth"]}
             self.assertEqual("binary",by["bundle.zip"]["skipped"]);self.assertEqual(1,by["说明.txt"]["growth"])
             self.assertFalse(any("bundle.zip" in item for item in data["blockers"]+data["warnings"]))
+    def test_architecture_guard_requires_structure_decision_before_large_file_gets_new_responsibility(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);repo(root);(root/"src").mkdir()
+            source=root/"src/Feature.ts";source.write_text("\n".join(["// stable"]*321)+"\n",encoding="utf-8")
+            git(root,"add",".");git(root,"commit","-m","feat: establish feature")
+            source.write_text(source.read_text(encoding="utf-8")+"export function addedResponsibility() { return true }\n",encoding="utf-8")
+            task_dir=root/".ai/tasks";task_dir.mkdir(parents=True)
+            task={"project_id":"APP","task_id":"KG-101","change_contract":{"allowed_files":["src/Feature.ts"],"allowed_modules":[],"protected_modules":[],"public_contract_changes":[],"behavior_invariants":["现有行为不变"],"required_tests":["功能回归"],"characterization_tests":[],"consumer_tests":[],"consumers":[],"structural_decisions":[]}}
+            (task_dir/"KG-101.json").write_text(json.dumps(task,ensure_ascii=False),encoding="utf-8")
+            blocked=architecture_evaluate(root,"KG-101")
+            self.assertTrue(any("编码前结构决策" in item for item in blocked["blockers"]))
+            task["change_contract"]["structural_decisions"]=["src/Feature.ts|EXTRACT|src/FeaturePart.ts|完成调用迁移后原文件只保留编排"]
+            (task_dir/"KG-101.json").write_text(json.dumps(task,ensure_ascii=False),encoding="utf-8")
+            allowed=architecture_evaluate(root,"KG-101")
+            self.assertFalse(any("编码前结构决策" in item for item in allowed["blockers"]))
     def test_test_plan_monorepo_cwd(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);repo(root);web=root/"web";web.mkdir();(web/"package.json").write_text(json.dumps({"packageManager":"pnpm@9","scripts":{"test":"vitest run"}}));data=plan(root,{"risk":{"level":"MEDIUM","tags":[]},"changes":[{"path":"web/src/a.ts"}]});self.assertTrue(any(x.get("cwd")=="web" and x["command"]=="pnpm test" for x in data["mandatory"]))
@@ -134,6 +149,23 @@ class QualityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);repo(root);data=release_review(root,"KG-001");self.assertEqual("BLOCKED",data["result"])
             self.assertTrue(any("发布状态文档缺失" in x for x in data["blockers"]));self.assertTrue(any("项目状态" in x or "任务状态" in x for x in data["blockers"]))
+    def test_release_review_binds_full_test_matrix_to_current_merge_commit(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);repo(root);merge_commit=git(root,"rev-parse","HEAD").stdout.strip()
+            for name in ("PROJECT_STATE.md","CHANGELOG.md","ARCHITECTURE.md"):(root/name).write_text("# current\n",encoding="utf-8")
+            (root/".ai/governance").mkdir(parents=True);(root/".ai/tasks").mkdir(parents=True);(root/".ai/evidence/risk").mkdir(parents=True);(root/".ai/evidence/test-plan").mkdir(parents=True);(root/".ai/evidence/results").mkdir(parents=True)
+            (root/".ai/governance/project-state.json").write_text(json.dumps({"project_id":"APP"}),encoding="utf-8")
+            task={"project_id":"APP","task_id":"KG-201","state":"Merged","merge_commit":merge_commit,"closure":{"merge":"PASS"},"change_contract":{"required_tests":["核心回归"]}}
+            (root/".ai/tasks/KG-201.json").write_text(json.dumps(task,ensure_ascii=False),encoding="utf-8")
+            (root/".ai/evidence/risk/latest.json").write_text(json.dumps({"project_id":"APP","risk":{"level":"LOW","tags":[]}}),encoding="utf-8")
+            test_plan={"mandatory":[{"cwd":".","command":"npm test"}],"manual":[],"gaps":[]}
+            (root/".ai/evidence/test-plan/latest.json").write_text(json.dumps(test_plan),encoding="utf-8")
+            tests={"project_id":"APP","task_id":"KG-201","status":"PASS","scope":"FULL","plan_fingerprint":plan_fingerprint(test_plan),"source_commit":"stale","commands":[{"cwd":".","command":"npm test","status":"PASS"}],"requirements":[{"name":"核心回归","status":"PASS"}],"manual_checks":[]}
+            (root/".ai/evidence/results/tests.json").write_text(json.dumps(tests,ensure_ascii=False),encoding="utf-8")
+            (root/".ai/evidence/results/build.json").write_text(json.dumps({"project_id":"APP","status":"PASS"}),encoding="utf-8")
+            stale=release_review(root,"KG-201");self.assertTrue(any("merge commit" in item for item in stale["blockers"]))
+            tests["source_commit"]=merge_commit;(root/".ai/evidence/results/tests.json").write_text(json.dumps(tests,ensure_ascii=False),encoding="utf-8")
+            current=release_review(root,"KG-201");self.assertEqual("PASS",current["result"])
 
     def test_large_matrix_requires_harness_self_validation(self):
         with tempfile.TemporaryDirectory() as td:

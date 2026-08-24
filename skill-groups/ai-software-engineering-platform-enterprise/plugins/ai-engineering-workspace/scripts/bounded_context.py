@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from workspacelib import atomic_json, read_json
+from workspacelib import atomic_json, locked_state, read_json
 
 DEFAULT_POLICY = {
     "schema_version": "1.0.0",
@@ -18,6 +18,8 @@ DEFAULT_POLICY = {
     "max_milestone_checkpoints": 8,
     "max_ledger_entries": 32,
     "max_task_index_closed": 200,
+    "max_task_history_events": 40,
+    "max_task_history_ledger_entries": 20,
 }
 MILESTONE_WORDS = ("start", "pause", "adjust", "plan", "review", "test", "merge", "release", "complete", "handoff")
 
@@ -95,6 +97,7 @@ def _archive_checkpoint(root: Path, path: Path, data: dict[str, Any]) -> tuple[s
     return archive.relative_to(root / ".ai").as_posix(), _sha(archive)
 
 
+@locked_state
 def retain_checkpoints(root: Path, updated_at: str) -> dict[str, Any]:
     policy = ensure_policy(root)
     folder = root / ".ai" / "runtime" / "checkpoints"; folder.mkdir(parents=True, exist_ok=True)

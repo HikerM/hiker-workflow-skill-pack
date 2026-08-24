@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 from datetime import datetime, timezone
@@ -21,6 +22,11 @@ MANIFEST_NAMES = {
 MATERIAL_HINTS = (
     "migration", "schema", "openapi", "asyncapi", "proto", "contract",
     "routes", "router", "projectsettings", "packages/manifest",
+)
+LEGACY_STATE_MARKERS = (
+    "schema.json", "runtime/task.json", "runtime/task-index.json", "runtime/skill-routing.json",
+    "governance/project-state.json", "governance/task-index.json", "governance/goal-contract.json",
+    "workspace/task-map.json",
 )
 
 
@@ -84,6 +90,31 @@ def _manifest_hash(root: Path) -> str:
 
 
 def current_snapshot(root: Path) -> dict[str, Any]:
+    root = root.resolve()
+    has_git = bool(os.environ.get("GIT_DIR")) or any((candidate / ".git").exists() for candidate in (root, *root.parents))
+    if not has_git:
+        digest = hashlib.sha256()
+        candidates = [root / name for name in MANIFEST_NAMES]
+        try:
+            children = sorted((item for item in root.iterdir() if item.is_dir()), key=lambda item: item.name)[:32]
+        except OSError:
+            children = []
+        for child in children:
+            candidates.extend(child / name for name in MANIFEST_NAMES)
+        for path in sorted(item for item in candidates if item.is_file())[:96]:
+            digest.update(path.relative_to(root).as_posix().encode("utf-8"))
+            try:
+                digest.update(path.read_bytes())
+            except OSError:
+                digest.update(b"unreadable")
+        return {
+            "schema_version": "1.0.0",
+            "repo_id": _sha(str(root)),
+            "head": None,
+            "branch": "NON_GIT",
+            "dirty": None,
+            "manifest_hash": digest.hexdigest(),
+        }
     head = _git(root, "rev-parse", "HEAD")
     branch = _git(root, "branch", "--show-current") or "DETACHED"
     raw_status = _git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all")
@@ -106,6 +137,24 @@ def provenance_path(root: Path) -> Path:
     return ai_root(root) / "governance" / "source-provenance.json"
 
 
+def _has_untrusted_state(root: Path) -> bool:
+    base = ai_root(root)
+    return any((base / relative).is_file() for relative in LEGACY_STATE_MARKERS)
+
+
+def _execution_policy(mode: str, trusted: bool, requires_recovery: bool) -> dict[str, Any]:
+    return {
+        "mode": mode,
+        "trusted_ai_state": trusted,
+        "current_request_is_authoritative": True,
+        "current_git_is_authoritative": True,
+        "may_resume_old_tasks": trusted,
+        "may_reuse_prior_pass": trusted,
+        "may_create_sessions_or_worktrees": trusted,
+        "requires_state_recovery": requires_recovery,
+    }
+
+
 def _changed_paths(root: Path, old_head: str, new_head: str) -> tuple[list[str], bool]:
     if not old_head or not new_head or old_head == new_head:
         return [], True
@@ -121,13 +170,24 @@ def assess(root: Path) -> dict[str, Any]:
     current = current_snapshot(root)
     stored = read_json(provenance_path(root), None)
     if not isinstance(stored, dict):
+        if not _has_untrusted_state(root):
+            return {
+                "ok": True,
+                "status": "STATELESS_UNMANAGED",
+                "recovery_level": "L0",
+                "current": current,
+                "stored": None,
+                "invalidated": [],
+                "execution_policy": _execution_policy("CURRENT_REQUEST_AND_GIT_ONLY", False, False),
+            }
         return {
             "ok": False,
-            "status": "UNINITIALIZED_OR_INVALID",
-            "recovery_level": "L1",
+            "status": "UNTRUSTED_AI_STATE",
+            "recovery_level": "L3",
             "current": current,
             "stored": None,
-            "invalidated": ["derived-ai-state"],
+            "invalidated": ["legacy-task-state", "legacy-skill-routing", "review-evidence", "test-evidence"],
+            "execution_policy": _execution_policy("QUARANTINE_AI_STATE", False, True),
         }
     if stored.get("repo_id") != current["repo_id"]:
         return {
@@ -137,6 +197,7 @@ def assess(root: Path) -> dict[str, Any]:
             "current": current,
             "stored": stored,
             "invalidated": ["all-derived-ai-state", "review-evidence", "test-evidence"],
+            "execution_policy": _execution_policy("QUARANTINE_AI_STATE", False, True),
         }
     paths, reachable = _changed_paths(root, str(stored.get("head") or ""), str(current.get("head") or ""))
     material = stored.get("manifest_hash") != current["manifest_hash"] or any(
@@ -153,6 +214,7 @@ def assess(root: Path) -> dict[str, Any]:
             "stored": stored,
             "changed_paths": [],
             "invalidated": ["candidate-binding", "derived-graph", "review-evidence", "test-evidence"],
+            "execution_policy": _execution_policy("QUARANTINE_AI_STATE", False, True),
         }
     if material:
         return {
@@ -163,6 +225,7 @@ def assess(root: Path) -> dict[str, Any]:
             "stored": stored,
             "changed_paths": paths,
             "invalidated": ["affected-module-baseline", "affected-contract-evidence"],
+            "execution_policy": _execution_policy("CURRENT_REQUEST_AND_GIT_ONLY", False, True),
         }
     if paths or stored.get("dirty") != current["dirty"] or stored.get("branch") != current["branch"]:
         return {
@@ -173,6 +236,7 @@ def assess(root: Path) -> dict[str, Any]:
             "stored": stored,
             "changed_paths": paths,
             "invalidated": ["affected-hot-index"],
+            "execution_policy": _execution_policy("CURRENT_REQUEST_AND_GIT_ONLY", False, True),
         }
     return {
         "ok": True,
@@ -182,11 +246,19 @@ def assess(root: Path) -> dict[str, Any]:
         "stored": stored,
         "changed_paths": [],
         "invalidated": [],
+        "execution_policy": _execution_policy("TRUSTED_AI_STATE", True, False),
     }
 
 
-def repair(root: Path) -> dict[str, Any]:
+def repair(root: Path, allow_untrusted_initialization: bool = False) -> dict[str, Any]:
     report = assess(root)
+    if report["status"] == "UNTRUSTED_AI_STATE" and not allow_untrusted_initialization:
+        return {
+            **report,
+            "repaired": False,
+            "repair_blocked": True,
+            "message": "旧 .ai 缺少可信源码指纹；保持隔离，禁止自动恢复旧任务或旧 PASS",
+        }
     path = provenance_path(root)
     if path.exists():
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")

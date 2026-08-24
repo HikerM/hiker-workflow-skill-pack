@@ -18,9 +18,9 @@ def component_name(path: Path) -> str:
     return path.stem
 
 
-def build(root: Path) -> dict:
+def build(root: Path, paths=None) -> dict:
     components = []
-    for path in source_files(root):
+    for path in paths if paths is not None else source_files(root):
         if path.suffix.lower() not in COMPONENT_EXT: continue
         rel = path.relative_to(root).as_posix()
         if not any(token in rel.lower() for token in ("component", "views", "pages", "app")): continue

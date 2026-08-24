@@ -8,8 +8,10 @@ description: 只读审核现有Web实现的设计系统、间距与色彩Token�
 先运行：
 
 ```bash
-python3 <plugin-root>/scripts/web_audit.py --root . --output .ai/quality/web-audit.json
+python3 <plugin-root>/scripts/web_audit.py --root . --scope auto --mode review --output .ai/quality/web-audit.json
 ```
+
+`auto` 优先只审当前变更 UI；没有变更集时才扫描现有前端。日常复审只要求一个主要桌面尺寸、一个窄屏尺寸和本次修改的隐藏/失败状态；完整分辨率矩阵仅在发布审核运行。相同源码指纹已有有效视觉证据时复用，不重复截图。
 
 审核维度：
 
@@ -22,6 +24,7 @@ python3 <plugin-root>/scripts/web_audit.py --root . --output .ai/quality/web-aud
 - 页面结构是否由任务与信息层级推导，是否套用普通后台模板或组件库 Demo；
 - 是否依赖 Bootstrap 式蓝色主操作、灰底白卡、机械栅格、统一圆角阴影形成视觉完成度；
 - 卡片是否有独立语义与交互边界，是否存在每个区块同形包裹的“卡片汤”；
+- 对所有 `Card/Panel/Surface/Paper/Box` 及等价圆角背景容器执行移除表面测试；组件名称和 Token 文件存在不能证明卡片合理或设计系统已落地；
 - 核心页面是否有明确视觉焦点、疏密节奏、层次变化、服务任务的签名元素和一致状态反馈，还是所有内容等权、等色、等容器的单调布局；
 - 动效、渐变、图形、阴影和品牌元素是否有信息或交互价值，并具备对比度、减弱动画和性能边界；
 - 1366×768、1440×900、1920×1080、2560×1440；
@@ -32,3 +35,5 @@ python3 <plugin-root>/scripts/web_audit.py --root . --output .ai/quality/web-aud
 对本次新增或重做的界面，缺少设计系统、间距规范、色彩规范、组件复用或视觉丰富度证据，或者明显命中普通后台模板、Bootstrap 式默认视觉、重复卡片汤、无焦点的单调等权布局，至少记为 `HIGH` 并判定 `FAIL`。历史遗留只读范围可记为技术债，但必须与本次变更隔离并给出证据。
 
 结果只有：`PASS`、`PASS_WITH_WARNINGS`、`FAIL`、`BLOCKED`。未运行的测试、未检查的关键状态和仅凭静态规则推断的视觉结论不能算通过；视觉结论必须结合截图、DOM/样式证据与设计契约。
+
+同一源码指纹只允许一次定向整改复审；仍命中同类 HIGH 时保持 `FAIL` 并报告缺口，不创建新会话、不扩展全量矩阵，也不以继续治理替代界面修改。

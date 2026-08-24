@@ -16,14 +16,23 @@ def read_json(path: Path, default=None):
     except Exception: return default
 
 
-def source_files(root: Path) -> Iterator[Path]:
+def source_files(root: Path, max_files: int = 5000) -> Iterator[Path]:
+    emitted = 0
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [name for name in dirnames if name not in SKIP]
         current = Path(dirpath)
         for filename in filenames:
             p = current / filename
             if p.suffix.lower() in SOURCE_EXT:
+                if emitted >= max_files:
+                    return
+                emitted += 1
                 yield p
+
+
+def source_inventory(root: Path, max_files: int = 5000) -> tuple[list[Path], bool]:
+    files = list(source_files(root, max_files=max_files + 1))
+    return files[:max_files], len(files) > max_files
 
 
 def digest(path: Path) -> str:

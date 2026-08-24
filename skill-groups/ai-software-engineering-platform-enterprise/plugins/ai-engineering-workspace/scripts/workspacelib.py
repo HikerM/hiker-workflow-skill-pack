@@ -1,5 +1,5 @@
 from __future__ import annotations
-import contextlib,fnmatch,hashlib,json,os,re,subprocess,tempfile,time
+import contextlib,fnmatch,functools,hashlib,json,os,re,subprocess,tempfile,threading,time
 from pathlib import Path
 from typing import Any,Iterator
 
@@ -41,23 +41,44 @@ def pid_alive(pid:int)->bool:
     if pid<=0:return False
     try:os.kill(pid,0);return True
     except OSError:return False
+_LOCK_LOCAL=threading.local();_PROCESS_LOCKS_GUARD=threading.Lock();_PROCESS_LOCKS:dict[str,threading.RLock]={}
+def _process_lock(key:str)->threading.RLock:
+    with _PROCESS_LOCKS_GUARD:return _PROCESS_LOCKS.setdefault(key,threading.RLock())
 @contextlib.contextmanager
 def state_lock(root:Path,timeout:float=15.0,stale_after:float=120.0)->Iterator[None]:
-    d=common_dir(root)/"ai-engineering";d.mkdir(parents=True,exist_ok=True);lock=d/"workspace.lock";start=time.time();fd=None
-    while True:
-        try:
-            fd=os.open(lock,os.O_CREAT|os.O_EXCL|os.O_WRONLY);os.write(fd,json.dumps({"pid":os.getpid(),"created":time.time()}).encode());break
-        except FileExistsError:
-            info=read_json(lock,{}) or {};age=time.time()-float(info.get("created",lock.stat().st_mtime));pid=int(info.get("pid",0) or 0)
-            if age>stale_after and not pid_alive(pid):
-                try:lock.unlink();continue
-                except FileNotFoundError:continue
-            if time.time()-start>timeout:raise TimeoutError(f"workspace state lock timeout; owner pid={pid}, age={round(age,1)}s")
-            time.sleep(0.1)
-    try:yield
+    d=common_dir(root)/"ai-engineering";d.mkdir(parents=True,exist_ok=True);lock=d/"workspace.lock";key=str(lock.resolve()).casefold()
+    process_lock=_process_lock(key);process_lock.acquire()
+    try:
+        held=getattr(_LOCK_LOCAL,"held",{})
+        if held.get(key,0):
+            held[key]+=1;_LOCK_LOCAL.held=held
+            try:yield
+            finally:held[key]-=1
+            return
+        start=time.time();fd=None
+        while True:
+            try:
+                fd=os.open(lock,os.O_CREAT|os.O_EXCL|os.O_WRONLY);os.write(fd,json.dumps({"pid":os.getpid(),"created":time.time()}).encode());break
+            except FileExistsError:
+                info=read_json(lock,{}) or {};age=time.time()-float(info.get("created",lock.stat().st_mtime));pid=int(info.get("pid",0) or 0)
+                if age>stale_after and not pid_alive(pid):
+                    try:lock.unlink();continue
+                    except FileNotFoundError:continue
+                if time.time()-start>timeout:raise TimeoutError(f"workspace state lock timeout; owner pid={pid}, age={round(age,1)}s")
+                time.sleep(0.1)
+        held[key]=1;_LOCK_LOCAL.held=held
+        try:yield
+        finally:
+            held.pop(key,None)
+            if fd is not None:os.close(fd)
+            try:lock.unlink()
+            except FileNotFoundError:pass
     finally:
-        if fd is not None:os.close(fd)
-        try:lock.unlink()
-        except FileNotFoundError:pass
+        process_lock.release()
+def locked_state(fn):
+    @functools.wraps(fn)
+    def wrapped(root:Path,*args,**kwargs):
+        with state_lock(root):return fn(root,*args,**kwargs)
+    return wrapped
 def state_path(root:Path)->Path:return common_dir(root)/"ai-engineering/workspace.json"
 def load_state(root:Path)->dict:return read_json(state_path(root),{"schema_version":"1.0.0","worktrees":{},"leases":{}}) or {"schema_version":"1.0.0","worktrees":{},"leases":{}}

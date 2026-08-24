@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from workspacelib import atomic_json, common_dir, read_json, repo_root, safe_id, state_lock
+from workspacelib import atomic_json, common_dir, locked_state, read_json, repo_root, safe_id, state_lock
 
 SCHEMA = "2.0.0"
 GLOBAL_EXCLUSIVE = {"unity-projectsettings", "database-migration", "api-contract"}
@@ -69,6 +69,7 @@ def ensure_task(root: Path, task_id: str) -> dict[str, Any]:
     return task
 
 
+@locked_state
 def acquire(root: Path, args: argparse.Namespace) -> dict[str, Any]:
     task_id = safe_id(args.task_id).upper(); ensure_task(root, task_id)
     paths = [normalize(root, item) for item in args.paths]
@@ -86,6 +87,7 @@ def acquire(root: Path, args: argparse.Namespace) -> dict[str, Any]:
     return {"acquired": paths, "locks": data["locks"]}
 
 
+@locked_state
 def release(root: Path, args: argparse.Namespace) -> dict[str, Any]:
     task_id = safe_id(args.task_id).upper(); data = load_locks(root); wanted = {normalize(root, x) for x in args.paths} if args.paths else None
     before = list(data["locks"]); removed = []; kept = []
@@ -97,6 +99,7 @@ def release(root: Path, args: argparse.Namespace) -> dict[str, Any]:
     return {"released": removed, "remaining": kept}
 
 
+@locked_state
 def heartbeat(root: Path, args: argparse.Namespace) -> dict[str, Any]:
     task_id = safe_id(args.task_id).upper(); data = load_locks(root); count = 0
     for item in data["locks"]:

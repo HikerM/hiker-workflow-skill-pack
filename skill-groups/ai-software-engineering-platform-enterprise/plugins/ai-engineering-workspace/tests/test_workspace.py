@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import subprocess
 import sys
 import tempfile
@@ -31,15 +32,17 @@ from convergence_guard import (
 )
 from file_lock import acquire, check, release
 from git_workspace import cmd_adopt, cmd_close, cmd_create, cmd_inventory, cmd_list, cmd_pause, cmd_plan_close, validate_branch_policy
-from governance_state import bind_review_candidate, checkpoint, control, create_task, init_project, load_task, record, save_task, set_change_contract, transition, validate
+from governance_state import bind_review_candidate, checkpoint, control, create_task, init_project, load_task, record, rebind_task_goal, save_task, set_change_contract, transition, validate
 from merge_guard import conflict_probe, evaluate as merge_evaluate, flow_ok
 from task_router import route
 from task_reconciler import reconcile
-from workspacelib import common_dir, read_json, safe_branch, state_lock
-from dispatch_guard import classify_observation, environment_plan, status_fingerprint
+from workspacelib import atomic_json, common_dir, read_json, safe_branch, state_lock
+from dispatch_guard import classify_observation, environment_plan, observe as dispatch_observe, status_fingerprint
 from candidate_guard import freeze as candidate_freeze, verify as candidate_verify
 from session_pool import bind as session_bind, complete as session_complete, plan as session_plan, release_ack as session_release_ack, status as session_status
+from runtime_release_probe import create_probe as create_runtime_release_probe
 from implementation_guard import validate_registry
+from goal_contract import set_contract, verify_binding
 
 
 def ns(**values): return argparse.Namespace(**values)
@@ -49,6 +52,156 @@ def git(root, *args): return subprocess.run(["git", *args], cwd=root, text=True,
 
 
 class WorkspaceTests(unittest.TestCase):
+    def test_concurrent_task_creates_do_not_lose_task_index_entries(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td); self.repo(root)
+            init_project(root,ns(project_id="PROJECT-A",architecture="backend",version="1.0.0",database_version="001",api_version="v1"))
+            def create(index):
+                task_id=f"KG-{index:03d}"
+                return create_task(root,ns(task_id=task_id,goal=f"目标{index}",owner_agent="Planning Agent",ownership_lane="backend",branch=f"feature/{task_id.lower()}",base_branch="develop",affected_files=[]))
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                tasks=list(pool.map(create,range(1,5)))
+            index=read_json(root/".ai/governance/task-index.json",{})
+            self.assertEqual(4,len(tasks)); self.assertEqual(4,len(index.get("tasks",[])))
+
+    def test_session_create_plan_reserves_slot_atomically(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td); self.repo(root)
+            init_project(root,ns(project_id="PROJECT-A",architecture="backend",version="1.0.0",database_version="001",api_version="v1"))
+            first=session_plan(root,"PROJECT-A","KG-001","Developer Agent",str(root),"base-a","EMPTY_CONFIRMED",ownership_lane="backend")
+            second=session_plan(root,"PROJECT-A","KG-001","Developer Agent",str(root),"base-a","EMPTY_CONFIRMED",ownership_lane="backend")
+            self.assertEqual("CREATE_THREAD",first["action"]); self.assertEqual("WAIT_PENDING",second["action"])
+
+    def test_router_auto_parallel_skips_unchanged_contract_lane(self):
+        data = route("局部调整前后端现有实现", proposal={"architecture": "bs", "client_families": [], "risk_class": "local", "contract_change": False})
+        names = {item["lane"] for item in data["lanes"]}
+        self.assertNotIn("contract-data", names)
+        self.assertEqual("auto-safe", data["policy"]["parallel_mode"])
+        self.assertEqual("project_id plus repository root plus task_id plus ownership_lane", data["policy"]["context_isolation"])
+
+    def test_router_accepts_dynamic_backend_ownership_and_marks_scope_conflicts(self):
+        data = route("大型服务端分模块改造", proposal={
+            "architecture": "backend",
+            "client_families": [],
+            "risk_class": "structural",
+            "contract_change": False,
+            "implementation_lanes": [
+                {"id": "orders", "surface": "backend-service", "write_scope": ["src/orders"]},
+                {"id": "billing", "surface": "backend-service", "write_scope": ["src/billing"]},
+                {"id": "orders-read", "surface": "backend-service", "write_scope": ["src/orders/read"]},
+            ],
+        })
+        lanes = {item["lane"]: item for item in data["lanes"]}
+        self.assertEqual(["orders-read"], lanes["orders"]["serial_with"])
+        self.assertEqual("orders", lanes["orders"]["ownership_lane"])
+
+    def test_router_rejects_reserved_unsafe_and_cyclic_dynamic_lanes(self):
+        data = route("非法动态通道", proposal={
+            "architecture": "backend", "client_families": [], "contract_change": False,
+            "implementation_lanes": [
+                {"id": "review", "surface": "backend-service", "write_scope": ["../outside"], "depends_on": ["orders"]},
+                {"id": "orders", "surface": "backend-service", "write_scope": ["src/orders"], "depends_on": ["review"]},
+            ],
+        })
+        self.assertEqual("REJECTED", data["status"])
+        joined = "\n".join(data["diagnostics"])
+        self.assertIn("RESERVED_IMPLEMENTATION_LANE_ID", joined)
+        self.assertIn("UNSAFE_WRITE_SCOPE", joined)
+        self.assertIn("CYCLIC_IMPLEMENTATION_LANES", joined)
+
+    def test_dispatch_query_failure_can_continue_current_bounded_thread_but_never_create(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.repo(root)
+            init_project(root, ns(project_id="PROJECT-A", architecture="backend", version="1.0.0", database_version="001", api_version="v1"))
+            result = dispatch_observe(root, ns(task_id="KG-001", role="Developer Agent", repository=str(root), base_sha="base-a", api_result="ERROR", project_id="PROJECT-A", thread_id=None, client_thread_id=None, runtime_status=None, detail="query failed", ownership_lane="backend", require_isolated_runtime=False))
+            self.assertEqual("BLOCK_QUERY", result["session"]["action"])
+            self.assertTrue(result["fallback"]["allowed"])
+            self.assertEqual("CURRENT_THREAD_BOUNDED", result["fallback"]["mode"])
+            self.assertFalse(result["create_allowed"])
+
+    def test_dispatch_serializes_overlapping_dynamic_write_scopes(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.repo(root)
+            init_project(root, ns(project_id="PROJECT-A", architecture="backend", version="1.0.0", database_version="001", api_version="v1"))
+            task_map = route("模块改造", proposal={
+                "architecture": "backend", "client_families": [], "contract_change": False,
+                "implementation_lanes": [
+                    {"id": "orders", "surface": "backend-service", "write_scope": ["src/orders"]},
+                    {"id": "orders-read", "surface": "backend-service", "write_scope": ["src/orders/read"]},
+                ],
+            })
+            atomic_json(root / ".ai/workspace/task-map.json", task_map)
+            session_bind(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "base-a", "thread-orders", None, "RUNNING", ownership_lane="orders")
+            result = dispatch_observe(root, ns(task_id="KG-002", role="Developer Agent", repository=str(root), base_sha="base-a", api_result="EMPTY", project_id="PROJECT-A", thread_id=None, client_thread_id=None, runtime_status=None, detail="", ownership_lane="orders-read", require_isolated_runtime=False))
+            self.assertEqual("BLOCK_SCOPE_CONFLICT", result["session"]["action"])
+            self.assertTrue(result["scope_conflicts"])
+            self.assertFalse(result["create_allowed"])
+
+    def test_two_stable_writer_lanes_run_in_parallel_without_task_explosion(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.repo(root)
+            init_project(root, ns(project_id="PROJECT-A", architecture="hybrid", version="1.0.0", database_version="001", api_version="v1"))
+            front = session_plan(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "base-a", "EMPTY_CONFIRMED", ownership_lane="frontend")
+            self.assertEqual("CREATE_THREAD", front["action"])
+            session_bind(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "base-a", "thread-front", None, "RUNNING", ownership_lane="frontend")
+            back = session_plan(root, "PROJECT-A", "KG-002", "Developer Agent", str(root), "base-a", "EMPTY_CONFIRMED", ownership_lane="backend")
+            self.assertEqual("CREATE_THREAD", back["action"])
+            self.assertNotEqual(front["slot_key"], back["slot_key"])
+            session_bind(root, "PROJECT-A", "KG-002", "Developer Agent", str(root), "base-a", "thread-back", None, "RUNNING", ownership_lane="backend")
+            third = session_plan(root, "PROJECT-A", "KG-003", "Developer Agent", str(root), "base-a", "EMPTY_CONFIRMED", ownership_lane="infrastructure")
+            self.assertEqual("QUEUE", third["action"])
+            same_front = session_plan(root, "PROJECT-A", "KG-004", "Developer Agent", str(root), "base-a", "EMPTY_CONFIRMED", ownership_lane="frontend")
+            self.assertEqual("QUEUE", same_front["action"])
+
+    def test_governance_budget_pushes_ready_task_into_development(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.repo(root)
+            init_project(root, ns(project_id="PROJECT-A", architecture="backend", version="1.0.0", database_version="001", api_version="v1"))
+            create_task(root, ns(task_id="KG-001", goal="实现安全切片", owner_agent="Planning Agent", branch="feature/KG-001-slice", base_branch="develop", affected_files=[]))
+            transition(root, ns(task_id="KG-001", to="Planning", agent_role="Planning Agent", commit_id=None))
+            set_change_contract(root, ns(task_id="KG-001", agent_role="Planning Agent", allowed_files=["src/service.ts"], allowed_modules=None, protected_modules=None, public_contract_changes=None, behavior_invariants=["原行为保持"], characterization_tests=[], consumer_tests=[], required_tests=["单元测试"], consumers=[], max_blast_radius=20, warn_lines=None, block_lines=None, warn_growth=None, block_growth=None))
+            task = load_task(root, "KG-001")
+            task["convergence"] = {"required": True, "delivery_progress": {"consecutive_governance_only_cycles": 2}}
+            save_task(root, task)
+            developed = transition(root, ns(task_id="KG-001", to="Development", agent_role="Developer Agent", commit_id=None))
+            self.assertEqual("Development", developed["state"])
+            self.assertEqual(2, developed["convergence"]["delivery_progress"]["consecutive_governance_only_cycles"])
+            self.assertFalse(developed["convergence"]["delivery_progress"].get("business_source_started", False))
+            self.assertEqual("BUSINESS_REQUIRED", developed["convergence"]["status"])
+
+    def test_goal_revision_blocks_stale_dispatch_until_rebound(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.repo(root)
+            init_project(root, ns(project_id="PROJECT-A", architecture="backend", version="1.0.0", database_version="001", api_version="v1"))
+            set_contract(root, "GOAL-001", "交付稳定能力", acceptance_ids=["AC-001"])
+            create_task(root, ns(task_id="KG-001", goal="实现能力", owner_agent="Planning Agent", branch="feature/KG-001-goal", base_branch="develop", affected_files=[]))
+            set_contract(root, "GOAL-001", "交付稳定且可恢复的能力", acceptance_ids=["AC-001", "AC-002"])
+            self.assertFalse(verify_binding(root, load_task(root, "KG-001")["goal_binding"])["ok"])
+            with self.assertRaisesRegex(RuntimeError, "goal contract revision is stale"):
+                transition(root, ns(task_id="KG-001", to="Planning", agent_role="Planning Agent", commit_id=None))
+            rebound = rebind_task_goal(root, ns(task_id="KG-001", agent_role="Planning Agent", impact_summary="新目标增加恢复验收", retain_change=[], revise_change=["恢复链路"], retire_change=[]))
+            self.assertTrue(verify_binding(root, rebound["goal_binding"])["ok"])
+            self.assertEqual("REPLAN_REQUIRED", rebound["goal_adjustment"]["status"])
+            with self.assertRaisesRegex(RuntimeError, "goal adjustment is not reconciled"):
+                transition(root, ns(task_id="KG-001", to="Planning", agent_role="Planning Agent", commit_id=None))
+
+    def test_task_context_and_history_remain_isolated_and_bounded(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.repo(root)
+            init_project(root, ns(project_id="PROJECT-A", architecture="hybrid", version="1.0.0", database_version="001", api_version="v1"))
+            for task_id, lane in (("KG-001", "frontend"), ("KG-002", "backend")):
+                task = create_task(root, ns(task_id=task_id, goal=f"{lane}目标", owner_agent="Planning Agent", ownership_lane=lane, branch=f"feature/{task_id.lower()}", base_branch="develop", affected_files=[]))
+                task["history"].extend({"at": str(i), "event": f"EVENT-{i}"} for i in range(60))
+                save_task(root, task)
+            master = (root / "CURRENT_CONTEXT.md").read_text(encoding="utf-8")
+            self.assertIn("KG-001", master); self.assertIn("KG-002", master)
+            front = (root / ".ai/runtime/task-contexts/KG-001.md").read_text(encoding="utf-8")
+            back = (root / ".ai/runtime/task-contexts/KG-002.md").read_text(encoding="utf-8")
+            self.assertIn("frontend", front); self.assertNotIn("backend目标", front)
+            self.assertIn("backend", back); self.assertNotIn("frontend目标", back)
+            self.assertLessEqual(len(load_task(root, "KG-001")["history"]), 40)
+            self.assertTrue((root / ".ai/archive/task-history/KG-001.jsonl").is_file())
+
     def repo(self, root: Path):
         git(root, "init", "-b", "main"); git(root, "config", "user.email", "hiker"); git(root, "config", "user.name", "Hiker")
         (root / "a.txt").write_text("a\n", encoding="utf-8"); git(root, "add", "."); git(root, "commit", "-m", "chore: initialize repository"); git(root, "branch", "develop"); git(root, "branch", "release")
@@ -118,6 +271,16 @@ class WorkspaceTests(unittest.TestCase):
             acquire(root,ns(task_id="KG-001",agent_role="Developer Agent",owner="agent-a",paths=["client/ProjectSettings/ProjectVersion.txt","Assets/Panel.prefab"]))
             own=check(root,ns(task_id="KG-001",files=["Assets/Panel.prefab.meta"]));self.assertTrue(own["ok"],own)
             self.assertEqual([],own["missing_required_locks"])
+
+    def test_concurrent_disjoint_file_locks_do_not_overwrite_each_other(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);self.repo(root);self.governance(root)
+            create_task(root,ns(task_id="KG-002",goal="并发修改",owner_agent="Planning Agent",branch="feature/KG-002-other",base_branch="develop",affected_files=[]))
+            transition(root,ns(task_id="KG-002",to="Planning",agent_role="Planning Agent",commit_id=None));set_change_contract(root,ns(task_id="KG-002",agent_role="Planning Agent",allowed_files=["src/B.ts"],allowed_modules=None,protected_modules=None,public_contract_changes=None,behavior_invariants=["已有行为不变"],characterization_tests=[],consumer_tests=[],required_tests=["回归"],consumers=[],max_blast_radius=20,warn_lines=None,block_lines=None,warn_growth=None,block_growth=None));transition(root,ns(task_id="KG-002",to="Development",agent_role="Developer Agent",commit_id=None))
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                list(pool.map(lambda spec:acquire(root,ns(task_id=spec[0],agent_role="Developer Agent",owner=spec[0],paths=[spec[1]])),[("KG-001","src/A.ts"),("KG-002","src/B.ts")]))
+            locks=read_json(common_dir(root)/"ai-engineering/file-locks.json",{})["locks"]
+            self.assertEqual({("KG-001","src/A.ts"),("KG-002","src/B.ts")},{(item["task_id"],item["path"]) for item in locks})
 
     def test_agent_role_cannot_forge_review_evidence(self):
         with tempfile.TemporaryDirectory() as td:
@@ -259,7 +422,9 @@ class WorkspaceTests(unittest.TestCase):
             for i in range(6): checkpoint(root, task, f"rolling-{i}")
             for i in range(4): checkpoint(root, task, f"pause-{i}")
             context = (root / "CURRENT_CONTEXT.md").read_text(encoding="utf-8")
-            self.assertIn("完整事实见", context); self.assertLessEqual(len(context), 2200)
+            task_context = (root / ".ai/runtime/task-contexts/KG-001.md").read_text(encoding="utf-8")
+            self.assertIn("完整事实见", task_context); self.assertLessEqual(len(task_context), 2200)
+            self.assertLessEqual(len(context), 2200)
             self.assertLessEqual(len(list((root / ".ai/runtime/checkpoints").glob("*.json"))), 3)
             ledger = read_json(root / ".ai/runtime/checkpoint-ledger.json", {})
             self.assertGreaterEqual(ledger.get("pruned_count", 0), 7); self.assertTrue(ledger.get("pruned_hash_chain"))
@@ -344,9 +509,26 @@ class WorkspaceTests(unittest.TestCase):
             self.assertEqual("ARCHIVE_AND_VERIFY_RUNTIME", terminal["next_action"])
             waiting = session_release_ack(root, "PROJECT-A", "Developer Agent", str(root), True, False, "CLOSED")
             self.assertEqual("ARCHIVED_RUNTIME_UNVERIFIED", waiting["slot"]["state"])
-            released = session_release_ack(root, "PROJECT-A", "Developer Agent", str(root), True, True, "CLOSED")
+            probe = create_runtime_release_probe(root, "PROJECT-A", "Developer Agent", str(root), "ARCHIVED", "desktop-observation-1", [999999], "default")
+            self.assertEqual("PASS", probe["result"])
+            released = session_release_ack(root, "PROJECT-A", "Developer Agent", str(root), False, False, "KEPT", probe_id=probe["probe_id"])
             self.assertTrue(released["ok"]); self.assertEqual("RELEASED", released["slot"]["state"])
             self.assertTrue(session_status(root, "PROJECT-A")["ok"])
+
+    def test_runtime_release_probe_observes_a_real_process_before_allowing_release(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "repo"; root.mkdir(); self.repo(root)
+            init_project(root, ns(project_id="PROJECT-A", architecture="hybrid", version="1.0.0", database_version="001", api_version="v1"))
+            session_bind(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "base-a", "thread-writer", None, "RUNNING", str(Path(td) / "closed-wt"))
+            session_complete(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "PASS", "CP-FINAL", True, True, "CLOSED", project_terminal=True)
+            process = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+            try:
+                active = create_runtime_release_probe(root, "PROJECT-A", "Developer Agent", str(root), "ARCHIVED", "desktop-observation-live", [process.pid], "default")
+                self.assertEqual("BLOCKED", active["result"]); self.assertIn(process.pid, active["alive_pids"])
+            finally:
+                process.terminate(); process.wait(timeout=10)
+            released = create_runtime_release_probe(root, "PROJECT-A", "Developer Agent", str(root), "ARCHIVED", "desktop-observation-released", [process.pid], "default")
+            self.assertEqual("PASS", released["result"]); self.assertEqual("RELEASED", released["runtime_status"])
 
     def test_long_chain_guard_notifies_once_for_changed_engineering_health(self):
         task = {"change_contract": {"behavior_invariants": [], "required_tests": []}}
@@ -447,13 +629,13 @@ class WorkspaceTests(unittest.TestCase):
         record_progress(state, "governance", "修复门禁自身缺陷", "开始最小业务实现")
         with self.assertRaisesRegex(RuntimeError, "governance-only cycle budget exceeded"):
             record_progress(state, "governance", "继续扩展控制账本", "开始最小业务实现")
-        self.assertIn("连续 2 个治理周期", convergence_assess(state)["warnings"][-1])
+        self.assertTrue(any("连续 2 个治理周期" in item for item in convergence_assess(state)["warnings"]))
         first = record_verification(state, "GATE-001", "head-1", "validator", "full", "PASS", "matrix.json")
         self.assertFalse(first["reused"])
         self.assertEqual("REUSE_PASS", verification_plan(state, "GATE-001", "head-1", "validator")["decision"])
         reused = record_verification(state, "GATE-001", "head-1", "validator", "targeted", "PASS", "matrix.json")
         self.assertTrue(reused["reused"])
-        record_progress(state, "business", "完成首个业务源码切片", "运行真实集成验证")
+        record_progress(state, "business", "完成首个业务源码切片", "运行真实集成验证", "source-1")
         self.assertTrue(state["delivery_progress"]["business_source_started"])
         self.assertEqual(0, state["delivery_progress"]["consecutive_governance_only_cycles"])
 

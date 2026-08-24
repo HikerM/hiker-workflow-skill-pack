@@ -12,6 +12,18 @@ class WebTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);(root/"node_modules/pkg").mkdir(parents=True);(root/"node_modules/pkg/Bad.vue").write_text("fetch('/api')")
             self.assertEqual([],list(__import__("weblib").source_files(root)))
+    def test_auto_scope_never_falls_back_to_full_repository(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);(root/"src/pages").mkdir(parents=True);(root/"src/pages/Legacy.tsx").write_text("fetch('/api')")
+            data=audit(root,scope="auto")
+            self.assertEqual("none",data["scope"]);self.assertEqual(0,data["component_count"])
+    def test_full_inventory_and_findings_are_bounded(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);(root/"src/pages").mkdir(parents=True)
+            for i in range(5100):(root/f"src/pages/F{i}.tsx").write_text("fetch('/api')")
+            data=audit(root,scope="full")
+            self.assertTrue(data["inventory_truncated"]);self.assertLessEqual(len(data["findings"]),200)
+            self.assertTrue(any("5000" in item for item in data["blockers"]))
     def test_registry_and_duplicate(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td); (root/"src/components").mkdir(parents=True); (root/"src/pages").mkdir()
@@ -29,13 +41,30 @@ class WebTests(unittest.TestCase):
             root=Path(td); (root/"src/pages").mkdir(parents=True)
             (root/"src/pages/Dashboard.tsx").write_text("import 'bootstrap/dist/css/bootstrap.css';\n"+"<MetricCard className='card' />\n"*6+"const css=`padding:8px; margin:8px; gap:8px; padding-top:8px; margin-top:8px; row-gap:8px;`;\n")
             data=audit(root); rules={x["rule"] for x in data["findings"]}
-            self.assertIn("bootstrap-style-review",rules); self.assertIn("repetitive-card-signal",rules); self.assertIn("hardcoded-spacing",rules)
-            self.assertEqual("1.1.0",data["schema_version"])
+            self.assertIn("bootstrap-style-review",rules); self.assertIn("unjustified-card-layout",rules); self.assertIn("hardcoded-spacing",rules)
+            self.assertEqual("2.0.0",data["schema_version"])
             self.assertEqual("FAIL",data["result"])
     def test_audit_records_design_token_evidence(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td); (root/"src/theme").mkdir(parents=True); (root/"src/theme/tokens.css").write_text(":root{--space-2:8px;--color-action:#0369a1}")
             data=audit(root); self.assertEqual(["src/theme/tokens.css"],data["design_system_evidence"]["token_files"])
+            self.assertEqual("DECLARED_UNUSED",data["design_system_evidence"]["status"])
+    def test_audit_detects_tailwind_surfaces_without_card_names(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td); (root/"src/pages").mkdir(parents=True)
+            surface='<section className="bg-white rounded-xl border p-6">x</section>\n'
+            (root/"src/pages/Workspace.tsx").write_text(surface*4,encoding="utf-8")
+            data=audit(root); rules={item["rule"] for item in data["findings"]}
+            self.assertIn("unjustified-card-layout",rules); self.assertEqual("FAIL",data["result"])
+    def test_review_requires_current_visual_evidence(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td); (root/"src/theme").mkdir(parents=True); (root/"src/pages").mkdir(parents=True); (root/".ai/design").mkdir(parents=True)
+            (root/"src/theme/tokens.css").write_text(":root{--color-surface:#fff}",encoding="utf-8")
+            (root/"src/pages/Main.tsx").write_text("const x='var(--color-surface)'",encoding="utf-8")
+            contract={key:[] if key in {"density_zones","card_usages","non_card_alternatives"} else "defined" for key in __import__("web_audit").REQUIRED_COMPOSITION_FIELDS}
+            (root/".ai/design/ui-contract.json").write_text(json.dumps(contract),encoding="utf-8")
+            data=audit(root,mode="review")
+            self.assertEqual("BLOCKED",data["result"]); self.assertIn("missing current visual evidence",data["blockers"])
     def test_backend_guard_detects_stack_contract_and_migration(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);(root/"server").mkdir();(root/"server/package.json").write_text(json.dumps({"engines":{"node":">=20"},"packageManager":"pnpm@9","dependencies":{"@nestjs/core":"11.0.0"}}))

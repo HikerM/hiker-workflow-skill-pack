@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from workspacelib import atomic_json, repo_root, safe_id, state_lock
+from workspacelib import atomic_json, repo_root, safe_id, state_lock, worktree_fingerprint
 from implementation_guard import validate_registry
 
 
@@ -223,6 +223,9 @@ def assess(state: dict[str, Any], phase: str = "status") -> dict[str, Any]:
     if governance_cycles >= MAX_GOVERNANCE_ONLY_CYCLES:
         warnings.append(f"已连续 {governance_cycles} 个治理周期没有业务价值增量")
         actions.append("停止追加控制投影或全量矩阵；复用未失效证据，只修首个真实阻断并明确下一业务门禁")
+    if state.get("status") == "BUSINESS_REQUIRED":
+        warnings.append("治理预算已用尽；下一次有效进展必须包含可验证的业务源码变化")
+        actions.append(str(progress.get("next_business_gate") or "执行当前变更契约内的最小业务切片"))
     if int(signals.get("scope_expansions", 0)):
         warnings.append(f"任务范围已扩大 {signals.get('scope_expansions')} 次")
     if int(signals.get("user_corrections", 0)):
@@ -283,7 +286,8 @@ def assess(state: dict[str, Any], phase: str = "status") -> dict[str, Any]:
 
 
 def record_progress(
-    state: dict[str, Any], lane: str, summary: str, next_business_gate: str, override_reason: str = ""
+    state: dict[str, Any], lane: str, summary: str, next_business_gate: str,
+    source_fingerprint: str = "", override_reason: str = ""
 ) -> dict[str, Any]:
     if lane not in {"governance", "business"}:
         raise RuntimeError("progress lane must be governance or business")
@@ -291,17 +295,25 @@ def record_progress(
         raise RuntimeError("progress requires summary and an exact next business gate")
     progress = state.setdefault("delivery_progress", {})
     if lane == "business":
+        previous_fingerprint = str(progress.get("last_business_fingerprint") or progress.get("baseline_source_fingerprint") or "")
+        if not source_fingerprint or source_fingerprint == previous_fingerprint:
+            raise RuntimeError("business progress requires a new verifiable source fingerprint; state transition or prose is not business progress")
         progress["business_events"] = int(progress.get("business_events", 0)) + 1
         progress["business_source_started"] = True
         progress["consecutive_governance_only_cycles"] = 0
+        progress["last_business_fingerprint"] = source_fingerprint
+        if state.get("status") == "BUSINESS_REQUIRED":
+            state["status"] = "STABLE"
     else:
         next_count = int(progress.get("consecutive_governance_only_cycles", 0)) + 1
-        if next_count > MAX_GOVERNANCE_ONLY_CYCLES and not override_reason:
+        if next_count > MAX_GOVERNANCE_ONLY_CYCLES:
             raise RuntimeError(
-                "governance-only cycle budget exceeded; reuse evidence, narrow the gate or provide an explicit override reason"
+                "governance-only cycle budget exceeded; an override cannot create more governance cycles—execute the recorded business gate or change strategy"
             )
         progress["governance_events"] = int(progress.get("governance_events", 0)) + 1
         progress["consecutive_governance_only_cycles"] = next_count
+        if next_count == MAX_GOVERNANCE_ONLY_CYCLES:
+            state["status"] = "BUSINESS_REQUIRED"
     progress["last_lane"] = lane
     progress["last_summary"] = summary
     progress["next_business_gate"] = next_business_gate
@@ -752,6 +764,9 @@ def main() -> int:
             state = task.get("convergence")
             if args.command == "init":
                 state = initialize(task, args.criterion, args.strategy)
+                progress = state.setdefault("delivery_progress", {})
+                progress.setdefault("baseline_source_fingerprint", worktree_fingerprint(root))
+                progress.setdefault("last_business_fingerprint", progress["baseline_source_fingerprint"])
             elif not state or not state.get("required"):
                 raise RuntimeError("convergence guard is not initialized for this task")
             elif args.command == "observe":
@@ -782,7 +797,10 @@ def main() -> int:
             elif args.command == "evidence-record":
                 record_evidence(state, args.criterion_id, args.level, args.status, args.value, args.fingerprint)
             elif args.command == "progress-record":
-                operation_result = record_progress(state, args.lane, args.summary, args.next_business_gate, args.override_reason)
+                operation_result = record_progress(
+                    state, args.lane, args.summary, args.next_business_gate,
+                    worktree_fingerprint(root), args.override_reason,
+                )
             elif args.command == "verification-plan":
                 operation_result = verification_plan(state, args.gate_id, args.fingerprint, args.scope)
             elif args.command == "verification-record":

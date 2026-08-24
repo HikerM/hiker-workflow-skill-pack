@@ -165,7 +165,8 @@ def main() -> int:
         missing = [x for x in required if not (ai_root(root) / x).exists()]
         print(json.dumps({"ok": ok and not missing, "schema": version, "missing": missing, "git": git_info(root)}, ensure_ascii=False, indent=2)); return 0 if ok and not missing else 2
     elif args.cmd == "memory-status":
-        print(json.dumps({"ok": True, "memory": memory_status(root)}, ensure_ascii=False, indent=2)); return 0
+        from session_epoch import assess as assess_epoch
+        print(json.dumps({"ok": True, "memory": memory_status(root), "session_epoch": assess_epoch(root)}, ensure_ascii=False, indent=2)); return 0
     elif args.cmd == "route-record":
         try: routing = record_routing(root, args.stage, args.active_skill, args.deferred_skill, args.route_fingerprint, args.loaded_skill)
         except ValueError as exc: raise SystemExit(f"ROUTE_STATE_ERROR: {exc}")

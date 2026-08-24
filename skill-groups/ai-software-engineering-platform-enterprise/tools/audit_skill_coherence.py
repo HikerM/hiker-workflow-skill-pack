@@ -97,6 +97,12 @@ def audit(root: Path = ROOT) -> dict[str, Any]:
         except (OSError, json.JSONDecodeError) as exc:
             errors.append(_finding("INVALID_PLUGIN_MANIFEST", plugin.name, str(exc), manifest_path))
             continue
+        prompts = manifest.get("interface", {}).get("defaultPrompt") or []
+        if not isinstance(prompts, list) or len(prompts) > 3:
+            errors.append(_finding("DESKTOP_DEFAULT_PROMPT_OVERFLOW", plugin.name, "defaultPrompt 必须是不超过3项的数组", manifest_path))
+        hook_files = [path for path in (plugin / "hooks").rglob("*") if path.is_file()] if (plugin / "hooks").exists() else []
+        if hook_files:
+            errors.append(_finding("DESKTOP_LIFECYCLE_HOOK_FORBIDDEN", plugin.name, "高频生命周期Hook会放大桌面任务崩溃与重入写入风险", hook_files[0]))
         for skill_path in sorted((plugin / "skills").glob("*/SKILL.md")):
             text = skill_path.read_text(encoding="utf-8")
             meta = _frontmatter(text)
@@ -122,6 +128,8 @@ def audit(root: Path = ROOT) -> dict[str, Any]:
                 errors.append(_finding("DESCRIPTION_TOO_THIN", name, "description 未充分说明用途、触发条件与边界", skill_path))
             if len(text.splitlines()) > 500:
                 errors.append(_finding("SKILL_BODY_TOO_LARGE", name, "SKILL.md 超过500行，违反渐进加载预算", skill_path))
+            if skill_path.stat().st_size > 16 * 1024:
+                errors.append(_finding("SKILL_BYTES_TOO_LARGE", name, "SKILL.md 超过16KiB，会增加桌面上下文压力", skill_path))
             if not display or re.search(r"[A-Za-z]", display):
                 errors.append(_finding("INVALID_DISPLAY_NAME", name, "用户可见 Skill 名称必须是非空中文名称", yaml_path))
             elif display in display_names:
@@ -279,7 +287,7 @@ def audit(root: Path = ROOT) -> dict[str, Any]:
         "ownership": sum("MODE" in item["code"] or "OWNERSHIP" in item["code"] for item in errors),
         "permissions": sum("PERMISSION" in item["code"] or "DESTRUCTIVE" in item["code"] or "INDEPENDENT" in item["code"] for item in errors),
         "usability": sum("PROMPT" in item["code"] or "DISPLAY" in item["code"] or "DESCRIPTION" in item["code"] for item in errors),
-        "performance": sum("TOO_LARGE" in item["code"] for item in errors),
+        "performance": sum("TOO_LARGE" in item["code"] or "DESKTOP_" in item["code"] for item in errors),
     }
     return {
         "ok": not errors,

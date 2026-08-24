@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sqlite3
 import subprocess
 from pathlib import Path
@@ -13,7 +14,15 @@ from graph_store import impact, import_tokens, resolve_token
 from qualitylib import git_root, head, load_json, matches_any, now, posix, repo_ai, worktree_fingerprint, write_json
 
 
-DEFAULT_BUDGET = {"warn_lines": 400, "block_lines": 700, "warn_growth": 80, "block_growth": 200}
+DEFAULT_BUDGET = {
+    "preempt_lines": 320, "warn_lines": 400, "block_lines": 700,
+    "responsibility_growth": 1, "warn_growth": 80, "block_growth": 200,
+}
+DECLARATION = re.compile(
+    r"^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?(?:class|interface|type|enum|function|def|record|struct)\s+[A-Za-z_$][\w$]*"
+    r"|^\s*(?:export\s+)?(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=",
+    re.MULTILINE,
+)
 
 
 def safe_id(value: str) -> str:
@@ -40,6 +49,58 @@ def text_lines(path: Path) -> int | None:
 def git_lines(root: Path, rel: str, ref: str = "HEAD") -> int:
     result = subprocess.run(["git", "show", f"{ref}:{rel}"], cwd=root, text=True, encoding="utf-8", errors="replace", stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     return len(result.stdout.splitlines()) if result.returncode == 0 else 0
+
+
+def git_text(root: Path, rel: str, ref: str = "HEAD") -> str:
+    result = subprocess.run(
+        ["git", "show", f"{ref}:{rel}"], cwd=root, text=True, encoding="utf-8", errors="replace",
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    )
+    return result.stdout if result.returncode == 0 else ""
+
+
+def declaration_count(text: str) -> int:
+    return len(DECLARATION.findall(text))
+
+
+def structural_decisions(contract: dict[str, Any]) -> tuple[dict[str, dict[str, str]], list[str]]:
+    decisions: dict[str, dict[str, str]] = {}; errors: list[str] = []
+    for raw in contract.get("structural_decisions", []) or []:
+        parts = [part.strip() for part in str(raw).split("|")]
+        path = posix(parts[0]) if parts else ""; action = parts[1].upper() if len(parts) > 1 else ""
+        if not path or action not in {"KEEP", "EXTRACT", "MIGRATE", "RETIRE"}:
+            errors.append(f"结构决策格式无效: {raw}")
+            continue
+        if action == "KEEP" and (len(parts) < 3 or not parts[2]):
+            errors.append(f"KEEP 结构决策缺少职责稳定理由: {path}")
+            continue
+        if action in {"EXTRACT", "MIGRATE", "RETIRE"} and (len(parts) < 4 or not parts[2] or not parts[3]):
+            errors.append(f"{action} 结构决策必须包含目标路径和退出条件/证据: {path}")
+            continue
+        decisions[path] = {
+            "path": path, "action": action, "reason": parts[2] if action == "KEEP" else "",
+            "target": parts[2] if action != "KEEP" else "", "exit": parts[3] if len(parts) > 3 else "",
+        }
+    return decisions, errors
+
+
+def recent_line_trajectory(root: Path, rel: str, current: int, limit: int = 4) -> list[int]:
+    result = subprocess.run(
+        ["git", "log", "--format=%H", f"-n{limit}", "--", rel], cwd=root, text=True,
+        encoding="utf-8", errors="replace", stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    )
+    commits = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    historical = [git_lines(root, rel, commit) for commit in reversed(commits)]
+    return historical + [current]
+
+
+def oscillates(values: list[int]) -> bool:
+    signs = []
+    for left, right in zip(values, values[1:]):
+        delta = right - left
+        if delta: signs.append(1 if delta > 0 else -1)
+    turns = sum(left != right for left, right in zip(signs, signs[1:]))
+    return len(signs) >= 3 and signs[-1] > 0 and turns >= 2
 
 
 def module_for(path: str, registry: dict[str, Any]) -> str:
@@ -105,17 +166,43 @@ def evaluate(root: Path, task_id: str | None = None, mode: str = "all-local", ba
     if drift: blockers.append(f"实际改动超出 change_contract: {len(drift)} 个文件")
 
     budget = dict(DEFAULT_BUDGET); budget.update((contract.get("file_growth_budget") or {}) if isinstance(contract, dict) else {})
+    decisions, decision_errors = structural_decisions(contract)
+    blockers.extend(decision_errors)
     growth = []
+    responsibility_risks = []
+    history_budget = 12
     for item in changes:
         if item.get("binary"):
             growth.append({"path": item["path"], "before": None, "after": None, "growth": None, "skipped": "binary"})
             continue
-        current = text_lines(root / item["path"]); previous = git_lines(root, item.get("old_path") or item["path"], baseline_ref); delta = None if current is None else current - previous
-        row = {"path": item["path"], "before": previous, "after": current, "growth": delta}; growth.append(row)
+        rel = item["path"]; old_rel = item.get("old_path") or rel
+        current = text_lines(root / rel); previous = git_lines(root, old_rel, baseline_ref); delta = None if current is None else current - previous
+        current_text = (root / rel).read_text(encoding="utf-8", errors="ignore") if current is not None and (root / rel).is_file() else ""
+        previous_text = git_text(root, old_rel, baseline_ref)
+        responsibility_delta = declaration_count(current_text) - declaration_count(previous_text)
+        row = {"path": rel, "before": previous, "after": current, "growth": delta, "responsibility_delta": responsibility_delta}; growth.append(row)
         if current is not None and current >= int(budget["block_lines"]): blockers.append(f"文件超过阻断预算 {budget['block_lines']} 行: {item['path']} ({current})")
         elif current is not None and current >= int(budget["warn_lines"]): warnings.append(f"文件超过警告预算 {budget['warn_lines']} 行: {item['path']} ({current})")
         if delta is not None and delta >= int(budget["block_growth"]): blockers.append(f"单次增长超过阻断预算 {budget['block_growth']} 行: {item['path']} (+{delta})")
         elif delta is not None and delta >= int(budget["warn_growth"]): warnings.append(f"单次增长超过警告预算 {budget['warn_growth']} 行: {item['path']} (+{delta})")
+        near_budget = current is not None and max(previous, current) >= int(budget["preempt_lines"])
+        adds_responsibility = responsibility_delta >= int(budget["responsibility_growth"])
+        decision = decisions.get(rel)
+        trajectory: list[int] = []
+        repeated_cycle = False
+        if near_budget and history_budget > 0:
+            trajectory = recent_line_trajectory(root, rel, current)
+            repeated_cycle = oscillates(trajectory)
+            history_budget -= 1
+        if near_budget and adds_responsibility and not decision:
+            blockers.append(f"接近文件预算时新增职责但缺少编码前结构决策: {rel}（新增声明 {responsibility_delta}）")
+        if repeated_cycle and (not decision or decision.get("action") not in {"EXTRACT", "MIGRATE", "RETIRE"}):
+            blockers.append(f"检测到文件反复增长—拆分—再写回: {rel}；必须给出带退出条件的提取、迁移或退役决策")
+        if near_budget or repeated_cycle:
+            responsibility_risks.append({
+                "path": rel, "near_budget": near_budget, "responsibility_delta": responsibility_delta,
+                "trajectory": trajectory, "oscillation": repeated_cycle, "decision": decision,
+            })
 
     public_changes = []
     declared = set(contract.get("public_contract_changes", [])); characterization = contract.get("characterization_tests", []); consumer_tests = contract.get("consumer_tests", [])
@@ -154,6 +241,7 @@ def evaluate(root: Path, task_id: str | None = None, mode: str = "all-local", ba
         "head": head(root), "worktree_fingerprint": worktree_fingerprint(root), "change_mode": effective_mode, "baseline_ref": baseline_ref, "changes": changes,
         "changed_modules": sorted(set(changed_modules)), "scope_drift": drift, "file_growth": growth, "file_growth_budget": budget,
         "public_contract_changes": public_changes, "potential_public_changes": potential_public, "dependency_violations": dep_violations, "graph": graph,
+        "structural_decisions": list(decisions.values()), "responsibility_risks": responsibility_risks,
         "blockers": list(dict.fromkeys(blockers)), "warnings": list(dict.fromkeys(warnings)), "findings": findings,
     }
 

@@ -34,8 +34,23 @@ def git_worktrees(root: Path) -> list[dict[str, str]]:
     return items
 
 
-def tasks(root: Path) -> list[dict[str, Any]]:
-    return [data for path in sorted((root / ".ai" / "tasks").glob("*.json")) if (data := read_json(path, {}))]
+def tasks(root: Path, mode: str = "quick") -> list[dict[str, Any]]:
+    if mode == "deep":
+        return [data for path in sorted((root / ".ai" / "tasks").glob("*.json")) if (data := read_json(path, {}))]
+    index = read_json(root / ".ai" / "governance" / "task-index.json", {}) or {}
+    summaries = [item for item in index.get("tasks", []) if isinstance(item, dict)]
+    if mode == "quick":
+        summaries = [item for item in summaries if item.get("state") not in CLOSED]
+    records = []
+    for item in summaries[:20 if mode == "quick" else 220]:
+        task_id = str(item.get("task_id") or "")
+        if not task_id:
+            continue
+        path = root / ".ai" / "tasks" / f"{task_id}.json"
+        data = read_json(path, {}) or {}
+        if data:
+            records.append(data)
+    return records
 
 
 def _expired(value: Any) -> bool:
@@ -50,7 +65,7 @@ def _expired(value: Any) -> bool:
 def reconcile(path: Path, write_report: bool = False, mode: str = "quick", phase: str = "development") -> dict[str, Any]:
     root = repo_root(path)
     project = read_json(root / ".ai" / "governance" / "project-state.json", {}) or {}
-    records = tasks(root)
+    records = tasks(root, mode)
     branches = git_branches(root)
     stock = inventory(root, mode)
     worktrees = [{"worktree": item.get("path", ""), "branch": f"refs/heads/{item.get('branch')}" if item.get("branch") else "", **item} for item in stock["entries"]]
@@ -109,7 +124,7 @@ def reconcile(path: Path, write_report: bool = False, mode: str = "quick", phase
 
     session_pool = read_json(common_dir(root) / "ai-engineering" / "session-pool.json", {}) or {}
     session_slots = list(session_pool.get("slots", {}).values())
-    max_slots = int(project.get("session_budget", {}).get("max_resident_slots", 4))
+    max_slots = int(project.get("session_budget", {}).get("max_resident_slots", 6))
     resident_slots = [slot for slot in session_slots if slot.get("state") != "RELEASED"]
     if len(resident_slots) > max_slots:
         findings.append({"severity": "BLOCK", "type": "SESSION_SLOT_BUDGET", "task_id": "", "detail": f"{len(resident_slots)}/{max_slots}"})

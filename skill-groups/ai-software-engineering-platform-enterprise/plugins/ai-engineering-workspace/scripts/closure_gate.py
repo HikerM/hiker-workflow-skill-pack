@@ -57,6 +57,10 @@ def evaluate(root: Path, task: dict, phase: str) -> dict:
         if task.get("state") != "Merged": failures.append("release gate requires Merged state")
         if task.get("release", {}).get("status") != "PASS": failures.append("release evidence is not PASS")
         if not task.get("merge_commit"): failures.append("merge commit is missing")
+        release_report = read_json(root / ".ai" / "evidence" / "release" / "latest.json", {}) or {}
+        if release_report.get("result") not in {"PASS", "PASS_WITH_WARNINGS"}: failures.append("current release-readiness report is not PASS")
+        elif release_report.get("task_id") != task.get("task_id") or release_report.get("source_commit") != task.get("merge_commit"):
+            failures.append("release-readiness report is stale or bound to another task/merge commit")
     convergence = task.get("convergence") or {}
     if convergence.get("required"):
         convergence_report = convergence_assess(convergence, phase)

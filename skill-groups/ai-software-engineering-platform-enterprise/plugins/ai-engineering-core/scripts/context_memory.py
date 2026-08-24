@@ -10,7 +10,7 @@ from typing import Any
 from corelib import ai_root, atomic_write_json, read_json, sha256_file, utc_now
 
 DEFAULT_MEMORY_POLICY = {
-    "schema_version": "1.0.0",
+    "schema_version": "1.1.0",
     "active_context_max_chars": 12000,
     "session_context_max_chars": 6500,
     "max_items_per_section": 12,
@@ -18,6 +18,19 @@ DEFAULT_MEMORY_POLICY = {
     "max_milestone_checkpoints": 8,
     "max_ledger_entries": 32,
     "max_task_index_closed": 200,
+    "max_task_history_events": 40,
+    "max_task_history_ledger_entries": 20,
+    "max_session_epoch_turns": 20,
+    "max_session_epoch_tool_calls": 40,
+    "max_session_epoch_tool_output_chars": 60000,
+    "max_session_epoch_compactions": 1,
+}
+
+LEGACY_EPOCH_DEFAULTS = {
+    "max_session_epoch_turns": 40,
+    "max_session_epoch_tool_calls": 80,
+    "max_session_epoch_tool_output_chars": 120000,
+    "max_session_epoch_compactions": 2,
 }
 
 MILESTONE_WORDS = ("start", "pause", "adjust", "plan", "review", "test", "merge", "release", "complete", "handoff")
@@ -35,9 +48,12 @@ def ensure_memory_policy(root: Path) -> dict[str, Any]:
         for key, default in DEFAULT_MEMORY_POLICY.items():
             value = current.get(key)
             if key == "schema_version":
-                if isinstance(value, str) and value:
-                    policy[key] = value
+                continue
             elif isinstance(value, int) and value > 0:
+                # 5.14/5.15 早期默认值对桌面长任务过于宽松。只迁移旧默认，
+                # 用户明确调整过的其他正整数阈值仍保留。
+                if current.get("schema_version") == "1.0.0" and LEGACY_EPOCH_DEFAULTS.get(key) == value:
+                    continue
                 policy[key] = value
     if current != policy:
         atomic_write_json(path, policy)

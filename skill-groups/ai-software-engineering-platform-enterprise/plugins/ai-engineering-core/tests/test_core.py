@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 import os
 import subprocess
 import sys
@@ -21,6 +22,8 @@ from state_consistency import assess as assess_state_consistency, repair as repa
 from requirements_fusion import init as init_requirements, merge as merge_requirements, validate as validate_requirements
 from brownfield_reconcile import initialize as init_brownfield, set_baseline, reconcile, validate as validate_brownfield
 from suite_router import inspect_project, route
+from session_epoch import assess as assess_epoch, record as record_epoch, rotate as rotate_epoch
+from bounded_run import run_bounded
 
 
 def model_proposal(*skills: str, stage: str = "development", architecture: str = "unknown", mode: str = "existing", **extra):
@@ -37,6 +40,65 @@ def model_proposal(*skills: str, stage: str = "development", architecture: str =
 
 
 class CoreTests(unittest.TestCase):
+    def test_session_epoch_concurrent_records_do_not_lose_counts(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td); initialize(root)
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                list(pool.map(lambda _:record_epoch(root,tool_calls=1),range(40)))
+            self.assertEqual(40,assess_epoch(root)["counters"]["tool_calls"])
+
+    def test_session_epoch_rotates_only_after_checkpointed_threshold(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); initialize(root)
+            report = record_epoch(root, substantive_turns=40, tool_calls=2, tool_output_chars=1000, compactions=0, stage_transitions=1)
+            self.assertTrue(report["rotation_required"])
+            self.assertIn("substantive_turns", report["reasons"])
+            with self.assertRaises(RuntimeError):
+                rotate_epoch(root, "")
+            rotated = rotate_epoch(root, "CP-EPOCH-001")
+            self.assertFalse(rotated["rotation_required"])
+            self.assertEqual(2, rotated["epoch"])
+            self.assertEqual("CP-EPOCH-001", assess_epoch(root)["last_checkpoint_id"])
+
+    def test_legacy_epoch_policy_is_tightened_and_blocks_continuation(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);initialize(root)
+            policy=root/".ai/governance/context-retention.json"
+            data=json.loads(policy.read_text(encoding="utf-8"));data.update({
+                "schema_version":"1.0.0","max_session_epoch_turns":40,
+                "max_session_epoch_tool_calls":80,"max_session_epoch_tool_output_chars":120000,
+                "max_session_epoch_compactions":2,
+            });policy.write_text(json.dumps(data),encoding="utf-8")
+            report=record_epoch(root,compactions=1)
+            self.assertTrue(report["rotation_required"]);self.assertFalse(report["continuation_allowed"])
+            self.assertEqual("CRITICAL",report["risk"]);self.assertEqual(1,report["limits"]["compactions"])
+
+    def test_bounded_run_keeps_large_output_out_of_conversation(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); initialize(root)
+            report = run_bounded(root, "TEST-LARGE", [sys.executable, "-c", "print('x' * 8000)"], max_chars=800)
+            self.assertEqual(0, report["exit_code"])
+            self.assertTrue(report["truncated"])
+            self.assertLess(len(report["stdout_excerpt"]), 1200)
+            evidence = root / report["evidence_path"]
+            self.assertTrue(evidence.is_file())
+            self.assertGreater(evidence.stat().st_size, 7000)
+
+    def test_session_recovery_prefers_bound_task_context_over_master_summary(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); initialize(root)
+            (root / ".ai/governance/project-state.json").write_text(json.dumps({"project_id": "APP"}), encoding="utf-8")
+            (root / "CURRENT_CONTEXT.md").write_text("# 总控\n\n- OTHER\n", encoding="utf-8")
+            task_context = root / ".ai/runtime/task-contexts/KG-123.md"
+            task_context.parent.mkdir(parents=True, exist_ok=True)
+            task_context.write_text("# 任务上下文\n\n- BOUND-KG-123\n", encoding="utf-8")
+            result = subprocess.run([sys.executable, str(PLUGIN / "scripts/session_context.py")], cwd=root, input=json.dumps({"cwd": str(root), "source": "test", "taskId": "kg-123", "roleFamily": "writer", "ownershipLane": "frontend"}), text=True, encoding="utf-8", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.assertEqual(0, result.returncode, result.stderr)
+            context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+            self.assertIn("BOUND-KG-123", context)
+            self.assertNotIn("OTHER", context)
+            self.assertIn("Lane=frontend", context)
+
     def test_router_requires_chatgpt_proposal_and_never_keyword_selects(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -52,6 +114,7 @@ class CoreTests(unittest.TestCase):
 
     def test_router_accepts_model_candidates_and_keeps_bounded_queue(self):
         with tempfile.TemporaryDirectory() as td:
+            initialize(Path(td))
             proposal = model_proposal(
                 "multi-agent-project-governance", "workspace-task-router",
                 stage="governance", architecture="hybrid",
@@ -89,6 +152,7 @@ class CoreTests(unittest.TestCase):
             ("greenfield-project-planning", "planning", "0→1需求融合与选型"),
         )
         with tempfile.TemporaryDirectory() as td:
+            initialize(Path(td))
             for skill, stage, display in cases:
                 data = route(Path(td), model_proposal(skill, stage=stage, mode="greenfield" if skill == "greenfield-project-planning" else "unknown"))
                 self.assertTrue(data["accepted"], data["diagnostics"])
@@ -142,6 +206,7 @@ class CoreTests(unittest.TestCase):
             subprocess.run(["git", "config", "user.name", "Hiker"], cwd=root, check=True)
             (root / "package.json").write_text(json.dumps({"dependencies": {"vue": "3.5.0"}}), encoding="utf-8")
             subprocess.run(["git", "add", "."], cwd=root, check=True); subprocess.run(["git", "commit", "-m", "init"], cwd=root, check=True, stdout=subprocess.PIPE)
+            initialize(root)
             nested = root / "old-worktree"
             subprocess.run(["git", "worktree", "add", "-b", "feature/old", str(nested)], cwd=root, check=True, stdout=subprocess.PIPE)
             (nested / "legacy" ).mkdir(); (nested / "legacy/package.json").write_text(json.dumps({"dependencies": {"express": "5"}}), encoding="utf-8")
@@ -292,6 +357,40 @@ class CoreTests(unittest.TestCase):
             report = assess_state_consistency(second)
             self.assertEqual("L4", report["recovery_level"])
             self.assertEqual("PROJECT_IDENTITY_DRIFT", report["status"])
+
+    def test_projects_without_ai_use_stateless_current_request_policy(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            report = assess_state_consistency(root)
+            self.assertTrue(report["ok"])
+            self.assertEqual("STATELESS_UNMANAGED", report["status"])
+            self.assertEqual("CURRENT_REQUEST_AND_GIT_ONLY", report["execution_policy"]["mode"])
+            self.assertFalse(report["execution_policy"]["trusted_ai_state"])
+            self.assertFalse(report["execution_policy"]["requires_state_recovery"])
+            routed = route(root, model_proposal("web-component-implementation", stage="development", architecture="bs"))
+            self.assertTrue(routed["accepted"], routed["diagnostics"])
+            first_governance = route(root, model_proposal("workspace-task-router", stage="governance"))
+            self.assertTrue(first_governance["accepted"], first_governance["diagnostics"])
+
+    def test_legacy_ai_without_provenance_is_quarantined_and_cannot_be_auto_trusted(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / ".ai/runtime").mkdir(parents=True)
+            (root / ".ai/runtime/task.json").write_text(json.dumps({"id": "OLD", "status": "Development"}), encoding="utf-8")
+            report = assess_state_consistency(root)
+            self.assertEqual("UNTRUSTED_AI_STATE", report["status"])
+            self.assertEqual("QUARANTINE_AI_STATE", report["execution_policy"]["mode"])
+            self.assertFalse(report["execution_policy"]["may_resume_old_tasks"])
+            repaired = repair_state_consistency(root)
+            self.assertTrue(repaired["repair_blocked"])
+            self.assertFalse((root / ".ai/governance/source-provenance.json").exists())
+            with self.assertRaisesRegex(RuntimeError, "untrusted"):
+                initialize(root)
+            blocked = route(root, model_proposal("workspace-task-router", stage="governance"))
+            self.assertFalse(blocked["accepted"])
+            self.assertIn("STALE_AI_STATE_DEPENDENCY", {item["code"] for item in blocked["diagnostics"]})
+            stateless = route(root, model_proposal("backend-component-implementation", stage="development", architecture="backend"))
+            self.assertTrue(stateless["accepted"], stateless["diagnostics"])
     def test_detect_monorepo(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -424,6 +523,7 @@ class CoreTests(unittest.TestCase):
     def test_router_rejects_stage_skill_conflicts_instead_of_rewriting_stage(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
+            initialize(root)
             wrong = route(root, model_proposal("release-readiness-review", stage="development"))
             self.assertFalse(wrong["accepted"])
             self.assertIn("STAGE_SKILL_CONFLICT", {item["code"] for item in wrong["diagnostics"]})

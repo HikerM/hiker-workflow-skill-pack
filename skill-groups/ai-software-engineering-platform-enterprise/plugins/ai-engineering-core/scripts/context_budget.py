@@ -54,6 +54,8 @@ def _run(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
 
 
 def tracked_file_count(root: Path) -> int | None:
+    if not any((candidate / ".git").exists() for candidate in (root.resolve(), *root.resolve().parents)):
+        return None
     result = _run(root, "git", "ls-files", "-z")
     if result.returncode != 0:
         return None

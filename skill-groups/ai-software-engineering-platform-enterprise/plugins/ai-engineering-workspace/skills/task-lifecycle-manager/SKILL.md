@@ -15,7 +15,7 @@ python <plugin-root>/scripts/governance_state.py --root . contract-set --task-id
 
 使用 `contract-set` 记录本次允许文件/模块、公共契约变化、原有行为不变量和最低回归；没有范围、不变量和测试不得进入 Development。使用 `record` 写入 commit/review/test/artifact/document/decision/risk；使用 `checkpoint` 保存阶段快照。`pause` 不改变生命周期状态，只把 `control_status` 设为 PAUSED；`adjust` 记录新方向；`insert` 必须创建新的Task ID并关联原任务；`resume` 从原状态继续。未满足阶段证据门禁时不得推进。
 
-生命周期状态之外单独维护会话绑定子状态：`SETUP_PENDING → BOUND → RUNNING → IDLE_REUSABLE / RELEASE_PENDING → RELEASED`。只有 Master Agent 管理该状态；角色槽以项目、仓库和角色族为稳定身份，Task ID 是槽内工作项。`clientThreadId` 不能当作真实 `threadId`，`SETUP_PENDING` 不能触发第二个同族会话；任何时刻一个项目仓库只能有一个活动 writer 槽。普通任务结束自动回到 `IDLE_REUSABLE`，项目终态由总控自动归档并验证运行时释放，不要求用户确认。
+生命周期状态之外单独维护会话绑定子状态：`SETUP_PENDING → BOUND → RUNNING → IDLE_REUSABLE / RELEASE_PENDING → RELEASED`。writer 槽按项目、仓库和稳定所有权通道区分，默认最多两个；同一通道仍只有一个活动writer。`clientThreadId` 不能当作真实 `threadId`，pending不能通过换Task ID制造替代会话。
 
 Development 进入 Review 前必须生成与当前 Git HEAD、工作区指纹一致的架构守卫证据，并运行 `governance_state.py candidate-freeze --task-id <TASK-ID> --agent-role "Developer Agent" --candidate-id <CANDIDATE-ID>` 冻结只读审核候选。Review、Testing 与 Merge 只可消费该 `candidate_id`；候选提交、索引、源文件集合或工作区指纹发生任何变化即 `STALE`，必须生成新候选并重新取得受影响证据。普通局部任务只需最小变更契约，不要求维护全量模块、依赖或运行拓扑配置。
 
@@ -25,7 +25,7 @@ Development 进入 Review 前必须生成与当前 Git HEAD、工作区指纹一
 
 每个阶段状态必须区分 `governance_progress` 与 `business_progress`。校验器、控制账本或测试工具修复不等于业务 Development 已开始；验证工具失败标为 `INVALID`，只有真实产品断言失败才标记业务测试 `FAIL`。相同 Gate、源码/合同指纹和范围已有 PASS 时复用证据，禁止为了“更保险”无条件从头重跑全部矩阵。
 
-进入 Development 前还必须服从项目并行预算：默认最多两个活动写任务；当 Review/Testing 待收敛任务达到上限时，禁止继续开启写任务。恢复长期项目时先运行 `task_reconciler.py --root .`，用 Task/Branch/Worktree/文件锁对账结果识别孤儿工作区、丢失分支和合并债务。
+进入 Development 前还必须服从项目并行预算和目标契约指纹。连续两个治理周期后，若范围、不变量和最低测试已满足，应直接进入首个安全业务切片；治理周期上限不得反向阻止 Development。日常状态和quick对账只读取活动Task索引，只有显式deep/full审计才扫描全部历史Task。
 
 桌面任务或 Subagent 调度前先运行 `dispatch_guard.py observe`。查询异常和超时分别记录为 `API_ERROR`、`QUERY_TIMEOUT`，都必须失败关闭；只有 `EMPTY_CONFIRMED` 才允许创建。随后运行 `environment-plan`：仓库、容器或设备任务继承项目环境，纯分析任务使用无项目环境，浏览器任务留在当前宿主。状态告警通过 `notify` 指纹去重，状态或证据变化时才再次显示。
 

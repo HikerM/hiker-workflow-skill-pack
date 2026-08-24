@@ -1,10 +1,13 @@
 from __future__ import annotations
-import csv,json,py_compile,re,sys
+import csv,json,py_compile,re,subprocess,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from evaluate_router import evaluate as evaluate_router
 from audit_skill_coherence import audit as audit_skill_coherence
+from benchmark_router import benchmark as benchmark_router
+from evaluate_master_progression import evaluate as evaluate_master_progression
+from desktop_stability_gate import audit as audit_desktop_stability
 NAME_RE=re.compile(r"^[a-z0-9][a-z0-9-]*$")
 def frontmatter(path:Path)->dict:
     text=path.read_text(encoding="utf-8");m=re.match(r"^---\n(.*?)\n---\n",text,re.S)
@@ -16,6 +19,10 @@ def frontmatter(path:Path)->dict:
     return out
 def main()->int:
     errors=[];warnings=[];skill_names={};display_names={};plugins=sorted((ROOT/"plugins").iterdir())
+    unit_run=subprocess.run([sys.executable,"-X","utf8",str(ROOT/"tools/run_all_tests.py")],cwd=str(ROOT),text=True,encoding="utf-8",errors="replace",stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+    unit_report=json.loads((ROOT/"test-results.json").read_text(encoding="utf-8")) if (ROOT/"test-results.json").is_file() else {"ok":False,"results":[]}
+    if unit_run.returncode!=0 or not unit_report.get("ok"):
+        errors.append("完整单元测试失败；发布验证不得复用旧 test-results.json")
     if len(plugins)!=5:errors.append(f"期望5个插件，实际{len(plugins)}")
     for p in plugins:
         manifest_path=p/".codex-plugin/plugin.json"
@@ -82,9 +89,16 @@ def main()->int:
     if "先读取 [角色契约]" in governance_skill:errors.append("多智能体总控退化为启动时预读全部参考")
     router_eval=evaluate_router()
     if not router_eval["ok"]:errors.append(f"轻量路由行为Eval失败: {len(router_eval['failures'])} 条")
+    master_progression=evaluate_master_progression()
+    if not master_progression["ok"]:errors.append("总控多维推进评估失败: "+", ".join(item["scenario"] for item in master_progression["results"] if not item["ok"]))
+    router_performance=benchmark_router(20,500.0)
+    if not router_performance["ok"]:errors.append(f"轻量路由性能失败: P95 {router_performance['p95_ms']}ms > {router_performance['max_p95_ms']}ms")
     coherence=audit_skill_coherence(ROOT)
     if not coherence["ok"]:errors.extend(f"Skill一致性审核: {item['code']} {item['skill']} {item['message']}" for item in coherence["errors"])
     warnings.extend(f"Skill一致性审核: {item['code']} {item['skill']} {item['message']}" for item in coherence["warnings"])
-    report={"ok":not errors,"plugin_count":len(plugins),"skill_count":len(skill_names),"router_eval":router_eval,"skill_coherence":coherence,"errors":errors,"warnings":warnings}
+    desktop_stability=audit_desktop_stability(ROOT)
+    if not desktop_stability["ok"]:errors.extend(f"桌面稳定性: {item}" for item in desktop_stability["errors"])
+    warnings.extend(f"桌面稳定性: {item}" for item in desktop_stability["warnings"])
+    report={"ok":not errors,"plugin_count":len(plugins),"skill_count":len(skill_names),"unit_tests":{"ok":bool(unit_report.get("ok")),"plugin_results":[{"plugin":item.get("plugin"),"ok":item.get("ok"),"seconds":item.get("seconds")} for item in unit_report.get("results",[])]},"router_eval":router_eval,"master_progression":master_progression,"router_performance":router_performance,"skill_coherence":coherence,"desktop_stability":desktop_stability,"errors":errors,"warnings":warnings}
     print(json.dumps(report,ensure_ascii=False,indent=2));return 0 if not errors else 2
 if __name__=="__main__":raise SystemExit(main())

@@ -4,7 +4,8 @@
 
 - `.ai/governance/project-state.json`：项目身份、版本、架构、数据库/API版本和风险的机器事实源。
 - `PROJECT_STATE.md`：当前版本/分支、已完成、开发中、待处理、数据库/API版本、风险的可读投影。
-- `CURRENT_CONTEXT.md`：当前目标、完成修改、未完成事项、关键决定、禁止事项。
+- `CURRENT_CONTEXT.md`：总控的当前目标、活动Task摘要、关键决定和禁止事项；执行角色读取 `.ai/runtime/task-contexts/<Task-ID>.md`。
+- `.ai/governance/goal-contract.json`：项目目标ID、修订、结果、非目标、验收、不变量、约束和指纹；Task保存目标绑定，旧修订不得继续执行。
 - `CHANGELOG.md`、`ARCHITECTURE.md`：发布历史和架构事实。
 
 ## 任务事实
@@ -15,4 +16,4 @@
 
 ## 上下文恢复
 
-新 Agent 先核对项目 ID，再读四个根文档、任务 JSON、最新 checkpoint 和 Git 状态。聊天摘要只能作为线索，不能覆盖仓库事实。
+新 Agent 先核对项目 ID、目标指纹、绑定Task和所有权通道，再读该Task上下文、必要根文档、最新 checkpoint 和 Git 状态。聊天摘要只能作为线索，不能覆盖仓库事实。

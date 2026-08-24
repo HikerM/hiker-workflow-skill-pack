@@ -119,6 +119,14 @@ SOURCE_CONFLICT_SAFE = {
     "worktree-task-manager", "worktree-safe-convergence", "project-bootstrap",
     "full-change-risk-review", "project-state-manager",
 }
+AI_STATE_DEPENDENT_SKILLS = {
+    "bounded-context-memory", "interruptible-task-control", "workspace-task-router",
+    "multi-agent-project-governance", "change-ownership-merge", "feature-acceptance-closure",
+    "file-lock-manager", "multi-project-portfolio-manager", "plugin-application-receipt",
+    "project-state-manager", "task-lifecycle-manager", "long-chain-change-convergence",
+    "worktree-task-manager", "knowledge-graph-maintenance",
+    "release-readiness-review",
+}
 
 
 def bounded_marker_paths(root: Path, max_depth: int = 3, max_dirs: int = 160) -> list[Path]:
@@ -159,7 +167,12 @@ def project_signals(root: Path) -> dict[str, Any]:
     sources: list[str] = []
     evidence_parts: list[str] = []
     context_evidence = ""
-    context_ready = context_fresh(context, identity.get("branch") or "", identity.get("head") or "") if identity["is_git"] else context.is_file()
+    consistency = assess_state_consistency(root)
+    state_trusted = bool(consistency.get("execution_policy", {}).get("trusted_ai_state"))
+    context_ready = state_trusted and (
+        context_fresh(context, identity.get("branch") or "", identity.get("head") or "")
+        if identity["is_git"] else context.is_file()
+    )
     if context_ready:
         try:
             context_evidence = json.dumps(json.loads(context.read_text(encoding="utf-8")), ensure_ascii=False).lower()
@@ -217,6 +230,7 @@ def project_signals(root: Path) -> dict[str, Any]:
         "sources": sources[:12],
         "identity": identity,
         "source_conflicts": bool(identity.get("nested_worktrees")),
+        "state_consistency": consistency,
     }
 
 
@@ -277,7 +291,7 @@ def inspect_project(root: Path) -> dict[str, Any]:
             "stages": sorted(VALID_STAGES),
         },
         "context_budget": build_context_plan(root, "unknown"),
-        "state_consistency": assess_state_consistency(root),
+        "state_consistency": signals["state_consistency"],
         "catalog": str((Path(__file__).resolve().parents[1] / "references" / "semantic-routing-catalog.md").resolve()),
     }
 
@@ -336,12 +350,33 @@ def _validate_architecture(skill: str, architectures: set[str]) -> str | None:
 def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str, Any]:
     """Validate a ChatGPT proposal. Never infer a Skill from request keywords."""
     root = root.resolve()
-    inspection = inspect_project(root)
     signals = project_signals(root)
+    identity = signals["identity"]
+    project_facts = {
+        "mode_hint": "existing" if signals["existing"] else "unknown",
+        "architectures": signals["architectures"],
+        "unity": signals["unity"],
+        "context_ready": signals["context_ready"],
+        "source_conflicts": signals["source_conflicts"],
+        "sources": signals["sources"],
+        "repo_root": identity.get("repo_root"),
+        "worktree_root": identity.get("worktree_root"),
+        "branch": identity.get("branch"),
+        "head": identity.get("head"),
+        "trusted_manifest_count": len(identity.get("trusted_markers", [])),
+        "nested_worktree_count": len(identity.get("nested_worktrees", [])),
+    }
+    consistency = signals["state_consistency"]
     if not isinstance(proposal, dict):
         request_hash = hashlib.sha256(str(proposal or "").encode("utf-8")).hexdigest()[:16] if proposal else None
         return {
-            **inspection,
+            "schema_version": "2.0.0",
+            "routing_authority": "chatgpt-semantic-selection",
+            "guard_role": "constraints-and-evidence-only",
+            "project_facts": project_facts,
+            "context_budget": build_context_plan(root, "unknown"),
+            "state_consistency": consistency,
+            "catalog": str((Path(__file__).resolve().parents[1] / "references" / "semantic-routing-catalog.md").resolve()),
             "guard_decision": "PROPOSAL_REQUIRED",
             "accepted": False,
             "reselect_required": True,
@@ -408,6 +443,16 @@ def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str,
             error("SKILL_PROJECT_EVIDENCE_CONFLICT", architecture_problem)
         if signals["source_conflicts"] and skill not in SOURCE_CONFLICT_SAFE:
             error("SOURCE_IDENTITY_CONFLICT", "检测到嵌套工作目录；只能先选择源码身份或工作目录收敛能力")
+        state_policy = consistency.get("execution_policy", {})
+        if (
+            consistency.get("status") != "STATELESS_UNMANAGED"
+            and not state_policy.get("trusted_ai_state")
+            and skill in AI_STATE_DEPENDENT_SKILLS
+        ):
+            error(
+                "STALE_AI_STATE_DEPENDENCY",
+                f"{skill} 依赖可信 .ai；当前只能按最新用户请求与 Git 轻量推进，禁止恢复旧任务、旧 PASS、多会话或 Worktree",
+            )
 
     accepted = not diagnostics
     selected_output = [
@@ -464,7 +509,9 @@ def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str,
         "confidence": confidence,
         "context_budget": build_context_plan(root, stage, signals=context_signals),
         "project_evidence": signals["sources"],
-        "source_identity": inspection["project_facts"],
+        "source_identity": project_facts,
+        "state_consistency": consistency,
+        "execution_policy": consistency.get("execution_policy", {}),
         "receipt_required": accepted,
         "diagnostics": diagnostics,
     }

@@ -26,6 +26,12 @@ DEFAULT_POLICY = {
 
 def initialize(root: Path, force: bool = False) -> dict:
     root = root.resolve()
+    initial_consistency = assess_state_consistency(root)
+    if initial_consistency.get("execution_policy", {}).get("mode") == "QUARANTINE_AI_STATE":
+        raise RuntimeError(
+            "existing .ai is untrusted or belongs to another source identity; "
+            "keep it quarantined and start from the current request and Git"
+        )
     ai = ai_root(root)
     ai.mkdir(parents=True, exist_ok=True)
     detected = detect(root)
@@ -62,7 +68,10 @@ def initialize(root: Path, force: bool = False) -> dict:
     ensure_memory_policy(root)
     (ai / "logs").mkdir(parents=True, exist_ok=True)
     if not assess_state_consistency(root)["ok"]:
-        repair_state_consistency(root)
+        repair_state_consistency(
+            root,
+            allow_untrusted_initialization=initial_consistency["status"] == "STATELESS_UNMANAGED",
+        )
     return detected
 
 

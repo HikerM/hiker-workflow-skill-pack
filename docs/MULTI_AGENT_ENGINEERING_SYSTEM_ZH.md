@@ -155,7 +155,7 @@ Developer完成 → Conventional Commit → Review PASS → Test PASS
 
 `PROJECT_STATE.md` 强制包含当前版本、分支、已完成、开发中、待处理、数据库版本、API版本和风险。`CURRENT_CONTEXT.md` 强制包含当前目标、已完成修改、未完成事项、关键决定和禁止事项。
 
-会话压缩或Agent接管时，聊天摘要只能提供线索；仓库状态、checkpoint和Git事实优先。01号 `bounded-context-memory` 默认限制活动上下文12000字符、会话注入6500字符、每节12项，并分开保留近期12个和里程碑8个checkpoint；旧冗余快照进入有界索引和连续哈希链。04号继续保存Task ID、Agent、Worktree、锁、合并和发布状态。冲突时进入 `BLOCKED_CONTEXT_CONFLICT`，不得自行采用旧聊天结论。
+会话压缩或Agent接管时，聊天摘要只能提供线索；仓库状态、checkpoint和Git事实优先。01号 `bounded-context-memory` 默认限制活动上下文8000字符、会话注入4000字符、每节8项，并分开保留近期8个和里程碑6个checkpoint；旧冗余快照进入有界索引和连续哈希链。04号继续保存Task ID、Agent、Worktree、锁、合并和发布状态。冲突时进入 `BLOCKED_CONTEXT_CONFLICT`，不得自行采用旧聊天结论。
 
 “不丢失”指关键需求、决定、任务状态、风险、证据和Git事实在压缩前进入正式事实源，不代表逐字永久保存所有聊天。新会话只加载当前任务的固定大小工作集，完整事实按指针按需读取，因此不会因轮次增加而线性变重。
 

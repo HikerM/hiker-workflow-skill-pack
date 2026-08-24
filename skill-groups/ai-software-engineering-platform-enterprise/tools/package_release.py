@@ -41,7 +41,7 @@ def main() -> int:
     unit_report = json.loads((ROOT / "test-results.json").read_text(encoding="utf-8")) if (ROOT / "test-results.json").is_file() else {"ok": False}
     router_eval = evaluate_router()
     master_progression = evaluate_master_progression()
-    router_performance = benchmark_router(20, 500.0)
+    router_performance = benchmark_router(20, 200.0)
     coherence = audit_skill_coherence(ROOT)
     desktop_stability = audit_desktop_stability(ROOT)
     gate_errors = []

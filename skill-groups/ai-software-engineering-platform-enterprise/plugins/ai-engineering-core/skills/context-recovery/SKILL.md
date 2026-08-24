@@ -1,6 +1,6 @@
 ---
 name: context-recovery
-description: 在新会话、Agent接管或上下文压缩后，从项目身份、有界工作集、.ai任务状态、正式文档和最新检查点恢复事实，并验证目标、锁、分支和下一步。不得依赖旧聊天摘要或其他仓库状态作为唯一依据。
+description: 在新会话、压缩恢复或插件版本升级后，从项目身份、Git、当前任务和检查点恢复有界事实；校验目标、分支、锁和套件版本后才能继续。
 ---
 
 # 上下文恢复
@@ -13,12 +13,12 @@ description: 在新会话、Agent接管或上下文压缩后，从项目身份�
 4. 总控读取 `PROJECT_STATE.md` 与 `CURRENT_CONTEXT.md`；writer、assurance 和 browser 优先读取会话绑定的 `.ai/runtime/task-contexts/<Task-ID>.md`，不得读取其他并行Task的最后写入状态；
 5. `CHANGELOG.md`、`ARCHITECTURE.md` 和当前阶段证据；
 6. 最新相关 `.ai/runtime/checkpoints/*.json` 与 `checkpoint-ledger.json`；
-7. `.ai/runtime/skill-routing.json`；先核对阶段与路由指纹，再恢复最多两个活跃原子 Skill，待执行项不预加载；
+7. `.ai/runtime/skill-routing.json`；核对阶段、路由指纹、`suite_version` 与 `suite_fingerprint`。版本漂移时先保存 Checkpoint，由当前完整版本重新路由，旧会话不得继续写源码；
 8. `.ai/context/project.json`、`tech-stack.json` 和旧版运行状态（如存在）；
 9. Git common dir 中的工作区租约和文件锁；
 10. 冷归档只按 Task ID、checkpoint名或时间点精确读取，禁止扫描整个 `.ai/archive/`；
 11. 核对 `.ai/governance/goal-contract.json` 的 revision 与 fingerprint；任务绑定过期时先恢复最新目标并重算受影响范围，不沿用旧目标执行。
-11. 旧聊天摘要只用于发现可能缺口，不得覆盖以上事实。
+12. 旧聊天摘要只用于发现可能缺口，不得覆盖以上事实。
 
 运行：
 
@@ -42,6 +42,7 @@ python3 <plugin-root>/scripts/state_consistency.py --root .
 - 未解决风险。
 - 活动工作集字符数、checkpoint保留/收敛数量和完整事实源。
 - 当前阶段、活跃原子 Skill、待执行 Skill 与路由指纹。
+- 五插件当前完整版本、套件指纹与旧任务迁移状态。
 
 任何关键状态或项目身份冲突时标记 `BLOCKED_CONTEXT_CONFLICT`，不得自行选择旧聊天或另一仓库的方案覆盖正式状态。存在新版多Agent治理状态时，以其任务状态机为主，旧版 `task.json` 仅作迁移线索。恢复时先再次显示轻量路由回执；路由指纹与当前请求不一致时重新计算，不得照搬压缩前的原子 Skill。
 

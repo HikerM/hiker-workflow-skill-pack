@@ -48,7 +48,7 @@
 
 - 状态脚本以 `PreCompact` 事件调用时：先把关键需求、决定、任务、风险和证据写入事实源，再复制关键状态、记录 Git HEAD/状态和校验和。
 - 恢复脚本以 `SessionStart(source=compact)` 调用时：只输出固定大小的活动工作集、最近决定和恢复回执。
-- `context-retention.json` 默认限制活动上下文12000字符、会话注入6500字符、每节12项、近期checkpoint 12个、里程碑checkpoint 8个、已关闭任务摘要索引200项。
+- `context-retention.json` 默认限制活动上下文8000字符、会话注入4000字符、每节8项、近期checkpoint 8个、里程碑checkpoint 6个、已关闭任务摘要索引120项。
 - 超过上限的冗余checkpoint写入 `checkpoint-ledger.json` 的有界索引和连续哈希链后移除；源码、Git提交、Task、正式决定和验收证据不属于清理对象。
 - `task-index.json` 只服务日常状态渲染；旧已关闭任务摘要收敛为计数和哈希链，完整任务仍在 `.ai/tasks/*.json`，显式审计时再按需读取。
 - 新会话按“项目身份 → Task/决定 → Git → 正式文档 → 最新checkpoint → 聊天摘要”恢复。聊天摘要永远不是唯一事实源。

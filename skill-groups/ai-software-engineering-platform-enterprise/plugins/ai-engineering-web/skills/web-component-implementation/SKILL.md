@@ -1,6 +1,6 @@
 ---
 name: web-component-implementation
-description: 根据审核通过且包含设计系统、间距、色彩与组件复用契约的B/S设计，在现有Web框架和组件库中实现非模板化页面；先复用组件和语义Design Token，再写代码并验证，拒绝普通后台骨架、Bootstrap式默认视觉和千篇一律卡片。不得用于技术栈迁移或Unity源码。
+description: 在现有Web技术栈中按已审核设计实现非模板化页面，复用Design Token与组件并验证状态；不用于技术迁移或Unity。
 ---
 
 # B/S组件与页面实现

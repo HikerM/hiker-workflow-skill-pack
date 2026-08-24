@@ -1,6 +1,6 @@
 ---
 name: cs-client-router
-description: 在C/S、桌面、移动、游戏客户端或嵌入式HMI任务开始时，从已初始化项目状态轻量识别Unity、Qt、.NET桌面、Electron/Tauri、Flutter、Android、Apple原生、React Native、Java桌面或LVGL等技术族，并只路由当前阶段需要的一个通用或专项Skill。用于防止广覆盖插件在每次会话全量加载；不得扫描整个仓库或擅自迁移技术栈。
+description: 从项目证据轻量识别通用C/S或Unity技术及版本，并只路由当前阶段所需客户端Skill；不扫描全仓或迁移技术栈。
 ---
 
 # C/S客户端轻量路由

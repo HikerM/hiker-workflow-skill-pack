@@ -436,7 +436,7 @@ class WorkspaceTests(unittest.TestCase):
             for i in range(205):
                 save_task(root, {"schema_version":"2.0.0", "project_id":"PROJECT-A", "task_id":f"KG-{i+1:03d}", "goal":f"closed-{i}", "state":"Released", "control_status":"ACTIVE", "owner_agent":"Master Agent", "branch":f"feature/KG-{i+1:03d}", "updated_at":""})
             index = read_json(root / ".ai/governance/task-index.json", {})
-            self.assertEqual(200, index.get("retained_closed_count")); self.assertEqual(5, index.get("compacted_closed_count"))
+            self.assertEqual(120, index.get("retained_closed_count")); self.assertEqual(85, index.get("compacted_closed_count"))
             self.assertTrue(index.get("compacted_hash_chain")); self.assertEqual(205, len(list((root / ".ai/tasks").glob("*.json"))))
 
     def test_parallel_write_budget_blocks_a_third_development_task(self):

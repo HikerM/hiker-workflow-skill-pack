@@ -1,6 +1,6 @@
 ---
 name: cs-quality-review
-description: 独立、只读审核非Unity C/S桌面、移动和嵌入式客户端实现，覆盖设计系统、视觉层级、组件复用、线程与生命周期、资源、离线、设备、API兼容、安全、可访问性、性能、打包和更新证据。适用于Qt、.NET、Electron/Tauri、Flutter、Android、Apple原生、React Native、Java桌面和LVGL；不得边修改边批准。
+description: 独立只读审核非Unity C/S的视觉、组件、线程、生命周期、离线、API、安全、性能与交付证据；不得边修改边批准。
 ---
 
 # 通用C/S质量审核

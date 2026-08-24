@@ -221,7 +221,7 @@ def main() -> int:
     parser.add_argument("--no-merge-global-agents", action="store_true", help="只安装插件，不修改 ~/.codex/AGENTS.md")
     parser.add_argument("--no-activate-plugins", action="store_true", help="只注册Marketplace，不调用Codex CLI安装启用插件")
     parser.add_argument("--codex-cli", help="仅为旧版兼容显式指定codex或codex.exe；桌面端安装默认不需要")
-    parser.add_argument("--cache-retention", type=int, default=2, help="每个插件保留的缓存版本数（默认当前版加一个上一版）")
+    parser.add_argument("--cache-retention", type=int, default=1, help="每个插件保留的缓存版本数（默认只保留当前版；旧版进入可恢复备份）")
     args = parser.parse_args()
     if args.cache_retention < 1: parser.error("--cache-retention must be at least 1")
     home = Path.home(); dest = home / ".codex" / "plugins"; market = home / ".agents" / "plugins" / "marketplace.json"; stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"); backup = home / ".codex" / "plugins-backup" / stamp
@@ -245,11 +245,13 @@ def main() -> int:
         "status": "NOT_VERIFIED",
         "reason": "文件、缓存与启用配置一致不等于运行中的桌面进程已刷新插件注册表",
         "verification": "新建任务读取实际 SKILL.md 与 plugin.json 路径；若仍指向旧缓存，必须重启桌面端",
+        "existing_task_policy": "旧任务不得继续写源码；先保存Checkpoint，再由使用当前完整版本的新任务接管",
+        "mixed_version_execution": "FORBIDDEN",
     }
-    install_state = {"schema_version": "1.0.0", "installed_at": stamp, "marketplace": str(merged["name"]), "plugins": [{"plugin": item["plugin"], "version": item["version"]} for item in cache], "cache_retention": args.cache_retention, "cache_pruned": cache_pruned, "verification": verification, "runtime_activation": runtime_activation, "new_task_required": True}
+    install_state = {"schema_version": "1.1.0", "installed_at": stamp, "marketplace": str(merged["name"]), "plugins": [{"plugin": item["plugin"], "version": item["version"]} for item in cache], "cache_retention": args.cache_retention, "cache_pruned": cache_pruned, "verification": verification, "runtime_activation": runtime_activation, "new_task_required": True, "existing_tasks_must_handoff": True, "mixed_version_execution_forbidden": True}
     atomic_json(home / ".codex" / "plugin-install-state.json", install_state)
     ok = activation["status"] != "partial-failure" and verification.get("ok", False)
-    next_step = "新建任务读取实际插件路径复验；若仍指向旧缓存，关闭并重启桌面端后再新建任务。" if activation["status"] == "activated" else "按manual_commands安装启用插件并新建任务复验；若仍指向旧缓存，重启桌面端。"
+    next_step = "先让旧任务保存Checkpoint并停止写入，再新建任务读取实际插件路径复验；若仍指向旧缓存，关闭并重启桌面端后再新建任务。" if activation["status"] == "activated" else "按manual_commands安装启用插件；旧任务保存Checkpoint后停止写入，再由新任务接管。"
     print(json.dumps({"ok": ok, "installed": installed, "cache": cache, "cache_pruned": cache_pruned, "marketplace": str(market), "marketplace_backup": str(marketplace_backup) if marketplace_backup else None, "plugin_backup": str(backup) if backup.exists() else None, "global_agents": global_agents, "plugin_activation": activation, "verification": verification, "runtime_activation": runtime_activation, "install_state": str(home / ".codex" / "plugin-install-state.json"), "next_step": next_step}, ensure_ascii=False, indent=2)); return 0 if ok else 2
 
 

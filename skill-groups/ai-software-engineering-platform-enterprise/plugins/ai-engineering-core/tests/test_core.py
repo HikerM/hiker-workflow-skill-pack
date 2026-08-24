@@ -24,6 +24,7 @@ from brownfield_reconcile import initialize as init_brownfield, set_baseline, re
 from suite_router import inspect_project, route
 from session_epoch import assess as assess_epoch, record as record_epoch, rotate as rotate_epoch
 from bounded_run import run_bounded
+from suite_version import inspect_suite
 
 
 def model_proposal(*skills: str, stage: str = "development", architecture: str = "unknown", mode: str = "existing", **extra):
@@ -40,6 +41,11 @@ def model_proposal(*skills: str, stage: str = "development", architecture: str =
 
 
 class CoreTests(unittest.TestCase):
+    def test_five_plugins_share_one_exact_suite_version(self):
+        report = inspect_suite()
+        self.assertTrue(report["consistent"], report)
+        self.assertEqual(5, len(report["versions"]))
+
     def test_session_epoch_concurrent_records_do_not_lose_counts(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td); initialize(root)
@@ -59,6 +65,15 @@ class CoreTests(unittest.TestCase):
             self.assertFalse(rotated["rotation_required"])
             self.assertEqual(2, rotated["epoch"])
             self.assertEqual("CP-EPOCH-001", assess_epoch(root)["last_checkpoint_id"])
+
+    def test_session_epoch_soft_limit_recommends_checkpoint_without_forcing_rotation(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); initialize(root)
+            report = record_epoch(root, substantive_turns=15)
+            self.assertTrue(report["checkpoint_recommended"])
+            self.assertFalse(report["rotation_required"])
+            self.assertTrue(report["continuation_allowed"])
+            self.assertEqual("WARNING", report["risk"])
 
     def test_legacy_epoch_policy_is_tightened_and_blocks_continuation(self):
         with tempfile.TemporaryDirectory() as td:
@@ -129,6 +144,7 @@ class CoreTests(unittest.TestCase):
             self.assertTrue(data["phase_transition_required"])
             self.assertEqual(2, data["max_loaded_atomic_skills"])
             self.assertFalse(data["router_counts_toward_limit"])
+            self.assertIn("admission_cache", data)
 
     def test_router_rejects_more_than_two_candidates_without_substitution(self):
         with tempfile.TemporaryDirectory() as td:
@@ -472,6 +488,8 @@ class CoreTests(unittest.TestCase):
             )
             self.assertEqual(2, len(routing["active_atomic_skills"]))
             self.assertEqual("skill-loader-telemetry", routing["receipt_source"])
+            self.assertTrue(routing["suite_version"])
+            self.assertTrue(routing["suite_fingerprint"])
             self.assertEqual("已应用：03 客户端工程｜客户端技术路由；03 客户端工程｜客户端组件实现", routing["application_receipt"])
             update_active(root, json.loads((root / ".ai/runtime/task.json").read_text(encoding="utf-8")))
             self.assertIn("回归测试规划", (root / ".ai/runtime/active-context.md").read_text(encoding="utf-8"))
@@ -482,6 +500,18 @@ class CoreTests(unittest.TestCase):
                 record_routing(root, "development", ["一", "二", "三"], [])
             with self.assertRaisesRegex(ValueError, "exactly match"):
                 record_routing(root, "testing", ["回归测试规划"], [], loaded_skills=["完整变更风险评估"])
+
+    def test_router_blocks_old_suite_state_until_recovery_skill_migrates_it(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); initialize(root)
+            route_state = root / ".ai/runtime/skill-routing.json"
+            route_state.write_text(json.dumps({"route_fingerprint": "old", "suite_fingerprint": "old-suite"}), encoding="utf-8")
+            blocked = route(root, model_proposal("backend-component-implementation", stage="development", architecture="backend"))
+            self.assertFalse(blocked["accepted"])
+            self.assertIn("PLUGIN_VERSION_DRIFT", {item["code"] for item in blocked["diagnostics"]})
+            recovery = route(root, model_proposal("context-recovery", stage="governance"))
+            self.assertTrue(recovery["accepted"], recovery["diagnostics"])
+            self.assertTrue(recovery["version_gate"]["drift"])
 
     def test_model_proposal_separates_current_stage_from_follow_up_actions(self):
         with tempfile.TemporaryDirectory() as td:
@@ -519,6 +549,17 @@ class CoreTests(unittest.TestCase):
             ))
             self.assertEqual("skill-loader-telemetry", data["receipt_source"])
             self.assertTrue(data["phase_transition_required"])
+
+    def test_router_fingerprint_changes_with_goal_revision_and_action(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            first = route(root, model_proposal("bounded-context-memory", stage="governance", goal_revision="7", current_action="压缩当前工作集"))
+            same = route(root, model_proposal("bounded-context-memory", stage="governance", goal_revision="7", current_action="压缩当前工作集"))
+            changed = route(root, model_proposal("bounded-context-memory", stage="governance", goal_revision="8", current_action="压缩当前工作集"))
+            redirected = route(root, model_proposal("bounded-context-memory", stage="governance", goal_revision="7", current_action="轮换总控纪元"))
+            self.assertEqual(first["route_fingerprint"], same["route_fingerprint"])
+            self.assertNotEqual(first["route_fingerprint"], changed["route_fingerprint"])
+            self.assertNotEqual(first["route_fingerprint"], redirected["route_fingerprint"])
 
     def test_router_rejects_stage_skill_conflicts_instead_of_rewriting_stage(self):
         with tempfile.TemporaryDirectory() as td:

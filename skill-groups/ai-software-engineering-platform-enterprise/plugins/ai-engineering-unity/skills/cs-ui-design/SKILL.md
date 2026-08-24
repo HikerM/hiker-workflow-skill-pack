@@ -1,6 +1,6 @@
 ---
 name: cs-ui-design
-description: 为已识别的非Unity C/S桌面、移动或嵌入式客户端设计UI与交互；支持Qt、WPF/WinUI/WinForms/Avalonia/.NET MAUI、Electron/Tauri、Flutter、Android、iOS/macOS、React Native、JavaFX/Swing和LVGL等现有技术栈，建立设计系统、间距、色彩、组件复用、窗口与设备生命周期、离线和API契约。不得用于Web页面、Unity界面或技术栈迁移。
+description: 为已识别的非Unity C/S技术栈设计界面、Design Token、复用组件、生命周期、离线与API状态；不用于Web、Unity或技术迁移。
 ---
 
 # 通用C/S界面设计

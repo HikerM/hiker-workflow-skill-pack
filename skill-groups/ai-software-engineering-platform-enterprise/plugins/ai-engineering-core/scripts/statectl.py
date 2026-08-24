@@ -9,6 +9,7 @@ from pathlib import Path
 from corelib import ai_root, atomic_write_json, atomic_write_text, ensure_schema, git_info, read_json, sha256_file, utc_now
 from context_memory import bounded_items, crop, enforce_checkpoint_retention, ensure_memory_policy, limit_text, memory_status
 from suite_router import PLUGIN_DISPLAY, PLUGIN_FOR, skill_display
+from suite_version import inspect_suite
 
 
 def task_path(root: Path) -> Path: return ai_root(root) / "runtime" / "task.json"
@@ -48,6 +49,9 @@ def record_routing(root: Path, stage: str, active_skills: list[str], deferred_sk
     basis = {"stage": stage or "unknown", "active_atomic_skills": active, "deferred_atomic_skills": deferred}
     fingerprint = route_fingerprint or __import__("hashlib").sha256(json.dumps(basis, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:16]
     changed = fingerprint != previous.get("route_fingerprint")
+    suite = inspect_suite()
+    if not suite["consistent"]:
+        raise ValueError("plugin suite version is inconsistent")
     data = {
         "schema_version": "1.0.0", "route_revision": int(previous.get("route_revision", 0)) + (1 if changed else 0),
         **basis, "loaded_atomic_skills": loaded, "router_counts_toward_limit": False, "max_loaded_atomic_skills": 2,
@@ -56,6 +60,7 @@ def record_routing(root: Path, stage: str, active_skills: list[str], deferred_sk
         "application_receipt": _application_receipt(loaded),
         "receipt_source": "skill-loader-telemetry" if loaded else "route-declaration-only",
         "route_fingerprint": fingerprint, "updated_at": utc_now(),
+        "suite_version": suite["version"], "suite_fingerprint": suite["fingerprint"],
     }
     atomic_write_json(routing_path(root), data)
     return data

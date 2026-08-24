@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,7 @@ from context_memory import ensure_memory_policy
 
 
 SCHEMA = "1.1.0"
+SOFT_RATIO = 0.75
 
 
 def state_file(root: Path) -> Path:
@@ -50,18 +52,24 @@ def assess(root: Path, state: dict[str, Any] | None = None) -> dict[str, Any]:
         "compactions": (int(state.get("compactions") or 0), int(policy["max_session_epoch_compactions"])),
     }
     reasons = [name for name, (value, limit) in checks.items() if value >= limit]
+    soft_reasons = [
+        name for name, (value, limit) in checks.items()
+        if name != "compactions" and value >= max(1, math.ceil(limit * SOFT_RATIO)) and value < limit
+    ]
     return {
         "schema_version": SCHEMA,
         "epoch": int(state.get("epoch") or 1),
         "rotation_required": bool(reasons),
+        "checkpoint_recommended": bool(soft_reasons) and not reasons,
         "continuation_allowed": not reasons,
-        "risk": "CRITICAL" if reasons else "NORMAL",
+        "risk": "CRITICAL" if reasons else ("WARNING" if soft_reasons else "NORMAL"),
         "reasons": reasons,
+        "soft_reasons": soft_reasons,
         "counters": {name: value for name, (value, _) in checks.items()},
         "limits": {name: limit for name, (_, limit) in checks.items()},
         "stage_transitions": int(state.get("stage_transitions") or 0),
         "last_checkpoint_id": state.get("last_checkpoint_id"),
-        "rule": "达到任一阈值后当前纪元禁止继续实质执行；先保存Checkpoint，再由唯一新总控纪元接管",
+        "rule": "软阈值只在自然阶段边界保存Checkpoint；硬阈值禁止继续实质执行，并由唯一新总控纪元接管",
     }
 
 

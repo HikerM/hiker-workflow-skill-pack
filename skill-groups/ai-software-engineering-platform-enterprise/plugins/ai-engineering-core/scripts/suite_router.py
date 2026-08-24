@@ -12,6 +12,7 @@ from typing import Any
 from source_identity import context_fresh, identify
 from context_budget import build_context_plan
 from state_consistency import assess as assess_state_consistency
+from suite_version import inspect_suite, skill_path
 
 
 # Keep this literal mapping: the release audit uses it as the single coverage map.
@@ -127,6 +128,7 @@ AI_STATE_DEPENDENT_SKILLS = {
     "worktree-task-manager", "knowledge-graph-maintenance",
     "release-readiness-review",
 }
+VERSION_RECOVERY_SKILLS = {"context-recovery", "bounded-context-memory", "interruptible-task-control"}
 
 
 def bounded_marker_paths(root: Path, max_depth: int = 3, max_dirs: int = 160) -> list[Path]:
@@ -237,6 +239,9 @@ def project_signals(root: Path) -> dict[str, Any]:
 @lru_cache(maxsize=64)
 def locate(skill: str) -> str:
     plugin = PLUGIN_FOR[skill]
+    exact = skill_path(plugin, skill)
+    if exact.is_file():
+        return str(exact.resolve())
     here = Path(__file__).resolve().parents[1]
     candidates = [
         here.parent / plugin / "skills" / skill / "SKILL.md",
@@ -245,7 +250,7 @@ def locate(skill: str) -> str:
     cache = Path.home() / ".codex" / "plugins" / "cache"
     if cache.is_dir():
         candidates.extend(sorted(cache.glob(f"*/{plugin}/*/skills/{skill}/SKILL.md"), reverse=True))
-    return str(next((path.resolve() for path in candidates if path.is_file()), candidates[0].resolve()))
+    return str(candidates[0].resolve())
 
 
 @lru_cache(maxsize=64)
@@ -265,6 +270,7 @@ def inspect_project(root: Path) -> dict[str, Any]:
     root = root.resolve()
     signals = project_signals(root)
     identity = signals["identity"]
+    suite = inspect_suite()
     return {
         "schema_version": "2.0.0",
         "routing_authority": "chatgpt-semantic-selection",
@@ -290,8 +296,14 @@ def inspect_project(root: Path) -> dict[str, Any]:
             "architectures": sorted(VALID_ARCHITECTURES),
             "stages": sorted(VALID_STAGES),
         },
+        "latency_policy": {
+            "fast": "简单解释、状态查询或无项目动作时不调用本脚本",
+            "project": "证据充分时直接一次守门；证据不足时最多一次检查加一次守门",
+            "governed": "仅多会话、合并、发布或长链路任务启用完整治理",
+        },
         "context_budget": build_context_plan(root, "unknown"),
         "state_consistency": signals["state_consistency"],
+        "plugin_suite": suite,
         "catalog": str((Path(__file__).resolve().parents[1] / "references" / "semantic-routing-catalog.md").resolve()),
     }
 
@@ -367,6 +379,7 @@ def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str,
         "nested_worktree_count": len(identity.get("nested_worktrees", [])),
     }
     consistency = signals["state_consistency"]
+    suite = inspect_suite()
     if not isinstance(proposal, dict):
         request_hash = hashlib.sha256(str(proposal or "").encode("utf-8")).hexdigest()[:16] if proposal else None
         return {
@@ -376,6 +389,7 @@ def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str,
             "project_facts": project_facts,
             "context_budget": build_context_plan(root, "unknown"),
             "state_consistency": consistency,
+            "plugin_suite": suite,
             "catalog": str((Path(__file__).resolve().parents[1] / "references" / "semantic-routing-catalog.md").resolve()),
             "guard_decision": "PROPOSAL_REQUIRED",
             "accepted": False,
@@ -394,6 +408,7 @@ def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str,
     architecture = str(proposal.get("architecture") or "unknown").strip().lower()
     project_mode = str(proposal.get("project_mode") or ("existing" if signals["existing"] else "unknown")).strip().lower()
     confidence = str(proposal.get("confidence") or "medium").strip().lower()
+    goal_revision = str(proposal.get("goal_revision") or "current").strip()[:80] or "current"
     current_action = str(proposal.get("current_action") or "").strip()[:240]
     candidates = _candidate_items(proposal.get("candidates"))
     deferred = _candidate_items(proposal.get("deferred"))[:8]
@@ -401,6 +416,9 @@ def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str,
 
     def error(code: str, message: str) -> None:
         diagnostics.append({"code": code, "message": message})
+
+    if not suite["consistent"]:
+        error("PLUGIN_SUITE_VERSION_CONFLICT", "五个插件不是同一完整版本；禁止加载混合版本Skill")
 
     if stage not in VALID_STAGES:
         error("INVALID_STAGE", f"未知阶段：{stage}")
@@ -454,6 +472,31 @@ def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str,
                 f"{skill} 依赖可信 .ai；当前只能按最新用户请求与 Git 轻量推进，禁止恢复旧任务、旧 PASS、多会话或 Worktree",
             )
 
+    basis = {
+        "stage": stage,
+        "architecture": architecture,
+        "active": [item["skill"] for item in candidates],
+        "deferred": [item["skill"] for item in deferred],
+        "current_action": current_action,
+        "goal_revision": goal_revision,
+        "repo_id": consistency.get("current", {}).get("repo_id"),
+        "head": consistency.get("current", {}).get("head"),
+        "dirty": consistency.get("current", {}).get("dirty"),
+        "manifest_hash": consistency.get("current", {}).get("manifest_hash"),
+        "suite_fingerprint": suite["fingerprint"],
+    }
+    route_fingerprint = hashlib.sha256(json.dumps(basis, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+    previous_route = {}
+    if consistency.get("execution_policy", {}).get("trusted_ai_state"):
+        route_state = root / ".ai" / "runtime" / "skill-routing.json"
+        try:
+            previous_route = json.loads(route_state.read_text(encoding="utf-8")) if route_state.is_file() else {}
+        except (OSError, json.JSONDecodeError):
+            previous_route = {}
+    previous_suite = previous_route.get("suite_fingerprint") if previous_route else None
+    version_drift = bool(previous_route and previous_suite != suite["fingerprint"])
+    if version_drift and not {item["skill"] for item in candidates}.issubset(VERSION_RECOVERY_SKILLS):
+        error("PLUGIN_VERSION_DRIFT", "项目记录来自旧插件版本；先保存Checkpoint并用上下文恢复能力迁移到当前版本")
     accepted = not diagnostics
     selected_output = [
         {
@@ -473,13 +516,6 @@ def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str,
         }
         for item in deferred if item["skill"] in PLUGIN_FOR
     ] if accepted else []
-    basis = {
-        "stage": stage,
-        "architecture": architecture,
-        "active": [item["skill"] for item in candidates],
-        "deferred": [item["skill"] for item in deferred],
-        "head": signals["identity"].get("head"),
-    }
     context_signals = set(_bounded_text_list(proposal.get("risk_signals")))
     return {
         "schema_version": "2.0.0",
@@ -504,13 +540,26 @@ def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str,
         },
         "phase_transition_required": bool(deferred or proposal.get("future_terms") or proposal.get("follow_up_actions")),
         "receipt_source": "skill-loader-telemetry",
-        "route_fingerprint": hashlib.sha256(json.dumps(basis, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:16],
+        "route_fingerprint": route_fingerprint,
+        "admission_cache": {
+            "hit": bool(accepted and previous_route.get("route_fingerprint") == route_fingerprint),
+            "key_fields": ["goal_revision", "repo_id", "head", "dirty", "manifest_hash", "stage", "current_action", "active", "deferred"],
+            "reuse": "命中时复用已加载能力与回执，不重复读取目录或Skill正文",
+        },
+        "version_gate": {
+            "suite_version": suite["version"],
+            "suite_fingerprint": suite["fingerprint"],
+            "consistent": suite["consistent"],
+            "drift": version_drift,
+            "old_task_policy": "版本漂移时只允许Checkpoint、上下文恢复和新总控接管，不允许继续写源码",
+        },
         "next_gate": "完成当前阶段并由 ChatGPT 重新语义选择" if deferred else None,
         "confidence": confidence,
         "context_budget": build_context_plan(root, stage, signals=context_signals),
         "project_evidence": signals["sources"],
         "source_identity": project_facts,
         "state_consistency": consistency,
+        "plugin_suite": suite,
         "execution_policy": consistency.get("execution_policy", {}),
         "receipt_required": accepted,
         "diagnostics": diagnostics,
@@ -529,6 +578,7 @@ def _load_proposal(args: argparse.Namespace) -> dict[str, Any] | None:
             "stage": args.stage,
             "current_action": args.current_action,
             "confidence": args.confidence,
+            "goal_revision": args.goal_revision,
             "candidates": args.candidate,
             "deferred": args.deferred_skill,
             "negated_terms": args.negated_term,
@@ -550,6 +600,7 @@ def main() -> int:
     parser.add_argument("--stage", default="unknown")
     parser.add_argument("--current-action", default="")
     parser.add_argument("--confidence", default="medium")
+    parser.add_argument("--goal-revision", default="current")
     parser.add_argument("--candidate", action="append", default=[])
     parser.add_argument("--deferred-skill", action="append", default=[])
     parser.add_argument("--negated-term", action="append", default=[])

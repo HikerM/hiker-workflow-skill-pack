@@ -44,7 +44,7 @@ def benchmark(runs: int, max_p95_ms: float) -> dict:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(); parser.add_argument("--runs", type=int, default=20); parser.add_argument("--max-p95-ms", type=float, default=500)
+    parser = argparse.ArgumentParser(); parser.add_argument("--runs", type=int, default=20); parser.add_argument("--max-p95-ms", type=float, default=200)
     args = parser.parse_args(); data = benchmark(max(3, args.runs), args.max_p95_ms); print(json.dumps(data, ensure_ascii=False, indent=2)); return 0 if data["ok"] else 2
 
 

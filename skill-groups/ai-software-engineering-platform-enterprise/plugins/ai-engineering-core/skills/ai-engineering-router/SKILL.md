@@ -1,6 +1,6 @@
 ---
 name: ai-engineering-router
-description: AI软件工程原子Skill的唯一轻量自动入口。收到从0开始、存量源码接管、B/S、C/S、后端、Unity、插件开发、测试、审核、Git、多会话或发布请求时，由ChatGPT结合用户语义和有界项目证据选择当前阶段最多两个原子Skill，再交给确定性守门器校验数量、阶段、架构证据、权限与源码身份；规则不得按关键词替代模型选择，也不得扫描或预加载完整Skill正文。
+description: AI软件工程的唯一轻量自动入口；由ChatGPT语义选择当前阶段最多两个原子Skill，脚本只校验项目证据、阶段、版本和权限。简单问答不运行脚本，项目动作按证据一次准入或最多一次检查后准入。
 ---
 
 # AI 工程轻量路由
@@ -12,18 +12,22 @@ description: AI软件工程原子Skill的唯一轻量自动入口。收到从0�
 ## 必须执行
 
 1. 会话第一条助手输出先展示 `已应用：01 智能工程核心｜智能工程轻量路由`。该入口不计入原子 Skill 上限。
-2. 运行只读项目检查，不传用户原文：
+2. 先判定性能路径：
+   - `FAST`：解释、状态查询、简单诊断且不要求读取或修改项目，直接回答；不得运行脚本、读取 `.ai` 或加载原子 Skill。
+   - `PROJECT`：普通设计、实现、审核或测试。已有当前 Git、Manifest 和可信热状态证据时，ChatGPT直接提交候选做一次守门；证据不足才运行一次只读检查。
+   - `GOVERNED`：多会话、合并、发布、跨仓库或长链路任务，才启用状态机与完整治理。
+3. 证据不足时运行只读项目检查，不传用户原文：
 
    ```powershell
    py -3 <plugin-root>\scripts\suite_router.py --root <repo> --inspect
    ```
 
-   检查结果同时给出小型、标准或大型工作集预算，以及 `.ai` 与当前源码的 L0–L4 一致性级别。若不是 L0，先按「上下文恢复」修复受影响的派生状态；禁止把旧 `.ai`、旧任务 PASS 或旧图谱直接当成当前源码事实。
+   检查结果给出有界预算、`.ai` 一致性和五插件版本指纹。不得为得到“更多把握”重复检查。
 
    没有 `.ai` 时返回 `STATELESS_UNMANAGED`，直接以最新用户请求和当前 Git 轻量推进，不得强制初始化治理。存在旧任务状态但缺少可信源码指纹，或仓库身份/历史冲突时返回隔离策略：普通设计、实现、审核和测试可继续，但禁止恢复旧 Task、旧路由、旧 PASS、旧锁、创建多会话/Worktree、合并或发布；不得通过补写来源指纹把旧状态自动变成可信。
 
-3. 读取检查结果给出的 [原子 Skill 语义路由目录](../../references/semantic-routing-catalog.md)。只读取这份紧凑元数据，不遍历 Skill 目录，不预读任何原子 `SKILL.md`。
-4. ChatGPT 根据当前用户目标、项目证据和会话状态形成语义提案，至少包括：
+4. 读取 [原子 Skill 语义路由目录](../../references/semantic-routing-catalog.md)。只读取紧凑元数据，不遍历 Skill 目录。
+5. ChatGPT 形成语义提案，至少包括：
    - `current_action`：本阶段唯一主动作；
    - `project_mode`：`greenfield`、`brownfield`、`existing` 或 `unknown`；
    - `architecture`：`bs`、`cs`、`backend`、`hybrid`、`tooling` 或 `unknown`；
@@ -31,7 +35,8 @@ description: AI软件工程原子Skill的唯一轻量自动入口。收到从0�
    - `candidates`：最多两个当前原子 Skill ID；
    - `deferred`：最多八个未来阶段 Skill ID；
    - `negated_terms`、`future_terms` 和 `follow_up_actions`：按需记录，防止禁止项、示例和未来计划污染当前选择。
-5. 将模型提案交给守门器。优先使用逐项参数，避免把用户原文嵌入 Shell：
+   同一目标修订、源码身份、HEAD、脏状态、Manifest、阶段、动作和候选未变化时，复用已有准入指纹，不重复读取目录或 Skill 正文。
+6. 将模型提案交给守门器。证据已经充分时直接执行本命令，不再先运行 `--inspect`：
 
    ```powershell
    py -3 <plugin-root>\scripts\suite_router.py `
@@ -39,14 +44,15 @@ description: AI软件工程原子Skill的唯一轻量自动入口。收到从0�
      --project-mode existing `
      --architecture backend `
      --stage development `
+     --goal-revision 7 `
      --current-action "实现当前服务端功能" `
      --candidate backend-technology-router `
      --candidate backend-component-implementation
    ```
 
-6. 只有 `guard_decision=ACCEPT` 时才完整读取输出 `load` 中的 `SKILL.md`。守门器拒绝时，根据 `diagnostics` 由 ChatGPT 重新选择一次；仍无法通过时保持 `unknown` 并说明缺少的项目事实，不加载猜测能力。
-7. 原子 Skill 完整读取成功后，使用 `statectl.py route-record` 登记真实 `loaded`，再展示它生成的中文 `application_receipt`。路由候选不等于已经应用，不得提前手写原子 Skill 回执。
-8. 当前阶段门禁通过后，由 ChatGPT 根据最新目标和证据重新选择待执行能力；不得让旧路由结果长期控制后续阶段。
+7. `guard_decision=ACCEPT` 后才读取 `load`。五插件完整版本不一致时禁止加载；项目路由记录来自旧版本时，只允许「上下文恢复」「有界上下文记忆」或「可中断任务控制」保存 Checkpoint 并迁移，新旧版本不得共同继续写源码。
+8. Skill 读取后用 `statectl.py route-record` 登记真实加载项、路由指纹和套件版本，再显示中文回执。缓存命中时不重复读取或显示。
+9. 阶段或目标修订变化后重新语义选择；需求调整不得自动新建会话、Worktree 或总控。
 
 ## 语义选择要求
 
@@ -69,9 +75,10 @@ description: AI软件工程原子Skill的唯一轻量自动入口。收到从0�
 
 ## 性能预算
 
-- 路由只读取一个紧凑目录、浅层 Manifest 和有界 `.ai` 技术栈状态。
+- `FAST` 路径回答前零次 Shell 调用；`PROJECT` 已有证据时最多一次准入工具往返，证据不足时最多一次检查加一次准入。
+- 路由只读取紧凑目录、浅层 Manifest 和有界 `.ai` 热状态；准入缓存绑定目标修订、源码身份、HEAD、脏状态、Manifest、阶段与候选。
 - 当前阶段最多加载两个原子 `SKILL.md`；轻量路由不计入上限。
 - Skill 正文不写入路由状态；只保存阶段、中文活跃名称、待执行名称和指纹。
-- 同一阶段且目标、项目 HEAD 和候选未变化时复用路由指纹，不重复读取目录或回执。
+- 本地路由 P95 目标不超过200ms；普通单工具建议不超过30秒，大型工程45秒，发布分片60秒。
 - 小项目优先直接读取当前任务、差异、契约和测试；大型或长寿命项目只从有界索引进入受影响分片。风险只会提升预算层级，不会取消文件、日志和 Skill 上限。
 - 用户、公司、仓库和业务名称不得写入插件模板、Eval、发布包或示例；项目运行时状态只保存在项目自身 `.ai`，对外证据使用摘要、哈希和通用 ID。

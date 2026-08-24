@@ -18,7 +18,7 @@ def frontmatter(path:Path)->dict:
             k,v=line.split(":",1);out[k.strip()]=v.strip().strip('"').strip("'")
     return out
 def main()->int:
-    errors=[];warnings=[];skill_names={};display_names={};plugins=sorted((ROOT/"plugins").iterdir())
+    errors=[];warnings=[];skill_names={};display_names={};suite_versions=set();plugins=sorted((ROOT/"plugins").iterdir())
     unit_run=subprocess.run([sys.executable,"-X","utf8",str(ROOT/"tools/run_all_tests.py")],cwd=str(ROOT),text=True,encoding="utf-8",errors="replace",stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
     unit_report=json.loads((ROOT/"test-results.json").read_text(encoding="utf-8")) if (ROOT/"test-results.json").is_file() else {"ok":False,"results":[]}
     if unit_run.returncode!=0 or not unit_report.get("ok"):
@@ -29,6 +29,7 @@ def main()->int:
         try:m=json.loads(manifest_path.read_text(encoding="utf-8"))
         except Exception as e:errors.append(f"{p.name}: manifest无效 {e}");continue
         if m.get("name")!=p.name:errors.append(f"{p.name}: manifest name不一致")
+        if m.get("version"):suite_versions.add(str(m["version"]))
         if not NAME_RE.match(p.name):errors.append(f"{p.name}: 非法名称")
         for key in ["displayName","shortDescription","longDescription","composerIcon","logo"]:
             if not m.get("interface",{}).get(key):errors.append(f"{p.name}: 缺少 interface.{key}")
@@ -76,6 +77,7 @@ def main()->int:
             text=text_file.read_text(encoding="utf-8",errors="ignore")
             pollution_pattern="|".join(("学"+"员", "学"+"生", r"\bStu"+"dent\b"))
             if re.search(pollution_pattern,text,re.I):errors.append(f"业务域样例污染 {text_file.relative_to(ROOT)}")
+    if len(suite_versions)!=1:errors.append(f"五个插件必须具有同一完整版本: {sorted(suite_versions)}")
     registry=json.loads((ROOT/"SKILL_REGISTRY.json").read_text(encoding="utf-8"));registry_names=set((registry.get("skills") or {}).keys())
     if registry_names!=set(skill_names):errors.append(f"Skill登记与目录不一致: 缺少{sorted(set(skill_names)-registry_names)} 多余{sorted(registry_names-set(skill_names))}")
     market=json.loads((ROOT/".agents/plugins/marketplace.json").read_text(encoding="utf-8"));names={x.get("name") for x in market.get("plugins",[])}
@@ -91,7 +93,7 @@ def main()->int:
     if not router_eval["ok"]:errors.append(f"轻量路由行为Eval失败: {len(router_eval['failures'])} 条")
     master_progression=evaluate_master_progression()
     if not master_progression["ok"]:errors.append("总控多维推进评估失败: "+", ".join(item["scenario"] for item in master_progression["results"] if not item["ok"]))
-    router_performance=benchmark_router(20,500.0)
+    router_performance=benchmark_router(20,200.0)
     if not router_performance["ok"]:errors.append(f"轻量路由性能失败: P95 {router_performance['p95_ms']}ms > {router_performance['max_p95_ms']}ms")
     coherence=audit_skill_coherence(ROOT)
     if not coherence["ok"]:errors.extend(f"Skill一致性审核: {item['code']} {item['skill']} {item['message']}" for item in coherence["errors"])

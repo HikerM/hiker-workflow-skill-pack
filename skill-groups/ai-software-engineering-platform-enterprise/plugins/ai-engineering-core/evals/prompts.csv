@@ -23,6 +23,8 @@ core-21,true,brownfield-requirement-reconciliation,"已有一部分工程源码�
 core-22,false,brownfield-requirement-reconciliation,"空目录从零创建一个新系统"
 core-23,true,ai-engineering-router,"检查桌面端插件为什么选择很慢"
 core-24,true,ai-engineering-router,"Skill 是否会走偏和变慢"
+core-25,false,ai-engineering-router,"为什么 Codex 回答这么慢，只解释原因，不读取或修改项目"
+core-26,true,ai-engineering-router,"修改智能工程插件，减少全局上下文和路由工具往返"
 core-25,true,ai-engineering-router,"修改登录功能，包含前端页面和后端接口"
 core-26,true,long-chain-change-convergence,"这个跨仓库复杂链路已经多轮修复并回滚，需要收敛后再真实执行"
 core-27,true,long-chain-change-convergence,"同一个功能多次修改后出现新旧代码和多个入口并存，先控制内部膨胀"

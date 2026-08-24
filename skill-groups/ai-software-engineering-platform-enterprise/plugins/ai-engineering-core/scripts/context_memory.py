@@ -11,13 +11,13 @@ from corelib import ai_root, atomic_write_json, read_json, sha256_file, utc_now
 
 DEFAULT_MEMORY_POLICY = {
     "schema_version": "1.1.0",
-    "active_context_max_chars": 12000,
-    "session_context_max_chars": 6500,
-    "max_items_per_section": 12,
-    "max_recent_checkpoints": 12,
-    "max_milestone_checkpoints": 8,
-    "max_ledger_entries": 32,
-    "max_task_index_closed": 200,
+    "active_context_max_chars": 8000,
+    "session_context_max_chars": 4000,
+    "max_items_per_section": 8,
+    "max_recent_checkpoints": 8,
+    "max_milestone_checkpoints": 6,
+    "max_ledger_entries": 24,
+    "max_task_index_closed": 120,
     "max_task_history_events": 40,
     "max_task_history_ledger_entries": 20,
     "max_session_epoch_turns": 20,
@@ -31,6 +31,16 @@ LEGACY_EPOCH_DEFAULTS = {
     "max_session_epoch_tool_calls": 80,
     "max_session_epoch_tool_output_chars": 120000,
     "max_session_epoch_compactions": 2,
+}
+
+LEGACY_CONTEXT_DEFAULTS = {
+    "active_context_max_chars": 12000,
+    "session_context_max_chars": 6500,
+    "max_items_per_section": 12,
+    "max_recent_checkpoints": 12,
+    "max_milestone_checkpoints": 8,
+    "max_ledger_entries": 32,
+    "max_task_index_closed": 200,
 }
 
 MILESTONE_WORDS = ("start", "pause", "adjust", "plan", "review", "test", "merge", "release", "complete", "handoff")
@@ -52,7 +62,8 @@ def ensure_memory_policy(root: Path) -> dict[str, Any]:
             elif isinstance(value, int) and value > 0:
                 # 5.14/5.15 早期默认值对桌面长任务过于宽松。只迁移旧默认，
                 # 用户明确调整过的其他正整数阈值仍保留。
-                if current.get("schema_version") == "1.0.0" and LEGACY_EPOCH_DEFAULTS.get(key) == value:
+                legacy_defaults = {**LEGACY_EPOCH_DEFAULTS, **LEGACY_CONTEXT_DEFAULTS}
+                if current.get("schema_version") in {"1.0.0", "1.1.0"} and legacy_defaults.get(key) == value:
                     continue
                 policy[key] = value
     if current != policy:

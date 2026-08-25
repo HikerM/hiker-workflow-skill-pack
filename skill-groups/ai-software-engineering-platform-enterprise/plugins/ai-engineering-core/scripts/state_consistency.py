@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from corelib import ai_root, atomic_write_json, read_json
+from source_identity import identify
 
 
 MANIFEST_NAMES = {
@@ -89,10 +90,10 @@ def _manifest_hash(root: Path) -> str:
     return digest.hexdigest()
 
 
-def current_snapshot(root: Path) -> dict[str, Any]:
+def current_snapshot(root: Path, identity: dict[str, Any] | None = None) -> dict[str, Any]:
     root = root.resolve()
-    has_git = bool(os.environ.get("GIT_DIR")) or any((candidate / ".git").exists() for candidate in (root, *root.parents))
-    if not has_git:
+    identity = identity or identify(root)
+    if not identity.get("is_git"):
         digest = hashlib.sha256()
         candidates = [root / name for name in MANIFEST_NAMES]
         try:
@@ -115,21 +116,13 @@ def current_snapshot(root: Path) -> dict[str, Any]:
             "dirty": None,
             "manifest_hash": digest.hexdigest(),
         }
-    head = _git(root, "rev-parse", "HEAD")
-    branch = _git(root, "branch", "--show-current") or "DETACHED"
-    raw_status = _git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all")
-    dirty = any(
-        not item[3:].replace("\\", "/").startswith(".ai/")
-        for item in raw_status.split("\0")
-        if len(item) >= 4
-    )
     return {
         "schema_version": "1.0.0",
-        "repo_id": _repo_id(root),
-        "head": head or None,
-        "branch": branch,
-        "dirty": dirty,
-        "manifest_hash": _manifest_hash(root),
+        "repo_id": identity.get("repo_id") or _repo_id(root),
+        "head": identity.get("head"),
+        "branch": identity.get("branch") or "DETACHED",
+        "dirty": identity.get("dirty"),
+        "manifest_hash": identity.get("manifest_hash") or _manifest_hash(root),
     }
 
 
@@ -166,8 +159,8 @@ def _changed_paths(root: Path, old_head: str, new_head: str) -> tuple[list[str],
     return paths[:1000], True
 
 
-def assess(root: Path) -> dict[str, Any]:
-    current = current_snapshot(root)
+def assess(root: Path, current: dict[str, Any] | None = None) -> dict[str, Any]:
+    current = current or current_snapshot(root)
     stored = read_json(provenance_path(root), None)
     if not isinstance(stored, dict):
         if not _has_untrusted_state(root):

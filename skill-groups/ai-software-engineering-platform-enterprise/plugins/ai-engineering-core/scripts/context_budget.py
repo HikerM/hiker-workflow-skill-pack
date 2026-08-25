@@ -72,7 +72,9 @@ def tracked_file_count(root: Path) -> int | None:
 
 
 def closed_task_count(root: Path) -> int:
-    index = read_json(ai_root(root) / "runtime" / "task-index.json", {}) or {}
+    index = read_json(ai_root(root) / "governance" / "task-index.json", None)
+    if not isinstance(index, dict):
+        index = read_json(ai_root(root) / "runtime" / "task-index.json", {}) or {}
     if not isinstance(index, dict):
         return 0
     closed = index.get("closed")
@@ -81,9 +83,9 @@ def closed_task_count(root: Path) -> int:
     return int(index.get("closed_count") or 0)
 
 
-def classify_scale(root: Path, signals: set[str] | None = None) -> dict[str, Any]:
+def classify_scale(root: Path, signals: set[str] | None = None, tracked_files: int | None = None) -> dict[str, Any]:
     signals = {str(item).strip().lower() for item in (signals or set()) if str(item).strip()}
-    files = tracked_file_count(root)
+    files = tracked_files if tracked_files is not None else tracked_file_count(root)
     closed_tasks = closed_task_count(root)
     reasons: list[str] = []
 
@@ -122,8 +124,9 @@ def build_context_plan(
     stage: str,
     changed_paths: list[str] | None = None,
     signals: set[str] | None = None,
+    tracked_files: int | None = None,
 ) -> dict[str, Any]:
-    scale = classify_scale(root, signals)
+    scale = classify_scale(root, signals, tracked_files)
     budget = dict(MODE_BUDGETS[scale["mode"]])
     changed = [str(item).replace("\\", "/") for item in (changed_paths or []) if str(item).strip()]
     return {

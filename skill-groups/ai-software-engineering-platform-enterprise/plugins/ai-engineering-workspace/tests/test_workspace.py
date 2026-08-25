@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
+import json
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 PLUGIN = Path(__file__).resolve().parents[1]
@@ -32,17 +35,22 @@ from convergence_guard import (
 )
 from file_lock import acquire, check, release
 from git_workspace import cmd_adopt, cmd_close, cmd_create, cmd_inventory, cmd_list, cmd_pause, cmd_plan_close, validate_branch_policy
-from governance_state import bind_review_candidate, checkpoint, control, create_task, init_project, load_task, record, rebind_task_goal, save_task, set_change_contract, transition, validate
+from governance_state import bind_review_candidate, checkpoint, control, create_task, init_project, load_task, record, save_task, set_change_contract, transition, validate
 from merge_guard import conflict_probe, evaluate as merge_evaluate, flow_ok
 from task_router import route
 from task_reconciler import reconcile
 from workspacelib import atomic_json, common_dir, read_json, safe_branch, state_lock
-from dispatch_guard import classify_observation, environment_plan, observe as dispatch_observe, status_fingerprint
+from dispatch_guard import acknowledge_turn_dispatch, classify_observation, environment_plan, guard_turn_dispatch, observe as dispatch_observe, status_fingerprint
 from candidate_guard import freeze as candidate_freeze, verify as candidate_verify
 from session_pool import bind as session_bind, complete as session_complete, plan as session_plan, release_ack as session_release_ack, status as session_status
 from runtime_release_probe import create_probe as create_runtime_release_probe
 from implementation_guard import validate_registry
 from goal_contract import set_contract, verify_binding
+from control_kernel import operation_file
+from bootstrap_project import initialize as initialize_core
+import control_workflow
+from control_handoff import acknowledge_handoff, create_handoff
+from control_trace import TraceWriteError
 
 
 def ns(**values): return argparse.Namespace(**values)
@@ -52,6 +60,86 @@ def git(root, *args): return subprocess.run(["git", *args], cwd=root, text=True,
 
 
 class WorkspaceTests(unittest.TestCase):
+    def test_handoff_split_preserves_one_journaled_create_and_ack_path(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.repo(root); initialize_core(root); self.governance(root)
+            summary = root / "handoff-summary.md"; summary.write_text("bounded handoff\n", encoding="utf-8")
+            created = create_handoff(root, "KG-001", "Review Agent", "handoff-summary.md", [], "OP-HANDOFF-CREATE")
+            self.assertEqual("COMPLETE", created["operation_status"])
+            acknowledged = acknowledge_handoff(root, created["handoff_id"], "Review Agent", "OP-HANDOFF-ACK")
+            self.assertEqual("COMPLETE", acknowledged["operation_status"])
+            journal = json.loads(operation_file(root).read_text(encoding="utf-8"))
+            self.assertEqual({"COMPLETE"}, {journal["operations"][key]["status"] for key in ("OP-HANDOFF-CREATE", "OP-HANDOFF-ACK")})
+
+    def test_real_transition_trace_failure_commits_domain_and_retry_only_repairs_trace(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.repo(root); initialize_core(root)
+            init_project(root, ns(project_id="PROJECT-A", architecture="backend", version="1.0.0", database_version="001", api_version="v1"))
+            create_task(root, ns(task_id="KG-001", goal="登录", owner_agent="Planning Agent", ownership_lane="default", branch="feature/KG-001-login", base_branch="develop", affected_files=[]))
+            args = ns(task_id="KG-001", to="Planning", control_action=None, agent_role="Planning Agent", commit_id=None, instruction="", new_task_id=None, branch=None, base_branch="develop", operation_id="OP-REAL-TRACE-PENDING")
+            project_fact = (root / ".ai/governance/project-state.json").read_bytes()
+            with mock.patch.object(control_workflow, "write_context", wraps=control_workflow.write_context) as context_gate:
+                with mock.patch.object(control_workflow, "record_event", side_effect=TraceWriteError("injected trace failure")):
+                    pending = control_workflow.transition(root, args)
+                self.assertEqual(1, context_gate.call_count)
+            self.assertEqual("Planning", load_task(root, "KG-001")["state"])
+            self.assertEqual(project_fact, (root / ".ai/governance/project-state.json").read_bytes())
+            self.assertEqual("TRACE_PENDING", pending["operation_status"])
+            history_count = len(load_task(root, "KG-001")["history"])
+            recovered = control_workflow.transition(root, args)
+            self.assertEqual(history_count, len(load_task(root, "KG-001")["history"]))
+            self.assertEqual("COMPLETE", recovered["operation_status"])
+
+    def test_legacy_task_writer_cli_requires_operation_id_and_delegates_to_control_kernel(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.repo(root)
+            initialize_core(root)
+            init_project(root, ns(project_id="PROJECT-A", architecture="backend", version="1.0.0", database_version="001", api_version="v1"))
+            create_task(root, ns(task_id="KG-001", goal="登录", owner_agent="Planning Agent", ownership_lane="default", branch="feature/KG-001-login", base_branch="develop", affected_files=[]))
+            script = PLUGIN / "scripts" / "governance_state.py"
+            base = [sys.executable, str(script), "--root", str(root), "transition", "--task-id", "KG-001", "--to", "Planning", "--agent-role", "Planning Agent"]
+            bypass_commands = [
+                base,
+                [sys.executable, str(script), "--root", str(root), "checkpoint", "--task-id", "KG-001", "--label", "before-review"],
+                [sys.executable, str(script), "--root", str(root), "control", "--task-id", "KG-001", "--action", "pause"],
+                [sys.executable, str(script), "--root", str(root), "goal-rebind", "--task-id", "KG-001", "--agent-role", "Planning Agent", "--impact", "affected", "--impact-summary", "changed", "--revise-change", "scope"],
+            ]
+            for command in bypass_commands:
+                bypass = subprocess.run(command, cwd=root, text=True, encoding="utf-8", errors="replace", stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+                self.assertEqual(2, bypass.returncode)
+            self.assertEqual("Created", load_task(root, "KG-001")["state"])
+            delegated = subprocess.run(base + ["--operation-id", "OP-COMPAT-TRANSITION"], cwd=root, text=True, encoding="utf-8", errors="replace", stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+            self.assertEqual(0, delegated.returncode, delegated.stderr or delegated.stdout)
+            self.assertEqual("Planning", load_task(root, "KG-001")["state"])
+            journal = json.loads(operation_file(root).read_text(encoding="utf-8"))
+            self.assertEqual("COMPLETE", journal["operations"]["OP-COMPAT-TRANSITION"]["status"])
+
+    def test_desktop_turn_guard_blocks_duplicate_and_state_mismatch_dispatch_storms(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.repo(root)
+            allowed = guard_turn_dispatch(root, "thread-writer", "notLoaded", "completed", "turn-old")
+            self.assertEqual("SEND_ALLOWED", allowed["action"]); self.assertTrue(allowed["send_allowed"])
+            reserved = guard_turn_dispatch(
+                root, "thread-writer", "notLoaded", "completed", "turn-old",
+                operation_id="dispatch-001", message_digest="a" * 64, reserve=True,
+            )
+            self.assertEqual("DISPATCH_RESERVED", reserved["action"]); self.assertTrue(reserved["send_allowed"])
+            duplicate = guard_turn_dispatch(
+                root, "thread-writer", "notLoaded", "completed", "turn-old",
+                operation_id="dispatch-001", message_digest="a" * 64, reserve=True,
+            )
+            self.assertEqual("ALREADY_RESERVED", duplicate["action"]); self.assertFalse(duplicate["send_allowed"])
+            acknowledge_turn_dispatch(root, "thread-writer", "dispatch-001", True)
+            started = guard_turn_dispatch(root, "thread-writer", "active", "inProgress", "turn-new")
+            self.assertEqual("WAIT_ACTIVE", started["action"]); self.assertEqual("ACTIVE", started["lease_status"])
+            completed = guard_turn_dispatch(root, "thread-writer", "notLoaded", "completed", "turn-new")
+            self.assertEqual("SEND_ALLOWED", completed["action"]); self.assertTrue(completed["send_allowed"])
+
+            first = guard_turn_dispatch(root, "thread-master", "active", "completed", "turn-stale")
+            second = guard_turn_dispatch(root, "thread-master", "active", "completed", "turn-stale")
+            self.assertEqual("WAIT_ONCE", first["action"]); self.assertEqual(1, first["mismatch_attempts"])
+            self.assertEqual("CHECKPOINT_AND_PAUSE", second["action"]); self.assertEqual(2, second["mismatch_attempts"])
+
     def test_concurrent_task_creates_do_not_lose_task_index_entries(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td); self.repo(root)
@@ -71,6 +159,34 @@ class WorkspaceTests(unittest.TestCase):
             first=session_plan(root,"PROJECT-A","KG-001","Developer Agent",str(root),"base-a","EMPTY_CONFIRMED",ownership_lane="backend")
             second=session_plan(root,"PROJECT-A","KG-001","Developer Agent",str(root),"base-a","EMPTY_CONFIRMED",ownership_lane="backend")
             self.assertEqual("CREATE_THREAD",first["action"]); self.assertEqual("WAIT_PENDING",second["action"])
+
+    def test_expired_session_reservation_requires_explicit_empty_requery(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.repo(root)
+            init_project(root, ns(project_id="PROJECT-A", architecture="backend", version="1.0.0", database_version="001", api_version="v1"))
+            created = session_plan(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "base-a", "EMPTY_CONFIRMED", ownership_lane="backend")
+            pool_path = common_dir(root) / "ai-engineering/session-pool.json"
+            pool = read_json(pool_path, {})
+            pool["slots"][created["slot_key"]]["reserved_at"] = "2000-01-01T00:00:00+00:00"
+            atomic_json(pool_path, pool)
+
+            timed_out = session_plan(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "base-a", "QUERY_TIMEOUT", ownership_lane="backend")
+            self.assertEqual("BLOCK_QUERY", timed_out["action"])
+            self.assertEqual("REQUERY_REQUIRED", session_status(root, "PROJECT-A")["slots"][0]["state"])
+            still_blocked = session_plan(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "base-a", "UNKNOWN_RUNNING", ownership_lane="backend")
+            self.assertEqual("BLOCK_QUERY", still_blocked["action"])
+            recreated = session_plan(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "base-a", "EMPTY_CONFIRMED", ownership_lane="backend")
+            self.assertEqual("CREATE_THREAD", recreated["action"])
+
+    def test_damaged_session_pool_fails_closed_without_replacement(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.repo(root)
+            pool_path = common_dir(root) / "ai-engineering/session-pool.json"
+            pool_path.parent.mkdir(parents=True, exist_ok=True)
+            pool_path.write_text("{damaged", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "session pool is damaged"):
+                session_plan(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "base-a", "EMPTY_CONFIRMED")
+            self.assertEqual("{damaged", pool_path.read_text(encoding="utf-8"))
 
     def test_router_auto_parallel_skips_unchanged_contract_lane(self):
         data = route("局部调整前后端现有实现", proposal={"architecture": "bs", "client_families": [], "risk_class": "local", "contract_change": False})
@@ -136,6 +252,26 @@ class WorkspaceTests(unittest.TestCase):
             self.assertEqual("BLOCK_SCOPE_CONFLICT", result["session"]["action"])
             self.assertTrue(result["scope_conflicts"])
             self.assertFalse(result["create_allowed"])
+            slots = session_status(root, "PROJECT-A")["slots"]
+            self.assertFalse(any(slot.get("ownership_lane") == "orders-read" for slot in slots))
+
+    def test_dispatch_stale_goal_block_does_not_reserve_a_session(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.repo(root)
+            init_project(root, ns(project_id="PROJECT-A", architecture="backend", version="1.0.0", database_version="001", api_version="v1"))
+            set_contract(root, "GOAL-001", "交付稳定能力", acceptance_ids=["AC-001"])
+            create_task(root, ns(task_id="KG-001", goal="实现能力", owner_agent="Planning Agent", branch="feature/KG-001-goal", base_branch="develop", affected_files=[]))
+            current = read_json(root / ".ai/governance/goal-contract.json", {})
+            atomic_json(root / ".ai/governance/goal-change-active.json", {
+                "schema_version": "1.0.0", "operation_id": "goal-change-test",
+                "status": "PREPARED", "base_goal_revision": 1, "new_goal_revision": 2,
+                "new_goal_fingerprint": current["fingerprint"],
+            })
+
+            result = dispatch_observe(root, ns(task_id="KG-001", role="Developer Agent", repository=str(root), base_sha="base-a", api_result="EMPTY", project_id="PROJECT-A", thread_id=None, client_thread_id=None, runtime_status=None, detail="", ownership_lane="backend", require_isolated_runtime=False))
+            self.assertEqual("BLOCK_GOAL_DRIFT", result["session"]["action"])
+            self.assertFalse(result["session"]["reservation_created"])
+            self.assertEqual([], session_status(root, "PROJECT-A")["slots"])
 
     def test_two_stable_writer_lanes_run_in_parallel_without_task_explosion(self):
         with tempfile.TemporaryDirectory() as td:
@@ -169,17 +305,30 @@ class WorkspaceTests(unittest.TestCase):
             self.assertFalse(developed["convergence"]["delivery_progress"].get("business_source_started", False))
             self.assertEqual("BUSINESS_REQUIRED", developed["convergence"]["status"])
 
-    def test_goal_revision_blocks_stale_dispatch_until_rebound(self):
+    def test_goal_revision_transaction_rebinds_and_requires_replan(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); self.repo(root)
             init_project(root, ns(project_id="PROJECT-A", architecture="backend", version="1.0.0", database_version="001", api_version="v1"))
             set_contract(root, "GOAL-001", "交付稳定能力", acceptance_ids=["AC-001"])
-            create_task(root, ns(task_id="KG-001", goal="实现能力", owner_agent="Planning Agent", branch="feature/KG-001-goal", base_branch="develop", affected_files=[]))
-            set_contract(root, "GOAL-001", "交付稳定且可恢复的能力", acceptance_ids=["AC-001", "AC-002"])
-            self.assertFalse(verify_binding(root, load_task(root, "KG-001")["goal_binding"])["ok"])
-            with self.assertRaisesRegex(RuntimeError, "goal contract revision is stale"):
-                transition(root, ns(task_id="KG-001", to="Planning", agent_role="Planning Agent", commit_id=None))
-            rebound = rebind_task_goal(root, ns(task_id="KG-001", agent_role="Planning Agent", impact_summary="新目标增加恢复验收", retain_change=[], revise_change=["恢复链路"], retire_change=[]))
+            task = create_task(root, ns(task_id="KG-001", goal="实现能力", owner_agent="Planning Agent", branch="feature/KG-001-goal", base_branch="develop", affected_files=[]))
+            task["change_contract"]["owned_surface_ids"] = ["SURFACE:RECOVERY"]
+            save_task(root, task)
+            current = read_json(root / ".ai/governance/goal-contract.json", {})
+            plan = {
+                "schema_version": "1.0.0", "change_kind": "ADD",
+                "base_goal": {"goal_id": current["goal_id"], "revision": current["revision"], "fingerprint": current["fingerprint"]},
+                "new_goal": {"goal_id": current["goal_id"], "outcome": "交付稳定且可恢复的能力", "acceptance_ids": ["AC-001", "AC-002"]},
+                "changed_surface_ids": ["SURFACE:RECOVERY"],
+                "tasks": [{
+                    "task_id": "KG-001", "classification": "AFFECTED",
+                    "impact_summary": "新目标增加恢复验收", "affected_surface_ids": ["SURFACE:RECOVERY"],
+                    "retained_surface_ids": [], "invalidations": {},
+                    "invalidate_candidate": False, "change_contract_required": True,
+                }],
+            }
+            with mock.patch("control_workflow.write_gate", return_value={"suite_fingerprint": "test-suite"}):
+                control_workflow.change_goal(root, ns(plan=plan, plan_file=None, operation_id="goal-change-workspace"))
+            rebound = load_task(root, "KG-001")
             self.assertTrue(verify_binding(root, rebound["goal_binding"])["ok"])
             self.assertEqual("REPLAN_REQUIRED", rebound["goal_adjustment"]["status"])
             with self.assertRaisesRegex(RuntimeError, "goal adjustment is not reconciled"):
@@ -324,15 +473,38 @@ class WorkspaceTests(unittest.TestCase):
     def test_merged_state_waits_for_task_worktree_cleanup(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td) / "repo"; root.mkdir(); self.repo(root); self.governance(root)
-            task = load_task(root, "KG-001")
-            task["state"] = "Testing"; task["tests"] = {"status": "PASS", "records": [{"value": "ok"}]}; task["closure"]["merge"] = "PASS"
-            save_task(root, task)
+            git(root, "checkout", "-b", "feature/KG-001-login", "develop")
+            (root / "src").mkdir(); (root / "src/AuthService.ts").write_text("export const ok = true;\n", encoding="utf-8")
+            (root / "evidence.log").write_text("acceptance passed\n", encoding="utf-8")
+            git(root, "add", "."); git(root, "commit", "-m", "feat(auth): implement KG-001 login")
+            head = git(root, "rev-parse", "HEAD").stdout.strip()
+            record(root, ns(task_id="KG-001", kind="commit", value=head, status=None, command=None, reason=None, agent_role="Developer Agent"))
+            record(root, ns(task_id="KG-001", kind="document", value="CHANGELOG.md", status="UPDATED", command=None, reason=None, agent_role="Document Agent"))
+            record(root, ns(task_id="KG-001", kind="document", value="ARCHITECTURE.md", status="NOT_APPLICABLE", command=None, reason="no architecture change", agent_role="Document Agent"))
+            git(root, "add", "."); git(root, "commit", "-m", "docs: record KG-001 evidence")
+            head = git(root, "rev-parse", "HEAD").stdout.strip()
+            record(root, ns(task_id="KG-001", kind="commit", value=head, status=None, command=None, reason=None, agent_role="Developer Agent"))
+            quality_scripts = PLUGIN.parent / "ai-engineering-quality" / "scripts"
+            run_guard = subprocess.run([sys.executable, str(quality_scripts / "architecture_guard.py"), "--root", str(root), "check", "--task-id", "KG-001"], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.assertEqual(0, run_guard.returncode, run_guard.stdout + run_guard.stderr)
+            bind_review_candidate(root, ns(task_id="KG-001", candidate_id="CAND-KG-001-CLEANUP", review_source="independent-review", agent_role="Developer Agent"))
+            transition(root, ns(task_id="KG-001", to="Review", agent_role="Developer Agent", commit_id=None))
+            record(root, ns(task_id="KG-001", kind="review", value="independent review", status="PASS", command=None, reason=None, agent_role="Review Agent"))
+            transition(root, ns(task_id="KG-001", to="Testing", agent_role="Review Agent", commit_id=None))
+            record(root, ns(task_id="KG-001", kind="test", value="unit and e2e", status="PASS", command="npm test", reason=None, agent_role="Test Agent"))
+            record(root, ns(task_id="KG-001", kind="artifact", value="evidence.log", status="PASS", command=None, reason=None, agent_role="Test Agent"))
+            task = load_task(root, "KG-001"); closure = closure_evaluate(root, task, "merge")
+            self.assertTrue(closure["ok"], closure["failures"])
+            task["closure"]["merge"] = "PASS"; task.setdefault("closure_bindings", {})["merge"] = closure["binding"]; save_task(root, task)
             worktree = Path(td) / "task-wt"
-            git(root, "worktree", "add", "-b", "feature/KG-001-login", str(worktree), "develop")
+            git(root, "worktree", "add", str(worktree), "develop")
+            cmd_adopt(root, ns(worktree_id="WT-KG-001", path=str(worktree), task_id="KG-001"))
             transition(root, ns(task_id="KG-001", to="MergedPendingCleanup", agent_role="Merge Agent", commit_id="abc123"))
             with self.assertRaisesRegex(RuntimeError, "worktree to be closed"):
                 transition(root, ns(task_id="KG-001", to="Merged", agent_role="Merge Agent", commit_id=None))
-            git(root, "worktree", "remove", str(worktree))
+            close_plan = cmd_plan_close(root, ns(path=str(worktree), target="develop"))
+            self.assertTrue(close_plan["plan"]["ready"])
+            cmd_close(root, ns(token=close_plan["plan"]["token"]))
             merged = transition(root, ns(task_id="KG-001", to="Merged", agent_role="Merge Agent", commit_id=None))
             self.assertEqual("Merged", merged["state"])
 
@@ -345,6 +517,11 @@ class WorkspaceTests(unittest.TestCase):
             git(root, "add", "."); git(root, "commit", "-m", "feat(auth): implement KG-001 login")
             head = git(root, "rev-parse", "HEAD").stdout.strip()
             record(root, ns(task_id="KG-001", kind="commit", value=head, status=None, command=None, reason=None, agent_role="Developer Agent"))
+            record(root, ns(task_id="KG-001", kind="document", value="CHANGELOG.md", status="UPDATED", command=None, reason=None, agent_role="Document Agent"))
+            record(root, ns(task_id="KG-001", kind="document", value="ARCHITECTURE.md", status="NOT_APPLICABLE", command=None, reason="no architecture change", agent_role="Document Agent"))
+            git(root, "add", "."); git(root, "commit", "-m", "docs: record KG-001 acceptance evidence")
+            head = git(root, "rev-parse", "HEAD").stdout.strip()
+            record(root, ns(task_id="KG-001", kind="commit", value=head, status=None, command=None, reason=None, agent_role="Developer Agent"))
             quality_scripts = PLUGIN.parent / "ai-engineering-quality" / "scripts"
             run_guard = subprocess.run([sys.executable, str(quality_scripts / "architecture_guard.py"), "--root", str(root), "check", "--task-id", "KG-001"], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             self.assertEqual(0, run_guard.returncode, run_guard.stdout + run_guard.stderr)
@@ -354,15 +531,12 @@ class WorkspaceTests(unittest.TestCase):
             transition(root, ns(task_id="KG-001", to="Testing", agent_role="Review Agent", commit_id=None))
             record(root, ns(task_id="KG-001", kind="test", value="unit and e2e", status="PASS", command="npm test", reason=None, agent_role="Test Agent"))
             record(root, ns(task_id="KG-001", kind="artifact", value="evidence.log", status="PASS", command=None, reason=None, agent_role="Test Agent"))
-            record(root, ns(task_id="KG-001", kind="document", value="CHANGELOG.md", status="UPDATED", command=None, reason=None, agent_role="Document Agent"))
-            record(root, ns(task_id="KG-001", kind="document", value="ARCHITECTURE.md", status="NOT_APPLICABLE", command=None, reason="no architecture change", agent_role="Document Agent"))
-            git(root, "add", "."); git(root, "commit", "-m", "docs: record KG-001 acceptance evidence")
             run_guard = subprocess.run([sys.executable, str(quality_scripts / "architecture_guard.py"), "--root", str(root), "check", "--task-id", "KG-001"], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             self.assertEqual(0, run_guard.returncode, run_guard.stdout + run_guard.stderr)
             task = load_task(root, "KG-001"); closure = closure_evaluate(root, task, "merge"); self.assertTrue(closure["ok"], closure["failures"])
             task["closure"]["merge"] = "PASS"
-            from workspacelib import atomic_json
-            atomic_json(root / ".ai/tasks/KG-001.json", task)
+            task.setdefault("closure_bindings", {})["merge"] = closure["binding"]
+            save_task(root, task)
             gate = merge_evaluate(root, "feature/KG-001-login", "develop", "KG-001")
             self.assertTrue(gate["ok"], gate.get("failures"))
 
@@ -504,13 +678,22 @@ class WorkspaceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td) / "repo"; root.mkdir(); self.repo(root)
             init_project(root, ns(project_id="PROJECT-A", architecture="hybrid", version="1.0.0", database_version="001", api_version="v1"))
-            session_bind(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "base-a", "thread-writer", None, "RUNNING", str(Path(td) / "writer-wt"))
+            process = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+            session_bind(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "base-a", "thread-writer", None, "RUNNING", str(Path(td) / "writer-wt"), runtime_pids=[process.pid])
             terminal = session_complete(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "PASS", "CP-FINAL", True, True, "CLOSED", project_terminal=True)
             self.assertEqual("ARCHIVE_AND_VERIFY_RUNTIME", terminal["next_action"])
             waiting = session_release_ack(root, "PROJECT-A", "Developer Agent", str(root), True, False, "CLOSED")
             self.assertEqual("ARCHIVED_RUNTIME_UNVERIFIED", waiting["slot"]["state"])
-            probe = create_runtime_release_probe(root, "PROJECT-A", "Developer Agent", str(root), "ARCHIVED", "desktop-observation-1", [999999], "default")
-            self.assertEqual("PASS", probe["result"])
+            process.terminate(); process.wait(timeout=10)
+            forged = create_runtime_release_probe(root, "PROJECT-A", "Developer Agent", str(root), "ARCHIVED", "desktop-observation-forged", [999999], "default")
+            self.assertEqual("BLOCKED", forged["result"])
+            self.assertIn("caller runtime PID assertion does not match registered slot identities", forged["blockers"])
+            with mock.patch("runtime_release_probe.runtime_identity", return_value=None), mock.patch("runtime_release_probe.pid_presence", return_value=False):
+                probe = create_runtime_release_probe(root, "PROJECT-A", "Developer Agent", str(root), "ARCHIVED", "desktop-observation-1", [], "default")
+            self.assertEqual("PASS", probe["result"], probe)
+            self.assertEqual("HOST_ASSERTED", probe["evidence_authority"]["desktop_thread"])
+            self.assertEqual("LOCAL_VERIFIED", probe["evidence_authority"]["runtime_processes"])
+            self.assertEqual("LOCAL_VERIFIED", probe["evidence_authority"]["worktree"])
             released = session_release_ack(root, "PROJECT-A", "Developer Agent", str(root), False, False, "KEPT", probe_id=probe["probe_id"])
             self.assertTrue(released["ok"]); self.assertEqual("RELEASED", released["slot"]["state"])
             self.assertTrue(session_status(root, "PROJECT-A")["ok"])
@@ -519,16 +702,44 @@ class WorkspaceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td) / "repo"; root.mkdir(); self.repo(root)
             init_project(root, ns(project_id="PROJECT-A", architecture="hybrid", version="1.0.0", database_version="001", api_version="v1"))
-            session_bind(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "base-a", "thread-writer", None, "RUNNING", str(Path(td) / "closed-wt"))
-            session_complete(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "PASS", "CP-FINAL", True, True, "CLOSED", project_terminal=True)
             process = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
             try:
+                bound = session_bind(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "base-a", "thread-writer", None, "RUNNING", str(Path(td) / "closed-wt"), runtime_pids=[process.pid])
+                self.assertEqual("VERIFIED", bound["runtime_identity_status"])
+                self.assertEqual(process.pid, bound["runtime_processes"][0]["pid"])
+                self.assertEqual(64, len(bound["runtime_processes"][0]["process_fingerprint"]))
+                self.assertEqual(64, len(bound["runtime_registration_id"]))
+                session_complete(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "PASS", "CP-FINAL", True, True, "CLOSED", project_terminal=True)
                 active = create_runtime_release_probe(root, "PROJECT-A", "Developer Agent", str(root), "ARCHIVED", "desktop-observation-live", [process.pid], "default")
-                self.assertEqual("BLOCKED", active["result"]); self.assertIn(process.pid, active["alive_pids"])
+                self.assertEqual("BLOCKED", active["result"])
+                self.assertIn({"pid": process.pid, "status": "RUNNING"}, active["runtime_process_observations"])
             finally:
                 process.terminate(); process.wait(timeout=10)
-            released = create_runtime_release_probe(root, "PROJECT-A", "Developer Agent", str(root), "ARCHIVED", "desktop-observation-released", [process.pid], "default")
-            self.assertEqual("PASS", released["result"]); self.assertEqual("RELEASED", released["runtime_status"])
+            with mock.patch("runtime_release_probe.runtime_identity", return_value=None), mock.patch("runtime_release_probe.pid_presence", return_value=False):
+                released = create_runtime_release_probe(root, "PROJECT-A", "Developer Agent", str(root), "ARCHIVED", "desktop-observation-released", [process.pid], "default")
+            self.assertEqual("PASS", released["result"], released); self.assertEqual("RELEASED", released["runtime_status"])
+
+    def test_runtime_release_probe_fails_closed_without_bound_identity(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "repo"; root.mkdir(); self.repo(root)
+            init_project(root, ns(project_id="PROJECT-A", architecture="hybrid", version="1.0.0", database_version="001", api_version="v1"))
+            session_bind(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "base-a", "thread-writer", None, "RUNNING", str(Path(td) / "closed-wt"))
+            session_complete(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "PASS", "CP-FINAL", True, True, "CLOSED", project_terminal=True)
+            probe = create_runtime_release_probe(root, "PROJECT-A", "Developer Agent", str(root), "ARCHIVED", "desktop-observation-missing", [], "default")
+            self.assertEqual("BLOCKED", probe["result"])
+            self.assertEqual("NOT_REGISTERED", probe["runtime_status"])
+
+    def test_runtime_release_probe_blocks_pid_reuse_identity_mismatch(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "repo"; root.mkdir(); self.repo(root)
+            init_project(root, ns(project_id="PROJECT-A", architecture="hybrid", version="1.0.0", database_version="001", api_version="v1"))
+            session_bind(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "base-a", "thread-writer", None, "RUNNING", str(Path(td) / "closed-wt"), runtime_pids=[os.getpid()])
+            session_complete(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "PASS", "CP-FINAL", True, True, "CLOSED", project_terminal=True)
+            replacement = {"identity_version": "pid-start-v1", "pid": os.getpid(), "process_fingerprint": "f" * 64}
+            with mock.patch("runtime_release_probe.runtime_identity", return_value=replacement):
+                probe = create_runtime_release_probe(root, "PROJECT-A", "Developer Agent", str(root), "ARCHIVED", "desktop-observation-reused", [], "default")
+            self.assertEqual("BLOCKED", probe["result"])
+            self.assertEqual("IDENTITY_MISMATCH", probe["runtime_status"])
 
     def test_long_chain_guard_notifies_once_for_changed_engineering_health(self):
         task = {"change_contract": {"behavior_invariants": [], "required_tests": []}}

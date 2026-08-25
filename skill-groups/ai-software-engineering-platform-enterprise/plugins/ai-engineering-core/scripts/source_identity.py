@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -20,6 +21,13 @@ PROJECT_MARKERS = {
     "Gemfile",
     "CMakeLists.txt",
     "Packages/manifest.json",
+}
+
+STATE_MANIFEST_NAMES = {
+    "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock",
+    "pyproject.toml", "poetry.lock", "requirements.txt", "pom.xml",
+    "build.gradle", "build.gradle.kts", "Cargo.toml", "Cargo.lock",
+    "go.mod", "go.sum", "manifest.json", "ProjectVersion.txt",
 }
 
 
@@ -58,28 +66,45 @@ def _worktrees(repo: Path) -> list[dict[str, str]]:
     return items
 
 
-def _tracked_markers(repo: Path, scope: Path, limit: int = 96) -> list[Path]:
+def _tracked_inventory(repo: Path, scope: Path, marker_limit: int = 96, manifest_limit: int = 500) -> dict[str, Any]:
     result = _git(repo, "ls-files", "-z")
     if result.returncode:
-        return []
-    found: list[Path] = []
+        return {"count": None, "markers": [], "manifest_hash": hashlib.sha256(b"").hexdigest()}
+    markers: list[Path] = []
+    manifests: list[Path] = []
+    count = 0
     for raw in result.stdout.split("\0"):
         if not raw:
             continue
+        count += 1
         rel = Path(raw)
         normalized = rel.as_posix()
-        if rel.name not in PROJECT_MARKERS and normalized not in PROJECT_MARKERS and rel.suffix.lower() not in {".sln", ".csproj"}:
-            continue
         candidate = (repo / rel).resolve()
         try:
             candidate.relative_to(scope)
         except ValueError:
             continue
-        if candidate.is_file():
-            found.append(candidate)
-        if len(found) >= limit:
-            break
-    return found
+        if (
+            len(markers) < marker_limit
+            and (rel.name in PROJECT_MARKERS or normalized in PROJECT_MARKERS or rel.suffix.lower() in {".sln", ".csproj"})
+            and candidate.is_file()
+        ):
+            markers.append(candidate)
+        lower = normalized.lower()
+        if (
+            len(manifests) < manifest_limit
+            and (rel.name.lower() in {name.lower() for name in STATE_MANIFEST_NAMES} or "/migrations/" in f"/{lower}/")
+            and candidate.is_file()
+        ):
+            manifests.append(candidate)
+    digest = hashlib.sha256()
+    for path in sorted(manifests):
+        digest.update(path.relative_to(repo).as_posix().encode("utf-8"))
+        try:
+            digest.update(path.read_bytes())
+        except OSError:
+            digest.update(b"unreadable")
+    return {"count": count, "markers": markers, "manifest_hash": digest.hexdigest()}
 
 
 def _values_for_keys(value: Any, keys: set[str]) -> list[str]:
@@ -124,9 +149,14 @@ def identify(root: Path) -> dict[str, Any]:
             "common_dir": None,
             "trusted_markers": [],
             "nested_worktrees": [],
+            "tracked_file_count": None,
+            "dirty": None,
+            "manifest_hash": hashlib.sha256(b"").hexdigest(),
+            "repo_id": hashlib.sha256(str(scope).encode("utf-8", errors="replace")).hexdigest(),
         }
-    top = _git(scope, "rev-parse", "--show-toplevel")
-    if top.returncode:
+    revision = _git(scope, "rev-parse", "--show-toplevel", "--git-common-dir", "HEAD", "--abbrev-ref", "HEAD")
+    values = revision.stdout.splitlines()
+    if revision.returncode or len(values) < 4:
         return {
             "is_git": False,
             "scope": str(scope),
@@ -136,20 +166,28 @@ def identify(root: Path) -> dict[str, Any]:
             "common_dir": None,
             "trusted_markers": [],
             "nested_worktrees": [],
+            "tracked_file_count": None,
+            "dirty": None,
+            "manifest_hash": hashlib.sha256(b"").hexdigest(),
+            "repo_id": hashlib.sha256(str(scope).encode("utf-8", errors="replace")).hexdigest(),
         }
-    repo = Path(top.stdout.strip()).resolve()
-    branch = _git(scope, "branch", "--show-current").stdout.strip()
-    head = _git(scope, "rev-parse", "HEAD").stdout.strip()
-    common_raw = _git(scope, "rev-parse", "--git-common-dir").stdout.strip()
+    repo = Path(values[0].strip()).resolve()
+    common_raw = values[1].strip()
+    head = values[2].strip()
+    branch = values[3].strip()
     common_dir = _resolve_git_path(repo, common_raw) if common_raw else None
+    remote = _git(scope, "config", "--get", "remote.origin.url").stdout.strip()
+    repo_seed = remote or str(common_dir or repo)
+    repo_id = hashlib.sha256(repo_seed.encode("utf-8", errors="replace")).hexdigest()
     current = scope
-    for item in _worktrees(repo):
+    worktrees = _worktrees(repo)
+    for item in worktrees:
         path = Path(item.get("worktree", "")).resolve() if item.get("worktree") else None
         if path and (scope == path or scope.is_relative_to(path)):
             current = path
             break
     nested: list[str] = []
-    for item in _worktrees(repo):
+    for item in worktrees:
         if not item.get("worktree"):
             continue
         path = Path(item["worktree"]).resolve()
@@ -160,7 +198,13 @@ def identify(root: Path) -> dict[str, Any]:
         except ValueError:
             continue
         nested.append(str(path))
-    markers = _tracked_markers(repo, scope)
+    inventory = _tracked_inventory(repo, scope)
+    raw_status = _git(scope, "status", "--porcelain=v1", "-z", "--untracked-files=all").stdout
+    dirty = any(
+        not item[3:].replace("\\", "/").startswith(".ai/")
+        for item in raw_status.split("\0")
+        if len(item) >= 4
+    )
     return {
         "is_git": True,
         "scope": str(scope),
@@ -169,8 +213,12 @@ def identify(root: Path) -> dict[str, Any]:
         "branch": branch or None,
         "head": head or None,
         "common_dir": str(common_dir) if common_dir else None,
-        "trusted_markers": [str(path) for path in markers],
+        "trusted_markers": [str(path) for path in inventory["markers"]],
         "nested_worktrees": nested,
+        "tracked_file_count": inventory["count"],
+        "dirty": dirty,
+        "manifest_hash": inventory["manifest_hash"],
+        "repo_id": repo_id,
     }
 
 

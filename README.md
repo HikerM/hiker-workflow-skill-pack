@@ -1,10 +1,10 @@
 # Hiker 中文工程能力仓库
 
-<!-- repository-facts: repo=0.11.0; engineering=5.16.0; plugins=5; engineering-skills=42; desktop=1.3.0; desktop-skills=5; total-skills=47 -->
+<!-- repository-facts: repo=0.12.0; engineering=5.17.0; plugins=5; engineering-skills=42; desktop=1.3.0; desktop-skills=5; total-skills=47 -->
 
 这是面向 ChatGPT/Codex 桌面应用的软件工程能力仓库。仓库已经收敛，只保留两套用途明确、安装边界独立的能力包。
 
-> 仓库版本：`0.11.0`
+> 仓库版本：`0.12.0`
 >
 > 当前规模：`2` 套能力包、共 `47` 个 Skill
 >
@@ -14,12 +14,12 @@
 
 | 能力包 | 版本 | 规模 | 适用范围 | 使用方式 |
 |---|---:|---:|---|---|
-| 智能软件工程平台 | 5.16.0 | 5 个插件、42 个原子 Skill | 从零开发、存量接管、B/S、C/S、后端、大型工程、多会话、Git、测试、质量与发布 | ChatGPT 语义选择，规则守门，按阶段懒加载 |
+| 智能软件工程平台 | 5.17.0 | 5 个插件、42 个原子 Skill | 从零开发、存量接管、B/S、C/S、后端、大型工程、多会话、Git、测试、质量与发布 | ChatGPT 语义选择，规则守门，按阶段懒加载 |
 | 桌面软件等价重建 | 1.3.0 | 5 个 Skill | 已授权桌面软件的发现、规格、技术方案、实现、差分验证与发布 | 用户手动选择，阶段路由每次只加载一个原子 Skill |
 
 两套能力不会在同一消息中自动全部加载。详细说明见 [能力包中文详解](docs/CAPABILITY_PACKS_ZH.md)，完整名称见 [Skill 索引](docs/SKILL_INDEX.md)。
 
-## 智能软件工程平台 5.16.0
+## 智能软件工程平台 5.17.0
 
 平台由一个轻量入口和42个原子 Skill 组成。ChatGPT 根据用户当前目标、否定项、阶段和有界工程证据选择最多两个原子 Skill；确定性脚本只校验候选存在性、阶段、架构证据、权限、源码身份和数量，不按关键词代替模型决策。
 
@@ -33,7 +33,16 @@
 | 工作区与多会话协作 | 12 | 项目状态、任务生命周期、多智能体、文件锁、Worktree、实现收敛、合并和验收闭环 |
 | 质量、风险与发布 | 6 | 独立设计复审、完整变更风险、交互冲突、工程图谱、回归范围和发布审核 |
 
-### 5.16.0 的增强重点
+### 5.17.0 的增强重点
+
+- **可靠Control Kernel**：Task状态只有一个权威写协调入口；operation journal区分Domain提交与Trace补偿，重复请求不会重放已提交业务动作。
+- **可恢复Desktop生命周期**：Turn租约、Checkpoint、终态、归档和释放形成闭环；app-server中断后进入受控恢复，不盲目重复派发。
+- **有界Event与压力治理**：STATE/CONTROL低频持久化，TRACE有界分段，STREAM在Turn结束后聚合移除；压力升高时收敛并发并进入DRAINING。
+- **局部Goal Change**：结构化影响分类只失效受影响Task、消费者和证据，未受影响的完成成果、测试与Checkpoint继续有效。
+- **可证明发布**：Self Governance在打包前后强制Architecture、Privacy、Version、Tests、Performance、Package和Release Gate。
+- **专项能力证据化**：Laravel、NodeTS、Unity和Qt按需读取真实版本、构建、边界、测试与平台证据，不进入普通项目默认路径。
+
+5.16建立的性能内核、三档路径和版本栅栏继续保留：
 
 - **常驻上下文减重**：全局自动应用模板从约7.1KB压缩到约3KB；42个Skill前置描述从约13.3KB压缩到10KB以内，并由桌面稳定性门禁阻止回涨。
 - **三条性能路径**：简单解释与状态查询直接回答；普通项目在证据充分时一次准入；只有多会话、合并、发布和长链路任务进入完整治理。
@@ -75,6 +84,19 @@ py -3 -B .\tools\verify_desktop_install.py
 ```
 
 安装器复制并注册五个插件、更新个人 Marketplace、写入桌面端启用配置、生成唯一活动版本缓存并合并全局性能内核。已打开任务保存的是启动时能力快照，不能可靠原地热换：旧任务先Checkpoint并停止写入，再由新任务验证五插件版本指纹后接管；若新任务仍指向旧缓存，必须重启桌面端。
+
+### 5.17发布验证
+
+当前正式候选为 `5.17.0+codex.20260825194113`。发布流水线已完成以下验证：
+
+- 五插件237项测试全部通过，源码测试指纹为 `ee5dfbea525763e8919a`；
+- 42个Skill发布一致性审核通过；
+- 39项宿主语义路由Eval通过，未调用外部模型API；
+- Long Task、Crash Recovery、Multi Session、Goal Change和Event Pressure E2E通过；
+- Architecture、Privacy、Version Facts、Performance和Package Facts全部通过；
+- 五个5.17 ZIP与源码逐文件一致，并通过隔离HOME安装验证。
+
+发行包位于 `skill-groups/ai-software-engineering-platform-enterprise/dist/`，SHA-256以同目录的 `SHA256SUMS.txt` 为准。完整证据见 [5.17验证报告](skill-groups/ai-software-engineering-platform-enterprise/VALIDATION_REPORT_CN.md)。任一发布Gate失败时，打包器不会更新正式发行目录。
 
 ## 桌面软件等价重建 1.3.0
 

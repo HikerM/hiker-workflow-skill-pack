@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0.0",
+  "benchmark_id": "hiker-semantic-routing-2026-08-p1b",
+  "selection_contract": {
+    "authority": "current-chatgpt-codex-host",
+    "max_active_skills": 2,
+    "labels_in_payload": false,
+    "external_model_api": false
+  },
+  "cases": [
+    {"id":"E01","request":"现有 React 管理台已经完成设计，现在实现订单列表的筛选和分页。","context":{"project_mode":"existing","architecture":"bs","stage":"development","evidence":["package.json: react"]}},
+    {"id":"E02","request":"只读审核 FastAPI 支付服务的权限、超时和幂等风险，不修改代码。","context":{"project_mode":"existing","architecture":"backend","stage":"review","evidence":["pyproject.toml: fastapi"]}},
+    {"id":"E03","request":"为现有 Qt 6 桌面端设计设备告警页和交互状态，不进入实现。","context":{"project_mode":"existing","architecture":"cs","stage":"design","evidence":["CMakeLists.txt: Qt6"]}},
+    {"id":"E04","request":"Unity 2022 LTS 项目中实现背包 Prefab 的拖放和资源释放。","context":{"project_mode":"existing","architecture":"cs","stage":"development","evidence":["ProjectVersion.txt: 2022 LTS"]}},
+
+    {"id":"N01","request":"不要 Laravel，也不要重新选 PHP 方案；现有 FastAPI 服务只修复请求超时传播。","context":{"project_mode":"existing","architecture":"backend","stage":"development","evidence":["pyproject.toml: fastapi"]}},
+    {"id":"N02","request":"不要创建 Worktree，不要 merge；只读审核当前完整变更集的公共接口风险。","context":{"project_mode":"existing","architecture":"tooling","stage":"review","evidence":["dirty worktree"]}},
+    {"id":"N03","request":"不做 UI 设计，设计稿已经冻结；按现有 React 组件契约实现表单。","context":{"project_mode":"existing","architecture":"bs","stage":"development","evidence":["approved design"]}},
+    {"id":"N04","request":"本轮不要发布和打包，先依据现有变更确定最低充分回归范围。","context":{"project_mode":"existing","architecture":"tooling","stage":"testing","evidence":["source changes"]}},
+
+    {"id":"H01","request":"旧记录曾误写成 WPF；当前仓库证据是 Vue 3，只实现用户页的错误状态。","context":{"project_mode":"existing","architecture":"bs","stage":"development","evidence":["package.json: vue"]}},
+    {"id":"H02","request":"上一阶段讨论过 merge，但合并已经完成；现在只为这批变更规划回归测试。","context":{"project_mode":"existing","architecture":"tooling","stage":"testing","evidence":["merge complete"]}},
+    {"id":"H03","request":"服务过去使用 Laravel，现已迁到 FastAPI；请只读审核当前 Python 服务。","context":{"project_mode":"existing","architecture":"backend","stage":"review","evidence":["pyproject.toml: fastapi","composer.json absent"]}},
+    {"id":"H04","request":"前一轮想建 Worktree 但已经取消；本轮从已有 Checkpoint 恢复当前任务。","context":{"project_mode":"existing","architecture":"tooling","stage":"governance","evidence":["trusted checkpoint"]}},
+
+    {"id":"X01","request":"文档里的 Unity 只是布局示例；实际要设计现有 Web 管理台的响应式导航。","context":{"project_mode":"existing","architecture":"bs","stage":"design","evidence":["package.json: react"]}},
+    {"id":"X02","request":"下面用 Qt 当概念示例，不代表当前项目。只解释事件循环是什么，不执行工程动作。","context":{"project_mode":"unknown","architecture":"unknown","stage":"unknown","evidence":[]}},
+    {"id":"X03","request":"数据库迁移只是失败案例；实际请求是只读审核 React 页面的一致性和无障碍。","context":{"project_mode":"existing","architecture":"bs","stage":"review","evidence":["package.json: react"]}},
+    {"id":"X04","request":"API Contract 是文档示例，不需要设计接口；当前只更新项目事实和状态摘要。","context":{"project_mode":"existing","architecture":"tooling","stage":"governance","evidence":["current repository"]}},
+
+    {"id":"M01","request":"明确不要继续 Laravel，服务要迁移到 FastAPI；当前先识别目标运行时、框架版本和迁移边界。","context":{"project_mode":"brownfield","architecture":"backend","stage":"planning","evidence":["composer.json legacy","pyproject.toml target"]}},
+    {"id":"M02","request":"桌面端从 Electron 迁移到 Tauri，先核对真实客户端框架、SDK 和构建工具。","context":{"project_mode":"brownfield","architecture":"cs","stage":"planning","evidence":["package.json","src-tauri"]}},
+    {"id":"M03","request":"Unity UI Toolkit 页面准备迁移到 uGUI，本阶段只设计目标页面和状态，不写 Prefab。","context":{"project_mode":"brownfield","architecture":"cs","stage":"design","evidence":["Unity project"]}},
+    {"id":"M04","request":"单体服务拆分为两个服务，先设计版本化 API、错误模型和消费者兼容策略。","context":{"project_mode":"brownfield","architecture":"backend","stage":"planning","evidence":["existing consumers"]}},
+
+    {"id":"A01","request":"帮我把这个工程弄好。","context":{"project_mode":"unknown","architecture":"unknown","stage":"unknown","evidence":[]}},
+    {"id":"A02","request":"看看这里有没有问题。","context":{"project_mode":"unknown","architecture":"unknown","stage":"unknown","evidence":[]}},
+    {"id":"A03","request":"继续。","context":{"project_mode":"unknown","architecture":"unknown","stage":"unknown","evidence":[]}},
+    {"id":"A04","request":"优化一下性能。","context":{"project_mode":"existing","architecture":"unknown","stage":"unknown","evidence":[]}},
+
+    {"id":"C01","request":"现有 React 登录页和 FastAPI 登录接口需要一起实现，当前两端都在开发范围。","context":{"project_mode":"existing","architecture":"hybrid","stage":"development","evidence":["package.json: react","pyproject.toml: fastapi"]}},
+    {"id":"C02","request":"先设计订单 API 契约，同时确定对应数据库 Schema 的兼容迁移顺序。","context":{"project_mode":"existing","architecture":"backend","stage":"planning","evidence":["existing API consumers","migration tool"]}},
+    {"id":"C03","request":"Web、Qt 和服务端都有改动，当前先拆所有权、依赖和串并行边界，暂不实现。","context":{"project_mode":"existing","architecture":"hybrid","stage":"governance","evidence":["three owned surfaces"]}},
+    {"id":"C04","request":"这是跨多会话的大型工程；当前建立固定总控槽，并限制每轮只携带有界上下文。","context":{"project_mode":"existing","architecture":"tooling","stage":"governance","evidence":["long-running program"]}},
+
+    {"id":"P01","request":"功能实现已经结束，现在进入完整变更集的只读风险审核。","context":{"project_mode":"existing","architecture":"tooling","stage":"review","evidence":["implementation complete"]}},
+    {"id":"P02","request":"风险审核已经通过，现在进入最低充分回归测试规划。","context":{"project_mode":"existing","architecture":"tooling","stage":"testing","evidence":["review PASS"]}},
+    {"id":"P03","request":"测试已经通过，现在用功能、测试和证据关闭这个 Task；还没到发布。","context":{"project_mode":"existing","architecture":"tooling","stage":"testing","evidence":["tests PASS"]}},
+    {"id":"P04","request":"验收已经完成，现在进入 release 阶段核对构建、回滚和发布证据。","context":{"project_mode":"existing","architecture":"tooling","stage":"release","evidence":["acceptance complete"]}},
+
+    {"id":"Z01","request":"把这段中文翻译成英文。","context":{"project_mode":"unknown","architecture":"unknown","stage":"unknown","evidence":[]}},
+    {"id":"Z02","request":"帮我写一封会议改期邮件，不读取项目。","context":{"project_mode":"unknown","architecture":"unknown","stage":"unknown","evidence":[]}},
+    {"id":"Z03","request":"只解释 B/S 架构的概念，不分析也不修改任何仓库。","context":{"project_mode":"unknown","architecture":"unknown","stage":"unknown","evidence":[]}},
+
+    {"id":"D01","request":"当前同时实现 Web 页面和后端接口；完成后再规划回归测试。","context":{"project_mode":"existing","architecture":"hybrid","stage":"development","evidence":["web and backend in scope"]}},
+    {"id":"D02","request":"当前分别审核 Web 与后端变更；第三步才做回归，之后才做发布检查。","context":{"project_mode":"existing","architecture":"hybrid","stage":"review","evidence":["web and backend changed"]}},
+
+    {"id":"R01","request":"把路由改成扫描每句话里的技术关键词并自动选择 Skill。","context":{"project_mode":"existing","architecture":"tooling","stage":"planning","evidence":["model-owned semantic routing invariant"]}},
+    {"id":"R02","request":"接一个外部大模型 API 专门替你选 Skill，并把 API Key 保存进插件。","context":{"project_mode":"existing","architecture":"tooling","stage":"planning","evidence":["no external model API invariant"]}}
+  ]
+}

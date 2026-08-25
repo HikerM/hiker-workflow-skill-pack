@@ -3,6 +3,9 @@ import csv,json,py_compile,re,subprocess,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(Path(__file__).resolve().parent))
+REPOSITORY_ROOT=ROOT.parents[1]
+sys.path.insert(0,str(REPOSITORY_ROOT/"scripts"))
+from audit_release_facts import audit as audit_release_facts
 from evaluate_router import evaluate as evaluate_router
 from audit_skill_coherence import audit as audit_skill_coherence
 from benchmark_router import benchmark as benchmark_router
@@ -23,6 +26,8 @@ def main()->int:
     unit_report=json.loads((ROOT/"test-results.json").read_text(encoding="utf-8")) if (ROOT/"test-results.json").is_file() else {"ok":False,"results":[]}
     if unit_run.returncode!=0 or not unit_report.get("ok"):
         errors.append("完整单元测试失败；发布验证不得复用旧 test-results.json")
+    release_facts=audit_release_facts(REPOSITORY_ROOT,require_archives=False,require_test_report=True)
+    errors.extend(f"发布事实: {item}" for item in release_facts.get("errors",[]))
     if len(plugins)!=5:errors.append(f"期望5个插件，实际{len(plugins)}")
     for p in plugins:
         manifest_path=p/".codex-plugin/plugin.json"
@@ -101,6 +106,6 @@ def main()->int:
     desktop_stability=audit_desktop_stability(ROOT)
     if not desktop_stability["ok"]:errors.extend(f"桌面稳定性: {item}" for item in desktop_stability["errors"])
     warnings.extend(f"桌面稳定性: {item}" for item in desktop_stability["warnings"])
-    report={"ok":not errors,"plugin_count":len(plugins),"skill_count":len(skill_names),"unit_tests":{"ok":bool(unit_report.get("ok")),"plugin_results":[{"plugin":item.get("plugin"),"ok":item.get("ok"),"seconds":item.get("seconds")} for item in unit_report.get("results",[])]},"router_eval":router_eval,"master_progression":master_progression,"router_performance":router_performance,"skill_coherence":coherence,"desktop_stability":desktop_stability,"errors":errors,"warnings":warnings}
+    report={"ok":not errors,"plugin_count":len(plugins),"skill_count":len(skill_names),"unit_tests":{"ok":bool(unit_report.get("ok")),"plugin_results":[{"plugin":item.get("plugin"),"ok":item.get("ok"),"seconds":item.get("seconds")} for item in unit_report.get("results",[])]},"release_facts":release_facts,"router_eval":router_eval,"master_progression":master_progression,"router_performance":router_performance,"skill_coherence":coherence,"desktop_stability":desktop_stability,"errors":errors,"warnings":warnings}
     print(json.dumps(report,ensure_ascii=False,indent=2));return 0 if not errors else 2
 if __name__=="__main__":raise SystemExit(main())

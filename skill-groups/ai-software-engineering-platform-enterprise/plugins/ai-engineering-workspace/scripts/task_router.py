@@ -1,11 +1,21 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 from pathlib import Path
 
 from workspacelib import atomic_json
+
+
+def request_metadata(text: str) -> dict[str, object]:
+    raw = str(text or "")
+    return {
+        "request_fingerprint": hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest(),
+        "request_chars": len(raw),
+        "request_persisted": False,
+    }
 
 
 ROLE_CONTRACTS = {
@@ -171,7 +181,7 @@ def route(text: str, tech_stack: dict | None = None, proposal: dict | None = Non
         return {
             "schema_version": "3.0.0",
             "status": "REJECTED",
-            "request": text,
+            **request_metadata(text),
             "routing_authority": "chatgpt-semantic-selection",
             "guard_role": "constraints-and-workflow-expansion-only",
             "diagnostics": diagnostics,
@@ -259,7 +269,7 @@ def route(text: str, tech_stack: dict | None = None, proposal: dict | None = Non
     return {
         "schema_version": "3.0.0",
         "status": "ACCEPTED",
-        "request": text,
+        **request_metadata(text),
         "routing_authority": "chatgpt-semantic-selection",
         "guard_role": "constraints-and-workflow-expansion-only",
         "architecture": architecture,

@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
+from process_identity import owner_status, process_identity
+
 SCHEMA_VERSION = "1.0.0"
 
 
@@ -83,16 +85,6 @@ def read_json(path: Path, default: Any = None) -> Any:
         return default
 
 
-def _pid_alive(pid: int) -> bool:
-    if pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-        return True
-    except OSError:
-        return False
-
-
 _LOCK_LOCAL = threading.local()
 _PROCESS_LOCKS_GUARD = threading.Lock()
 _PROCESS_LOCKS: dict[str, threading.RLock] = {}
@@ -126,13 +118,17 @@ def state_lock(project_root: Path, timeout: float = 15.0, stale_after: float = 1
         while True:
             try:
                 fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-                os.write(fd, json.dumps({"pid": os.getpid(), "created": time.time()}).encode("utf-8"))
+                os.write(fd, json.dumps({
+                    "pid": os.getpid(),
+                    "created": time.time(),
+                    "runtime_identity": process_identity(os.getpid()),
+                }).encode("utf-8"))
                 break
             except FileExistsError:
                 info = read_json(lock, {}) or {}
                 age = time.time() - float(info.get("created", lock.stat().st_mtime))
                 owner = int(info.get("pid", 0) or 0)
-                if age > stale_after and not _pid_alive(owner):
+                if age > stale_after and owner_status(info) in {"DEAD", "IDENTITY_CHANGED"}:
                     try:
                         lock.unlink()
                         continue

@@ -9,6 +9,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from audit_specialization_maturity import audit as audit_specialization_maturity
+
 
 ROOT = Path(__file__).resolve().parents[1]
 ALLOWED_MODES = {"router", "planning", "design", "implementation", "review", "workflow", "control-plane", "report"}
@@ -281,6 +283,13 @@ def audit(root: Path = ROOT) -> dict[str, Any]:
         elif similarity >= 0.55:
             warnings.append(_finding("TRIGGER_OVERLAP_REVIEW", str(left["path"].parent.name), f"与 {right['path'].parent.name} 的触发描述相似：{similarity:.3f}"))
 
+    specialization_maturity = audit_specialization_maturity(root)
+    for item in specialization_maturity["errors"]:
+        errors.append(_finding(
+            "SPECIALIZATION_MATURITY_" + item["code"], item.get("profile", "suite"),
+            item["message"], root / item["path"] if item.get("path") else None,
+        ))
+
     categories = {
         "structure": sum(item["code"] in {"PLUGIN_COUNT_DRIFT", "PLUGIN_VERSION_DRIFT", "SKILL_NAME_MISMATCH", "REGISTRY_DRIFT", "BROKEN_LOCAL_REFERENCE"} for item in errors),
         "routing": sum("ROUTER" in item["code"] or "EVAL" in item["code"] or "TRIGGER" in item["code"] for item in errors),
@@ -297,6 +306,7 @@ def audit(root: Path = ROOT) -> dict[str, Any]:
         "checks": categories,
         "errors": errors,
         "warnings": warnings,
+        "specialization_maturity": specialization_maturity,
     }
 
 

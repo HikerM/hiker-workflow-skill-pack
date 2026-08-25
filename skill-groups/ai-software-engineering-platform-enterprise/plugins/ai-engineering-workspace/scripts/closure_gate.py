@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from convergence_guard import assess as convergence_assess
+from governance_state import verify_quality_lineage
 from workspacelib import atomic_json, common_dir, read_json, repo_root, run, safe_id, state_lock, worktree_fingerprint
 
 
@@ -26,6 +27,7 @@ def artifact_ok(root: Path, value: str) -> bool:
 
 def evaluate(root: Path, task: dict, phase: str) -> dict:
     failures = []; warnings = []
+    binding: dict = {}
     git_branch = run(["git", "branch", "--show-current"], root, check=False).stdout.strip() or "DETACHED"
     dirty_all = run(["git", "status", "--porcelain"], root, check=False).stdout.splitlines()
     dirty = []
@@ -38,6 +40,22 @@ def evaluate(root: Path, task: dict, phase: str) -> dict:
         if not task.get("commits"): failures.append("no implementation commit recorded")
         if task.get("review", {}).get("status") != "PASS": failures.append("Review Agent evidence is not PASS")
         if task.get("tests", {}).get("status") != "PASS" or not task.get("tests", {}).get("records"): failures.append("Test Agent evidence is not PASS")
+        review_lineage = verify_quality_lineage(root, task, "review", require_live_candidate=True)
+        test_lineage = verify_quality_lineage(root, task, "test", require_live_candidate=True)
+        if not review_lineage["ok"]: failures.append("Review evidence is not bound to the current immutable candidate")
+        if not test_lineage["ok"]: failures.append("Test evidence is not bound to the current immutable candidate")
+        if review_lineage["ok"] and test_lineage["ok"]:
+            if review_lineage["binding"].get("candidate_fingerprint") != test_lineage["binding"].get("candidate_fingerprint"):
+                failures.append("Review and Test evidence belong to different candidates")
+            else:
+                binding = {
+                    "candidate_id": test_lineage["binding"].get("candidate_id"),
+                    "candidate_fingerprint": test_lineage["binding"].get("candidate_fingerprint"),
+                    "candidate_commit": test_lineage["binding"].get("candidate_commit"),
+                    "goal_fingerprint": test_lineage["binding"].get("goal_fingerprint"),
+                    "review_evidence_digest": review_lineage["binding"].get("evidence_digest"),
+                    "test_evidence_digest": test_lineage["binding"].get("evidence_digest"),
+                }
         artifacts = [x for x in task.get("artifacts", []) if artifact_ok(root, str(x.get("value", "")))]
         if not artifacts: failures.append("no verifiable screenshot or log artifact")
         docs = task.get("documents", [])
@@ -66,7 +84,11 @@ def evaluate(root: Path, task: dict, phase: str) -> dict:
         convergence_report = convergence_assess(convergence, phase)
         failures.extend(f"convergence: {value}" for value in convergence_report["blockers"])
         warnings.extend(f"convergence: {value}" for value in convergence_report["warnings"])
-    return {"ok": not failures, "phase": phase, "task_id": task.get("task_id"), "failures": failures, "warnings": warnings, "checked_at": now(), "git_branch": git_branch}
+    return {
+        "ok": not failures, "phase": phase, "task_id": task.get("task_id"),
+        "failures": failures, "warnings": warnings, "checked_at": now(),
+        "git_branch": git_branch, "binding": binding,
+    }
 
 
 def main() -> int:
@@ -75,7 +97,10 @@ def main() -> int:
         with state_lock(root):
             path = task_path(root, args.task_id); task = read_json(path, {}) or {}
             if not task: raise RuntimeError("unknown task")
-            result = evaluate(root, task, args.phase); task.setdefault("closure", {})[args.phase] = "PASS" if result["ok"] else "FAIL"; task.setdefault("history", []).append({"at": now(), "event": f"CLOSURE:{args.phase}:{task['closure'][args.phase]}"}); task["updated_at"] = now(); atomic_json(path, task)
+            result = evaluate(root, task, args.phase); task.setdefault("closure", {})[args.phase] = "PASS" if result["ok"] else "FAIL"
+            if result["ok"]:
+                task.setdefault("closure_bindings", {})[args.phase] = result.get("binding") or {}
+            task.setdefault("history", []).append({"at": now(), "event": f"CLOSURE:{args.phase}:{task['closure'][args.phase]}"}); task["updated_at"] = now(); atomic_json(path, task)
             output = Path(args.output).resolve() if args.output else root / ".ai" / "evidence" / f"{safe_id(args.task_id)}-{args.phase}-closure.json"; atomic_json(output, result)
         print(json.dumps({"ok": result["ok"], "output": str(output), "result": result}, ensure_ascii=False, indent=2)); return 0 if result["ok"] else 2
     except (RuntimeError, ValueError, subprocess.CalledProcessError, TimeoutError) as exc:

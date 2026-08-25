@@ -5,14 +5,17 @@ import hashlib
 import json
 import re
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from workspacelib import atomic_json, load_state, locked_state, read_json, repo_root, run, safe_id, state_lock, worktree_fingerprint
-from bounded_context import bounded_bullets, crop, ensure_policy, limit_text, retain_checkpoints
+from bounded_context import crop, ensure_policy, retain_checkpoints
 from convergence_guard import assess as convergence_assess
 from goal_contract import ensure_contract as ensure_goal_contract, task_binding, verify_binding
+from governance_documents import ensure_supporting_docs, render_context, render_project_state
+from governance_quality import quality_lineage, verify_quality_lineage
 
 SCHEMA = "2.0.0"
 TASK_STATES = ["Created", "Planning", "Development", "Review", "Testing", "MergedPendingCleanup", "Merged", "Released"]
@@ -49,8 +52,6 @@ RECORD_ROLES = {
     "pending": {"Master Agent", "Planning Agent", "Developer Agent", "Review Agent", "Test Agent", "Document Agent"},
 }
 RECORD_STATES = {"commit": {"Development"}, "review": {"Review"}, "test": {"Testing"}, "release": {"Merged"}}
-MANAGED_START = "<!-- AI-GOVERNANCE:START -->"
-MANAGED_END = "<!-- AI-GOVERNANCE:END -->"
 
 
 def now() -> str:
@@ -171,141 +172,13 @@ def compact_task_history(root: Path, task: dict[str, Any]) -> None:
     }
 
 
-def managed_write(path: Path, title: str, body: str) -> None:
-    block = f"{MANAGED_START}\n{body.rstrip()}\n{MANAGED_END}"
-    if path.exists():
-        text = path.read_text(encoding="utf-8")
-        pattern = re.compile(re.escape(MANAGED_START) + r".*?" + re.escape(MANAGED_END), re.S)
-        updated = pattern.sub(block, text) if pattern.search(text) else text.rstrip() + "\n\n" + block + "\n"
-    else:
-        updated = f"# {title}\n\n{block}\n"
-    path.write_text(updated, encoding="utf-8", newline="\n")
-
-
-def bullets(values: list[str], limit: int = 20, source: str = ".ai/tasks/") -> list[str]:
-    return bounded_bullets(values, limit, source)
-
-
-def render_project_state(root: Path, project: dict[str, Any]) -> None:
-    index = read_json(task_index_file(root), {}) or {}
-    tasks = index.get("tasks", []) if isinstance(index.get("tasks"), list) else []
-    completed = [f"{t.get('task_id')}：{t.get('goal')}（{t.get('state')}）" for t in tasks if t.get("state") in {"Merged", "Released"}]
-    developing = [f"{t.get('task_id')}：{t.get('goal')}（{t.get('state')} / {t.get('control_status')}）" for t in tasks if t.get("state") not in {"Merged", "Released"}]
-    pending = list(project.get("pending_issues", []))
-    risks = list(project.get("risks", []))
-    git = git_snapshot(root)
-    lines = [
-        "## 当前版本", f"- {project.get('version') or '未设置'}", "",
-        "## 当前分支", f"- {git['branch']}", "",
-        "## 已完成功能", *bullets(completed, 20, ".ai/tasks/"), "",
-        "## 开发中功能", *bullets(developing, 20, ".ai/tasks/"), "",
-        "## 待处理问题", *bullets(pending, 20, ".ai/governance/project-state.json"), "",
-        "## 数据库版本", f"- {project.get('database_version') or '未设置'}", "",
-        "## API版本", f"- {project.get('api_version') or '未设置'}", "",
-        "## 风险列表", *bullets(risks, 20, ".ai/governance/project-state.json"), "",
-        "## 项目标识", f"- Project ID：{project.get('project_id')}", f"- Architecture：{project.get('architecture')}",
-        f"- Git HEAD：{git['head'] or '无'}", f"- 已收敛历史任务索引：{index.get('compacted_closed_count', 0)}（完整事实仍在 `.ai/tasks/`）", f"- 更新时间：{now()}",
-    ]
-    managed_write(root / "PROJECT_STATE.md", "项目状态", "\n".join(lines))
-
-
-def _task_context_body(root: Path, task: dict[str, Any]) -> str:
-    policy = ensure_policy(root); section_limit = policy["max_items_per_section"]
-    source = f".ai/tasks/{safe_id(str(task.get('task_id')))}.json"
-    binding = task.get("goal_binding") or {}
-    lines = [
-        "## 当前目标", f"- {crop(task.get('goal') or '未设置')}",
-        f"- 目标绑定：{binding.get('goal_id') or '未设置'} r{binding.get('revision') or 0} / {str(binding.get('fingerprint') or '')[:12]}", "",
-        "## 当前任务", f"- Task ID：{task.get('task_id')}", f"- 状态：{task.get('state')} / {task.get('control_status')}",
-        f"- 负责人：{task.get('owner_agent')}", f"- 所有权通道：{task.get('ownership_lane') or 'default'}", f"- 分支：{task.get('branch')}", "",
-        "## 已完成修改", *bullets(task.get("completed_changes", []), section_limit, source), "",
-        "## 未完成事项", *bullets(task.get("pending_items", []), section_limit, source), "",
-        "## 关键决定", *bullets(task.get("decisions", []), section_limit, source), "",
-        "## 禁止事项", *bullets(task.get("prohibitions", []), section_limit, source), "",
-        "## 影响文件", *bullets(task.get("affected_files", []), section_limit, source), "",
-        "## 上下文策略", "- 本文件只服务绑定Task与所有权通道，不代表其他并行任务。",
-        "- 完整任务事实保存在机器状态、Git和正式证据中。", "", f"- 更新时间：{now()}",
-    ]
-    return limit_text("\n".join(lines), policy["active_context_max_chars"], source)
-
-
-def render_master_context(root: Path) -> None:
-    policy = ensure_policy(root); limit = policy["max_items_per_section"]
-    summaries = indexed_task_summaries(root)[:limit]
-    goal = ensure_goal_contract(root)
-    goal_text = goal.get("outcome") if goal.get("status") == "ACTIVE" else "项目级目标尚未锁定；各Task按自己的稳定目标指纹执行。"
-    active = [f"{item.get('task_id')}｜{item.get('ownership_lane') or 'default'}｜{item.get('state')}｜{item.get('goal')}" for item in summaries]
-    lines = [
-        "## 当前目标", f"- {crop(goal_text)}", f"- 目标契约：{goal.get('goal_id') or 'UNSET'} r{goal.get('revision') or 0} / {str(goal.get('fingerprint') or '')[:12]}", "",
-        "## 当前任务", *bullets(active, limit, ".ai/governance/task-index.json"), "",
-        "## 已完成修改", "- 由各Task上下文与证据索引提供；总控不注入完整实现日志。", "",
-        "## 未完成事项", *bullets([f"{item.get('task_id')}：{item.get('state')}" for item in summaries], limit, ".ai/governance/task-index.json"), "",
-        "## 关键决定", "- 读取锁定决定与当前目标契约，不复制完整历史。", "",
-        "## 禁止事项", "- 不跨Task或所有权通道写文件；不以治理进展冒充业务进展；不把完整工具日志注入总控。", "",
-        "## 上下文策略", "- 本文件是总控摘要。执行角色必须读取 `.ai/runtime/task-contexts/<Task-ID>.md`。",
-        "- 新会话按项目身份 → 目标契约 → 绑定Task → Git → 证据 → checkpoint恢复。", "", f"- 更新时间：{now()}",
-    ]
-    managed_write(root / "CURRENT_CONTEXT.md", "当前上下文", limit_text("\n".join(lines), policy["active_context_max_chars"], ".ai/"))
-
-
-def render_context(root: Path, task: dict[str, Any] | None) -> None:
-    if task:
-        path = root / ".ai" / "runtime" / "task-contexts" / f"{safe_id(str(task.get('task_id')))}.md"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("# 任务上下文\n\n" + _task_context_body(root, task) + "\n", encoding="utf-8", newline="\n")
-    render_master_context(root)
-
-
-def ensure_supporting_docs(root: Path, architecture: str) -> None:
-    changelog = root / "CHANGELOG.md"
-    if not changelog.exists():
-        changelog.write_text("# Changelog\n\n## Unreleased\n\n- 初始化工程变更记录。\n", encoding="utf-8", newline="\n")
-    architecture_file = root / "ARCHITECTURE.md"
-    if not architecture_file.exists():
-        frontend = "B/S Web 前端" if architecture == "bs" else "C/S 客户端" if architecture == "cs" else "B/S Web 前端与 C/S 客户端"
-        architecture_file.write_text(
-            "# Architecture\n\n"
-            "## 系统边界\n\n- 待 Planning Agent 完成边界确认。\n\n"
-            f"## 前端/客户端\n\n- {frontend}\n\n"
-            "## 后端服务\n\n- API、领域服务、鉴权、任务与集成边界。\n\n"
-            "## 数据与契约\n\n- 数据库版本、迁移、API/事件契约和兼容策略。\n\n"
-            "## 部署与发布\n\n- 环境、构建、迁移、回滚和观测。\n",
-            encoding="utf-8", newline="\n")
-    architecture_dir = root / ".ai" / "architecture"
-    architecture_dir.mkdir(parents=True, exist_ok=True)
-    defaults = {
-        "module-registry.json": {
-            "schema_version": "1.0.0", "mode": "auto-discovery",
-            "modules": [],
-            "note": "零配置时按目录和依赖自动识别；仅为受保护或边界敏感模块补充显式条目。",
-        },
-        "dependency-rules.json": {
-            "schema_version": "1.0.0", "mode": "advisory-until-configured",
-            "rules": [],
-            "note": "空规则不阻塞普通开发；发现跨层、循环或受保护边界风险时再渐进配置。",
-        },
-        "public-surface.json": {
-            "schema_version": "1.0.0", "surfaces": [],
-            "note": "只登记跨模块公共接口、协议、迁移和共享资产，避免全量登记造成配置耦合。",
-        },
-        "runtime-topology.json": {
-            "schema_version": "1.0.0", "nodes": [], "edges": [],
-            "note": "仅在运行时调用关系无法由源码和清单推断时补充。",
-        },
-    }
-    for filename, payload in defaults.items():
-        path = architecture_dir / filename
-        if not path.exists():
-            atomic_json(path, payload)
-
-
 @locked_state
 def init_project(root: Path, args: argparse.Namespace) -> dict[str, Any]:
     root = repo_root(root)
     existing = read_json(state_file(root), {}) or {}
     parallel_budget = {"max_active_write_tasks": 2, "max_total_active_tasks": 5, "max_merge_debt": 2}
     parallel_budget.update(existing.get("parallel_budget", {}))
-    session_budget = {"max_resident_slots": 6, "max_pending_creates": 1, "max_writer_slots": 2}
+    session_budget = {"max_resident_slots": 6, "max_pending_creates": 1, "max_writer_slots": 2, "max_active_turns": 2}
     session_budget.update(existing.get("session_budget", {}))
     project = {
         "schema_version": SCHEMA,
@@ -467,11 +340,20 @@ def transition(root: Path, args: argparse.Namespace) -> dict[str, Any]:
             report = convergence_assess(convergence, "review")
             if not report["ok"]:
                 raise RuntimeError("convergence guard blocks Review: " + "; ".join(report["blockers"]))
-    if target == "Testing" and task.get("review", {}).get("status") != "PASS":
-        raise RuntimeError("Review -> Testing requires Review Agent PASS evidence")
+    if target == "Testing":
+        review_lineage = verify_quality_lineage(root, task, "review", require_live_candidate=True)
+        if not review_lineage["ok"]:
+            raise RuntimeError("Review -> Testing requires current Review Agent PASS evidence bound to the immutable candidate")
     if target == "MergedPendingCleanup":
         if task.get("tests", {}).get("status") != "PASS" or task.get("closure", {}).get("merge") != "PASS":
             raise RuntimeError("Testing -> MergedPendingCleanup requires tests PASS and merge closure PASS")
+        review_lineage = verify_quality_lineage(root, task, "review", require_live_candidate=False)
+        test_lineage = verify_quality_lineage(root, task, "test", require_live_candidate=False)
+        closure_binding = (task.get("closure_bindings") or {}).get("merge") or {}
+        if not review_lineage["ok"] or not test_lineage["ok"]:
+            raise RuntimeError("Testing -> MergedPendingCleanup requires review and test evidence bound to one immutable candidate")
+        if closure_binding.get("candidate_fingerprint") != test_lineage["binding"].get("candidate_fingerprint"):
+            raise RuntimeError("merge closure is not bound to the tested immutable candidate")
         if not args.commit_id:
             raise RuntimeError("MergedPendingCleanup transition requires merge commit id")
         convergence = task.get("convergence") or {}
@@ -496,9 +378,12 @@ def transition(root: Path, args: argparse.Namespace) -> dict[str, Any]:
             if not report["ok"]:
                 raise RuntimeError("convergence guard blocks release: " + "; ".join(report["blockers"]))
     task["state"] = target
-    task["history"].append({"at": now(), "event": f"STATE:{current}->{target}", "agent_role": args.agent_role, "commit_id": args.commit_id})
+    task["history"].append({
+        "at": now(), "event": f"STATE:{current}->{target}", "agent_role": args.agent_role,
+        "commit_id": args.commit_id, "operation_id": getattr(args, "operation_id", None),
+    })
     save_task(root, task)
-    project = load_project(root); project["updated_at"] = now(); atomic_json(state_file(root), project)
+    project = load_project(root)
     render_project_state(root, project); render_context(root, task)
     return task
 
@@ -526,6 +411,17 @@ def record(root: Path, args: argparse.Namespace) -> dict[str, Any]:
                 raise RuntimeError("release PASS requires the current release-readiness report")
             if report.get("task_id") != task.get("task_id") or report.get("source_commit") != task.get("merge_commit"):
                 raise RuntimeError("release-readiness report is stale or belongs to another task/merge commit")
+        if args.kind in {"review", "test"}:
+            binding = quality_lineage(root, task)
+            digest_basis = {
+                "kind": args.kind, "value": args.value, "status": args.status,
+                "command": args.command, "reason": args.reason, "binding": binding,
+            }
+            binding["evidence_digest"] = hashlib.sha256(
+                json.dumps(digest_basis, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            ).hexdigest()
+            item["binding"] = binding
+            task[key]["binding"] = binding
         task[key]["status"] = args.status or "RECORDED"; task[key]["records"].append(item)
     elif args.kind == "artifact": task["artifacts"].append(item)
     elif args.kind == "document": task["documents"].append(item)
@@ -626,72 +522,26 @@ def bind_review_candidate(root: Path, args: argparse.Namespace) -> dict[str, Any
 
 @locked_state
 def rebind_task_goal(root: Path, args: argparse.Namespace) -> dict[str, Any]:
-    if args.agent_role not in {"Master Agent", "Planning Agent"}:
-        raise RuntimeError("only Master Agent or Planning Agent may rebind a task goal")
-    task = load_task(root, args.task_id)
-    impact_summary = str(getattr(args, "impact_summary", "") or "").strip()
-    if not impact_summary:
-        raise RuntimeError("goal rebind requires an impact summary")
-    previous_binding = dict(task.get("goal_binding") or {})
-    new_binding = task_binding(root, str(task["task_id"]), str(task.get("goal") or ""))
-    if previous_binding == new_binding:
-        raise RuntimeError("task is already bound to the current goal revision")
-    invalidated = {
-        "at": now(),
-        "goal_binding": previous_binding,
-        "review_candidate": task.get("review_candidate"),
-        "review": task.get("review"),
-        "tests": task.get("tests"),
-        "closure": task.get("closure"),
-        "release": task.get("release"),
-    }
-    task.setdefault("invalidated_goal_evidence", []).append(invalidated)
-    task["invalidated_goal_evidence"] = task["invalidated_goal_evidence"][-5:]
-    task.pop("review_candidate", None)
-    task["review"] = {"status": "PENDING", "records": []}
-    task["tests"] = {"status": "PENDING", "records": []}
-    task["closure"] = {"merge": "PENDING", "release": "PENDING"}
-    task["release"] = {"status": "PENDING", "records": []}
-    convergence = task.get("convergence") or {}
-    if convergence.get("required"):
-        convergence["acceptance_revision"] = int(convergence.get("acceptance_revision", 1)) + 1
-        convergence["status"] = "WARNING"
-        for criterion in convergence.get("criteria", []):
-            criterion["status"] = "PENDING"
-        for item in (convergence.get("verification_budget") or {}).get("records", []):
-            item["status"] = "INVALID"
-            item["invalidated_reason"] = "goal revision changed"
-        convergence.setdefault("events", []).append({
-            "at": now(), "kind": "goal-baseline-invalidated",
-            "summary": "目标修订变化，旧候选、审核、测试和发布证据已失效",
-            "acceptance_revision": convergence["acceptance_revision"],
-        })
-        convergence["events"] = convergence["events"][-40:]
-        task["convergence"] = convergence
-    task["goal_binding"] = new_binding
-    task["goal_adjustment"] = {
-        "status": "REPLAN_REQUIRED",
-        "change_contract_required": True,
-        "previous_binding": previous_binding,
-        "current_binding": new_binding,
-        "impact_summary": impact_summary,
-        "retain": list(dict.fromkeys(getattr(args, "retain_change", []) or [])),
-        "revise": list(dict.fromkeys(getattr(args, "revise_change", []) or [])),
-        "retire": list(dict.fromkeys(getattr(args, "retire_change", []) or [])),
-        "recorded_at": now(),
-    }
-    task["control_status"] = "ADJUSTING"
-    task["history"].append({"at": now(), "event": "GOAL_REBOUND_REPLAN_REQUIRED", "agent_role": args.agent_role, "goal_revision": new_binding.get("revision")})
-    save_task(root, task)
-    render_context(root, task)
-    return task
+    raise RuntimeError(
+        "direct task goal rebind is disabled; use hikerctl goal-change so all task classifications share one transaction"
+    )
 
 
-def checkpoint(root: Path, task: dict[str, Any], label: str) -> Path:
+def checkpoint(root: Path, task: dict[str, Any], label: str, operation_id: str | None = None) -> Path:
     git = git_snapshot(root)
-    data = {"schema_version": SCHEMA, "created_at": now(), "label": label, "event": "WorkspaceCheckpoint", "task": task, "git": git}
-    stamp = now().replace(":", "-")
-    path = root / ".ai" / "runtime" / "checkpoints" / f"{stamp}-{safe_id(task['task_id'])}-{safe_id(label)}.json"
+    data = {
+        "schema_version": SCHEMA, "created_at": now(), "label": label,
+        "event": "WorkspaceCheckpoint", "task": task, "git": git,
+        "operation_id": safe_id(operation_id) if operation_id else None,
+    }
+    if operation_id:
+        path = root / ".ai" / "runtime" / "checkpoints" / f"control-{safe_id(operation_id)}-{safe_id(task['task_id'])}-{safe_id(label)}.json"
+        existing = read_json(path, {}) or {}
+        if existing.get("operation_id") == safe_id(operation_id):
+            return path
+    else:
+        stamp = now().replace(":", "-")
+        path = root / ".ai" / "runtime" / "checkpoints" / f"{stamp}-{safe_id(task['task_id'])}-{safe_id(label)}.json"
     atomic_json(path, data); render_context(root, task); retain_checkpoints(root, now())
     return path
 
@@ -710,8 +560,11 @@ def control(root: Path, args: argparse.Namespace) -> dict[str, Any]:
         if not args.new_task_id or not args.branch or not args.instruction:
             raise RuntimeError("insert requires --new-task-id, --branch and --instruction")
         task["pending_items"].append(f"插入需求 {args.new_task_id}：{args.instruction}")
-    task["history"].append({"at": now(), "event": f"CONTROL:{args.action}", "instruction": args.instruction, "agent_role": "Master Agent"})
-    save_task(root, task); path = checkpoint(root, task, args.action)
+    task["history"].append({
+        "at": now(), "event": f"CONTROL:{args.action}", "instruction": args.instruction,
+        "agent_role": "Master Agent", "operation_id": getattr(args, "operation_id", None),
+    })
+    save_task(root, task); path = checkpoint(root, task, args.action, operation_id=getattr(args, "operation_id", None))
     if args.action == "insert":
         inserted = create_task(root, argparse.Namespace(task_id=args.new_task_id, goal=args.instruction, owner_agent="Planning Agent", branch=args.branch, base_branch=args.base_branch, affected_files=[], dependencies=[task["task_id"]]))
         inserted["history"].append({"at": now(), "event": "INSERTED", "agent_role": "Master Agent", "parent_task": task["task_id"]}); save_task(root, inserted); render_context(root, inserted)
@@ -747,27 +600,41 @@ def main() -> int:
     ap = argparse.ArgumentParser(); ap.add_argument("--root", default="."); sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("init"); p.add_argument("--project-id", required=True); p.add_argument("--architecture", choices=["bs", "cs", "hybrid", "backend"], required=True); p.add_argument("--version", default="0.1.0"); p.add_argument("--database-version", default="unversioned"); p.add_argument("--api-version", default="v1")
     p = sub.add_parser("task-create"); p.add_argument("--task-id", required=True); p.add_argument("--goal", required=True); p.add_argument("--owner-agent", default="Master Agent"); p.add_argument("--ownership-lane", default="default"); p.add_argument("--branch", required=True); p.add_argument("--base-branch", default="develop"); p.add_argument("--affected-files", nargs="*")
-    p = sub.add_parser("transition"); p.add_argument("--task-id", required=True); p.add_argument("--to", choices=TASK_STATES, required=True); p.add_argument("--agent-role", required=True); p.add_argument("--commit-id")
+    p = sub.add_parser("transition", help="deprecated compatibility entry; delegates to hikerctl"); p.add_argument("--task-id", required=True); p.add_argument("--to", choices=TASK_STATES, required=True); p.add_argument("--agent-role", required=True); p.add_argument("--commit-id"); p.add_argument("--operation-id", required=True)
     p = sub.add_parser("record"); p.add_argument("--task-id", required=True); p.add_argument("--kind", choices=["commit", "review", "test", "artifact", "document", "decision", "prohibition", "risk", "completed", "pending", "release"], required=True); p.add_argument("--value", required=True); p.add_argument("--status"); p.add_argument("--command"); p.add_argument("--reason"); p.add_argument("--agent-role", required=True)
     p = sub.add_parser("contract-set"); p.add_argument("--task-id", required=True); p.add_argument("--agent-role", required=True); p.add_argument("--allowed-files", nargs="*"); p.add_argument("--allowed-modules", nargs="*"); p.add_argument("--protected-modules", nargs="*"); p.add_argument("--public-contract-changes", nargs="*"); p.add_argument("--behavior-invariants", nargs="*"); p.add_argument("--characterization-tests", nargs="*"); p.add_argument("--consumer-tests", nargs="*"); p.add_argument("--required-tests", nargs="*"); p.add_argument("--structural-decisions", nargs="*"); p.add_argument("--consumers", nargs="*"); p.add_argument("--max-blast-radius", type=int); p.add_argument("--warn-lines", type=int); p.add_argument("--block-lines", type=int); p.add_argument("--warn-growth", type=int); p.add_argument("--block-growth", type=int); p.add_argument("--preempt-lines", type=int); p.add_argument("--responsibility-growth", type=int)
     p = sub.add_parser("candidate-freeze"); p.add_argument("--task-id", required=True); p.add_argument("--candidate-id", required=True); p.add_argument("--review-source", default="independent-review"); p.add_argument("--agent-role", required=True)
-    p = sub.add_parser("goal-rebind"); p.add_argument("--task-id", required=True); p.add_argument("--agent-role", required=True); p.add_argument("--impact-summary", required=True); p.add_argument("--retain-change", action="append", default=[]); p.add_argument("--revise-change", action="append", default=[]); p.add_argument("--retire-change", action="append", default=[])
-    p = sub.add_parser("checkpoint"); p.add_argument("--task-id", required=True); p.add_argument("--label", required=True)
-    p = sub.add_parser("control"); p.add_argument("--task-id", required=True); p.add_argument("--action", choices=["pause", "resume", "adjust", "insert"], required=True); p.add_argument("--instruction", default=""); p.add_argument("--new-task-id"); p.add_argument("--branch"); p.add_argument("--base-branch", default="develop")
+    p = sub.add_parser("goal-rebind", help="deprecated compatibility entry; delegates to hikerctl"); p.add_argument("--task-id", required=True); p.add_argument("--agent-role", required=True); p.add_argument("--impact", choices=["affected", "unaffected"], default="affected"); p.add_argument("--impact-summary", required=True); p.add_argument("--retain-change", action="append", default=[]); p.add_argument("--revise-change", action="append", default=[]); p.add_argument("--retire-change", action="append", default=[]); p.add_argument("--operation-id", required=True)
+    p = sub.add_parser("checkpoint", help="deprecated compatibility entry; delegates to hikerctl"); p.add_argument("--task-id", required=True); p.add_argument("--label", required=True); p.add_argument("--operation-id", required=True)
+    p = sub.add_parser("control", help="deprecated compatibility entry; delegates to hikerctl"); p.add_argument("--task-id", required=True); p.add_argument("--action", choices=["pause", "resume", "adjust", "insert"], required=True); p.add_argument("--instruction", default=""); p.add_argument("--new-task-id"); p.add_argument("--branch"); p.add_argument("--base-branch", default="develop"); p.add_argument("--operation-id", required=True)
     p = sub.add_parser("status"); p.add_argument("--task-id")
     p = sub.add_parser("validate"); p.add_argument("--full", action="store_true")
     args = ap.parse_args(); root = repo_root(Path(args.root).resolve())
     try:
+        if args.cmd in {"transition", "goal-rebind", "checkpoint", "control"}:
+            core_scripts = Path(__file__).resolve().parents[2] / "ai-engineering-core" / "scripts"
+            if str(core_scripts) not in sys.path:
+                sys.path.insert(0, str(core_scripts))
+            import control_workflow
+
+            if args.cmd == "transition":
+                args.control_action = None; args.instruction = ""; args.new_task_id = None; args.branch = None; args.base_branch = "develop"
+                data = control_workflow.transition(root, args)
+            elif args.cmd == "goal-rebind":
+                data = control_workflow.rebind_goal(root, args)
+            elif args.cmd == "checkpoint":
+                data = control_workflow.checkpoint(root, args.task_id, args.label, args.operation_id)
+            else:
+                args.control_action = args.action; args.to = None; args.agent_role = "Master Agent"; args.commit_id = None
+                data = control_workflow.transition(root, args)
+            print(json.dumps({"ok": True, "result": data}, ensure_ascii=False, indent=2))
+            return 0
         with state_lock(root):
             if args.cmd == "init": data = init_project(root, args)
             elif args.cmd == "task-create": data = create_task(root, args)
-            elif args.cmd == "transition": data = transition(root, args)
             elif args.cmd == "record": data = record(root, args)
             elif args.cmd == "contract-set": data = set_change_contract(root, args)
             elif args.cmd == "candidate-freeze": data = bind_review_candidate(root, args)
-            elif args.cmd == "goal-rebind": data = rebind_task_goal(root, args)
-            elif args.cmd == "checkpoint": data = {"path": str(checkpoint(root, load_task(root, args.task_id), args.label))}
-            elif args.cmd == "control": data = control(root, args)
             elif args.cmd == "status": data = {"project": load_project(root), "task": load_task(root, args.task_id) if args.task_id else None, "task_summaries": indexed_task_summaries(root, include_closed=True), "git": git_snapshot(root)}
             else: data = validate(root, args.full)
         print(json.dumps({"ok": data.get("ok", True) if isinstance(data, dict) else True, "result": data}, ensure_ascii=False, indent=2))

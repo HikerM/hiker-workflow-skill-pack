@@ -11,7 +11,7 @@ from typing import Any
 
 from source_identity import context_fresh, identify
 from context_budget import build_context_plan
-from state_consistency import assess as assess_state_consistency
+from state_consistency import assess as assess_state_consistency, current_snapshot
 from suite_version import inspect_suite, skill_path
 
 
@@ -131,9 +131,14 @@ AI_STATE_DEPENDENT_SKILLS = {
 VERSION_RECOVERY_SKILLS = {"context-recovery", "bounded-context-memory", "interruptible-task-control"}
 
 
-def bounded_marker_paths(root: Path, max_depth: int = 3, max_dirs: int = 160) -> list[Path]:
+def bounded_marker_paths(
+    root: Path,
+    max_depth: int = 3,
+    max_dirs: int = 160,
+    identity: dict[str, Any] | None = None,
+) -> list[Path]:
     """Read only shallow manifests; never scan project source during routing."""
-    identity = identify(root)
+    identity = identity or identify(root)
     if identity["is_git"]:
         return [Path(path) for path in identity["trusted_markers"]]
     root = root.resolve()
@@ -169,7 +174,7 @@ def project_signals(root: Path) -> dict[str, Any]:
     sources: list[str] = []
     evidence_parts: list[str] = []
     context_evidence = ""
-    consistency = assess_state_consistency(root)
+    consistency = assess_state_consistency(root, current_snapshot(root, identity))
     state_trusted = bool(consistency.get("execution_policy", {}).get("trusted_ai_state"))
     context_ready = state_trusted and (
         context_fresh(context, identity.get("branch") or "", identity.get("head") or "")
@@ -182,7 +187,7 @@ def project_signals(root: Path) -> dict[str, Any]:
             sources.append(str(context))
         except (OSError, json.JSONDecodeError):
             pass
-    markers = bounded_marker_paths(root)
+    markers = bounded_marker_paths(root, identity=identity)
     package_dependencies: set[str] = set()
     backend = False
     client = False
@@ -287,6 +292,7 @@ def inspect_project(root: Path) -> dict[str, Any]:
             "branch": identity.get("branch"),
             "head": identity.get("head"),
             "trusted_manifest_count": len(identity.get("trusted_markers", [])),
+            "tracked_file_count": identity.get("tracked_file_count"),
             "nested_worktree_count": len(identity.get("nested_worktrees", [])),
         },
         "proposal_contract": {
@@ -555,7 +561,7 @@ def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str,
         },
         "next_gate": "完成当前阶段并由 ChatGPT 重新语义选择" if deferred else None,
         "confidence": confidence,
-        "context_budget": build_context_plan(root, stage, signals=context_signals),
+        "context_budget": build_context_plan(root, stage, signals=context_signals, tracked_files=identity.get("tracked_file_count")),
         "project_evidence": signals["sources"],
         "source_identity": project_facts,
         "state_consistency": consistency,

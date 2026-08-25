@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## 5.17.0
+
+- Control Kernel成为Task业务状态的唯一写协调入口；operation journal提供明确提交边界、幂等重试、Trace补偿和RECOVERY_REQUIRED失败关闭语义。
+- Trace锁统一复用PID、进程启动时间与可执行文件指纹；锁年龄只触发复核，不再把存活owner误判为stale。
+- Task与Desktop Turn生命周期覆盖准入、租约、运行、Checkpoint、验证、归档、释放及INTERRUPTED_UNKNOWN恢复，禁止异常后的自动重复派发。
+- Event按STATE、CONTROL、TRACE、STREAM分类，增加确定性Budget、冷热Rotation、校验归档、有界Turn Summary和Desktop Pressure状态。
+- Goal Change以结构化影响分类和原子修订事务保留未受影响成果，按消费者关系失效真实受影响证据，并支持中断续办。
+- Self Governance发布门禁覆盖Architecture、Privacy、Version Facts、237项测试、Performance、Package Facts和Release Gate，任一失败即阻止发行物生成。
+- 39例宿主语义路由基准覆盖否定、迁移、历史/示例引用、模糊、多领域与阶段变化，保持ChatGPT语义选择、脚本确定性准入，不增加外部模型调用。
+- Laravel、NodeTS、Unity和Qt建立统一专项成熟度证据模板与按需检测；FAST、PROJECT、GOVERNED三档路径保持默认Token不回涨。
+
 ## 5.16.0
 
 - 全局自动应用规则重构为约3KB性能内核；简单问答进入零脚本快速路径，普通项目按证据一次准入或最多一次检查后准入，完整治理只服务高风险任务。

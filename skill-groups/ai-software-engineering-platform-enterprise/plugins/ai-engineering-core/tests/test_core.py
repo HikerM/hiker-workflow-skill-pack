@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ast
+import importlib.util
 import json
 from concurrent.futures import ThreadPoolExecutor
 import os
@@ -8,13 +10,13 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 PLUGIN = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PLUGIN / "scripts"))
 
 from bootstrap_project import initialize
 from detect_project import detect
-from runtime_control import classify
 from statectl import checkpoint, record_routing, update_active
 from corelib import atomic_write_json
 from context_budget import build_context_plan
@@ -25,6 +27,11 @@ from suite_router import inspect_project, route
 from session_epoch import assess as assess_epoch, record as record_epoch, rotate as rotate_epoch
 from bounded_run import run_bounded
 from suite_version import inspect_suite
+from context_memory import ensure_memory_policy
+from control_trace import record_event, status as trace_status
+import control_trace
+from control_kernel import execute_operation
+from hikerctl import admit, capability_indexes, load_capability_registry
 
 
 def model_proposal(*skills: str, stage: str = "development", architecture: str = "unknown", mode: str = "existing", **extra):
@@ -61,10 +68,14 @@ class CoreTests(unittest.TestCase):
             self.assertIn("substantive_turns", report["reasons"])
             with self.assertRaises(RuntimeError):
                 rotate_epoch(root, "")
-            rotated = rotate_epoch(root, "CP-EPOCH-001")
+            with self.assertRaisesRegex(RuntimeError, "does not exist"):
+                rotate_epoch(root, "CP-EPOCH-001")
+            checkpoint_path = checkpoint(root, "epoch-rotation")
+            checkpoint_ref = checkpoint_path.relative_to(root).as_posix()
+            rotated = rotate_epoch(root, checkpoint_ref)
             self.assertFalse(rotated["rotation_required"])
             self.assertEqual(2, rotated["epoch"])
-            self.assertEqual("CP-EPOCH-001", assess_epoch(root)["last_checkpoint_id"])
+            self.assertEqual(checkpoint_ref, assess_epoch(root)["last_checkpoint_id"])
 
     def test_session_epoch_soft_limit_recommends_checkpoint_without_forcing_rotation(self):
         with tempfile.TemporaryDirectory() as td:
@@ -439,11 +450,220 @@ class CoreTests(unittest.TestCase):
             initialize(root); first = json.loads((root / ".ai/schema.json").read_text()); initialize(root); second = json.loads((root / ".ai/schema.json").read_text())
             self.assertEqual(first["created_at"], second["created_at"]); self.assertTrue((root / ".ai/runtime/task.json").exists())
 
-    def test_control_classification(self):
-        self.assertEqual(classify("先暂停当前任务，我要调整"), "PAUSE")
-        self.assertEqual(classify("继续执行"), "RESUME")
-        self.assertEqual(classify("调整方向：改成Renderer模式"), "ADJUST")
-        self.assertIsNone(classify("实现用户列表"))
+    def test_legacy_runtime_control_never_classifies_or_persists_prompt(self):
+        secret = "先暂停当前任务-PRIVATE-CONTROL-TEXT"
+        result = subprocess.run(
+            [sys.executable, str(PLUGIN / "scripts/runtime_control.py")],
+            input=json.dumps({"prompt": secret}), text=True, encoding="utf-8",
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True,
+        )
+        self.assertNotIn(secret, result.stdout)
+        self.assertEqual("disabled-prompt-classifier", json.loads(result.stdout)["compatibility"])
+
+    def test_capability_registry_covers_42_skills_and_lazily_validates_specialization_evidence(self):
+        registry = load_capability_registry()
+        skills, focuses = capability_indexes(registry)
+        self.assertEqual(42, len(skills))
+        self.assertIn("backend-node-typescript", focuses)
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            manifest = root / "package.json"
+            manifest.write_text(json.dumps({"dependencies": {"express": "5.0.0"}}), encoding="utf-8")
+            proposal = model_proposal("backend-technology-router", stage="planning", architecture="backend")
+            accepted = admit(
+                root, proposal, focuses=["backend-node-typescript"],
+                focus_evidence=[str(manifest)],
+            )
+            self.assertEqual("ACCEPT", accepted["decision"], accepted["diagnostics"])
+            active = accepted["capability_profile"][0]["focuses"][0]
+            self.assertEqual("NodeTS服务端专项", active["name"])
+            self.assertTrue(active["checks"])
+            self.assertEqual("package.json", active["evidence"][0]["path"])
+            rejected = admit(root, proposal, focuses=["backend-node-typescript"])
+            self.assertEqual("REJECT", rejected["decision"])
+            self.assertIn("SPECIALIZATION_EVIDENCE_REQUIRED", {item["code"] for item in rejected["diagnostics"]})
+
+    def test_project_admission_is_bounded_and_does_not_create_control_state(self):
+        with tempfile.TemporaryDirectory() as td, tempfile.TemporaryDirectory() as control_td:
+            root = Path(td)
+            (root / "package.json").write_text(json.dumps({"dependencies": {"express": "5.0.0"}}), encoding="utf-8")
+            with patch.dict(os.environ, {"HIKER_CONTROL_STATE_DIR": control_td}):
+                result = admit(root, model_proposal("backend-technology-router", stage="planning", architecture="backend"))
+            self.assertEqual("PROJECT", result["execution_tier"])
+            self.assertEqual(0, result["runtime_policy"]["additional_model_calls"])
+            self.assertLessEqual(len(json.dumps(result, ensure_ascii=False, separators=(",", ":"))), 4000)
+            self.assertFalse((root / ".ai").exists())
+            self.assertEqual([], list(Path(control_td).rglob("*")))
+
+    def test_control_trace_is_metadata_only_idempotent_and_bounded(self):
+        with tempfile.TemporaryDirectory() as td, tempfile.TemporaryDirectory() as control_td:
+            root = Path(td)
+            evidence = root / "proof.log"
+            evidence.write_text("TOP-SECRET-SOURCE-BODY", encoding="utf-8")
+            previous_limit = control_trace.MAX_SEGMENT_BYTES
+            control_trace.MAX_SEGMENT_BYTES = 1200
+            try:
+                with patch.dict(os.environ, {"HIKER_CONTROL_STATE_DIR": control_td}):
+                    first = record_event(
+                        root, event_type="gate", summary_code="GATE_PASSED",
+                        task_id="KG-001", result="PASS", evidence_paths=["proof.log"],
+                        operation_id="OP-TRACE-001",
+                    )
+                    replay = record_event(
+                        root, event_type="gate", summary_code="GATE_PASSED",
+                        task_id="KG-001", result="PASS", evidence_paths=["proof.log"],
+                        operation_id="OP-TRACE-001",
+                    )
+                    self.assertEqual(first["event_id"], replay["event_id"])
+                    self.assertTrue(replay["idempotent_replay"])
+                    with self.assertRaisesRegex(RuntimeError, "different payload"):
+                        record_event(
+                            root, event_type="gate", summary_code="GATE_BLOCKED",
+                            task_id="KG-001", result="BLOCKED", operation_id="OP-TRACE-001",
+                        )
+                    for index in range(24):
+                        record_event(
+                            root, event_type="gate", summary_code="CONTROL_EVENT",
+                            task_id="KG-001", result="PASS", operation_id=f"OP-TRACE-{index + 2:03d}",
+                        )
+                    report = trace_status(root)
+                    trace_root = Path(control_td) / "Hiker" / "engineering-control"
+                    files = list(trace_root.rglob("events-v1*.jsonl"))
+                    self.assertLessEqual(len(files), 3)
+                    body = "".join(path.read_text(encoding="utf-8") for path in files)
+                    self.assertNotIn("TOP-SECRET-SOURCE-BODY", body)
+                    for forbidden in ("request_text", "last_assistant_message", '"prompt"', '"stdout"', '"stderr"'):
+                        self.assertNotIn(forbidden, body)
+                    self.assertEqual(3, report["policy"]["max_segments"])
+            finally:
+                control_trace.MAX_SEGMENT_BYTES = previous_limit
+
+    def test_control_operation_journal_is_idempotent_and_recovers_same_operation_only(self):
+        with tempfile.TemporaryDirectory() as td, tempfile.TemporaryDirectory() as control_td:
+            root = Path(td)
+            calls = []
+            domain = {"committed": False, "fail_once": False}
+
+            def prepare():
+                return {"before_fingerprint": "a" * 64, "intended_after_fingerprint": "b" * 64}
+
+            def commit():
+                calls.append("commit")
+                if domain["fail_once"]:
+                    domain["fail_once"] = False
+                    raise RuntimeError("PRIVATE-FAILURE-DETAIL")
+                domain["committed"] = True
+                return {"domain_result": {"state": "Testing"}, "committed_after_fingerprint": "c" * 64}
+
+            def recover(entry):
+                if domain["committed"]:
+                    return {"status": "COMMITTED", "domain_result": {"state": "Testing"}, "committed_after_fingerprint": "c" * 64}
+                return {"status": "NOT_COMMITTED", "current_fingerprint": entry["before_fingerprint"]}
+
+            def trace(result):
+                calls.append("trace")
+                return {"event_id": "EVENT-001", "idempotent_replay": False}
+
+            with patch.dict(os.environ, {"HIKER_CONTROL_STATE_DIR": control_td}):
+                first = execute_operation(
+                    root, operation_id="OP-STATE-001", command="transition",
+                    payload={"task_id": "KG-001", "target": "Testing"},
+                    prepare=prepare, commit_domain=commit, recover_domain=recover, commit_trace=trace,
+                )
+                replay = execute_operation(
+                    root, operation_id="OP-STATE-001", command="transition",
+                    payload={"task_id": "KG-001", "target": "Testing"},
+                    prepare=prepare, commit_domain=commit, recover_domain=recover, commit_trace=trace,
+                )
+                self.assertEqual(["commit", "trace"], calls)
+                self.assertEqual("Testing", replay["state"])
+                self.assertTrue(replay["idempotent_replay"])
+                with self.assertRaisesRegex(RuntimeError, "different payload"):
+                    execute_operation(
+                        root, operation_id="OP-STATE-001", command="transition",
+                        payload={"task_id": "KG-001", "target": "Released"},
+                        prepare=prepare, commit_domain=commit, recover_domain=recover, commit_trace=trace,
+                    )
+                domain.update({"committed": False, "fail_once": True})
+                with self.assertRaisesRegex(RuntimeError, "PRIVATE-FAILURE-DETAIL"):
+                    execute_operation(
+                        root, operation_id="OP-STATE-002", command="checkpoint",
+                        payload={"task_id": "KG-001"}, prepare=prepare, commit_domain=commit,
+                        recover_domain=recover, commit_trace=trace,
+                    )
+                recovered = execute_operation(
+                    root, operation_id="OP-STATE-002", command="checkpoint",
+                    payload={"task_id": "KG-001"}, prepare=prepare, commit_domain=commit,
+                    recover_domain=recover, commit_trace=trace,
+                )
+                self.assertEqual("Testing", recovered["state"])
+                journal = next(Path(control_td).rglob("operations-v1.json")).read_text(encoding="utf-8")
+                self.assertNotIn("PRIVATE-FAILURE-DETAIL", journal)
+
+    def test_context_policy_round_trip_between_core_and_workspace_is_stable(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            initialize(root)
+            policy_path = root / ".ai/governance/context-retention.json"
+            policy = json.loads(policy_path.read_text(encoding="utf-8"))
+            policy["custom_retained_field"] = 17
+            policy_path.write_text(json.dumps(policy), encoding="utf-8")
+            workspace_scripts = PLUGIN.parent / "ai-engineering-workspace" / "scripts"
+            spec = importlib.util.spec_from_file_location("workspace_bounded_context_517", workspace_scripts / "bounded_context.py")
+            module = importlib.util.module_from_spec(spec)
+            old_path = list(sys.path)
+            try:
+                sys.path.insert(0, str(workspace_scripts))
+                assert spec.loader is not None
+                spec.loader.exec_module(module)
+                ensure_memory_policy(root)
+                first = policy_path.read_bytes()
+                module.ensure_policy(root)
+                ensure_memory_policy(root)
+                second = policy_path.read_bytes()
+            finally:
+                sys.path[:] = old_path
+            self.assertEqual(first, second)
+            self.assertEqual(17, json.loads(second)["custom_retained_field"])
+
+    def test_session_context_keeps_locked_rules_before_large_active_context(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            initialize(root)
+            policy_path = root / ".ai/governance/context-retention.json"
+            policy = json.loads(policy_path.read_text(encoding="utf-8"))
+            policy["session_context_max_chars"] = 1200
+            policy_path.write_text(json.dumps(policy), encoding="utf-8")
+            (root / ".ai/governance/locked-decisions.json").write_text(json.dumps({
+                "decisions": [{"id": "DEC-CRITICAL", "content": "禁止覆盖公共契约", "status": "LOCKED"}],
+            }), encoding="utf-8")
+            (root / ".ai/runtime/active-context.md").write_text("ACTIVE-DETAIL-" * 1000, encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(PLUGIN / "scripts/session_context.py")], cwd=root,
+                input=json.dumps({"cwd": str(root), "source": "test"}), text=True, encoding="utf-8",
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True,
+            )
+            context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+            self.assertIn("DEC-CRITICAL", context)
+            self.assertIn("继续前不得覆盖锁定决策", context)
+            self.assertLessEqual(len(context), 1201)
+
+    def test_plugin_scripts_do_not_import_model_or_network_clients_or_read_api_keys(self):
+        banned_modules = {"openai", "anthropic", "requests", "httpx", "aiohttp", "socketserver"}
+        banned_tokens = {"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "CLAUDE_API_KEY", "serve_forever"}
+        violations = []
+        for path in sorted(PLUGIN.parent.rglob("scripts/*.py")):
+            text = path.read_text(encoding="utf-8")
+            tree = ast.parse(text, filename=str(path))
+            imported = set()
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    imported.update(alias.name.split(".")[0] for alias in node.names)
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    imported.add(node.module.split(".")[0])
+            if imported & banned_modules or any(token in text for token in banned_tokens):
+                violations.append(path.relative_to(PLUGIN.parent).as_posix())
+        self.assertEqual([], violations)
 
     def test_checkpoint_records_git_or_non_git(self):
         with tempfile.TemporaryDirectory() as td:

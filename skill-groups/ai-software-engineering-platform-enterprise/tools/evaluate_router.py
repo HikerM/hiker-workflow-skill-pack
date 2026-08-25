@@ -104,7 +104,8 @@ def evaluate() -> dict:
                     })
     return {
         "ok": not failures,
-        "scope": "模型候选守门与无关键词自动选 Skill；ChatGPT 原生语义选择由 Skill 元数据和真实会话评测",
+        "scope": "仅验证结构化候选守门和原始文本不会触发关键词选 Skill；不计作 ChatGPT 语义准确率",
+        "semantic_host_evaluation": "plugins/ai-engineering-core/evals/semantic-routing + tools/evaluate_semantic_routing.py",
         "positive": {"passed": positive, "total": positive_total, "recall": round(positive / positive_total, 4) if positive_total else 1.0},
         "negative": {"passed": negative, "total": negative_total, "specificity": round(negative / negative_total, 4) if negative_total else 1.0},
         "failures": failures,

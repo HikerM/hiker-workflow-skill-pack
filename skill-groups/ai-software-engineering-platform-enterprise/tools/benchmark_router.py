@@ -24,11 +24,21 @@ def percentile(values: list[float], ratio: float) -> float:
     return ordered[min(len(ordered) - 1, max(0, int(len(ordered) * ratio + 0.999) - 1))]
 
 
-def benchmark(runs: int, max_p95_ms: float) -> dict:
-    samples = []
+def benchmark(runs: int, max_p95_ms: float, max_raw_p95_ms: float = 500.0) -> dict:
+    raw_samples = []
+    startup_samples = []
+    incremental_samples = []
     with tempfile.TemporaryDirectory() as td:
         root = Path(td); (root / "package.json").write_text('{"dependencies":{"react":"19","fastify":"5"}}', encoding="utf-8")
         for index in range(runs):
+            baseline_start = time.perf_counter()
+            baseline = subprocess.run(
+                [sys.executable, "-X", "utf8", "-c", "pass"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=10,
+            )
+            if baseline.returncode:
+                raise RuntimeError(baseline.stderr.decode("utf-8", errors="replace"))
+            startup_ms = (time.perf_counter() - baseline_start) * 1000
             start = time.perf_counter()
             architecture, stage, skill = PROPOSALS[index % len(PROPOSALS)]
             result = subprocess.run([
@@ -38,9 +48,25 @@ def benchmark(runs: int, max_p95_ms: float) -> dict:
                 "--candidate", skill,
             ], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=10)
             if result.returncode: raise RuntimeError(result.stderr.decode("utf-8", errors="replace"))
-            samples.append((time.perf_counter() - start) * 1000)
-    p95 = percentile(samples, .95)
-    return {"ok": p95 <= max_p95_ms, "scope": "本地冷进程路由开销，不包含桌面端网络与模型首字延迟", "runs": runs, "median_ms": round(statistics.median(samples), 2), "p95_ms": round(p95, 2), "max_p95_ms": max_p95_ms}
+            raw_ms = (time.perf_counter() - start) * 1000
+            startup_samples.append(startup_ms)
+            raw_samples.append(raw_ms)
+            incremental_samples.append(max(0.0, raw_ms - startup_ms))
+    p95 = percentile(incremental_samples, .95)
+    raw_p95 = percentile(raw_samples, .95)
+    return {
+        "ok": p95 <= max_p95_ms and raw_p95 <= max_raw_p95_ms,
+        "scope": "本地冷进程路由增量开销；以相邻Python冷启动校准宿主调度，不包含桌面端网络与模型首字延迟",
+        "runs": runs,
+        "median_ms": round(statistics.median(incremental_samples), 2),
+        "p95_ms": round(p95, 2),
+        "max_p95_ms": max_p95_ms,
+        "raw_median_ms": round(statistics.median(raw_samples), 2),
+        "raw_p95_ms": round(raw_p95, 2),
+        "max_raw_p95_ms": max_raw_p95_ms,
+        "python_startup_median_ms": round(statistics.median(startup_samples), 2),
+        "python_startup_p95_ms": round(percentile(startup_samples, .95), 2),
+    }
 
 
 def main() -> int:

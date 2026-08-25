@@ -50,10 +50,10 @@ def policy_path(root: Path) -> Path:
     return ai_root(root) / "governance" / "context-retention.json"
 
 
-def ensure_memory_policy(root: Path) -> dict[str, Any]:
-    path = policy_path(root)
-    current = read_json(path, {}) or {}
-    policy = dict(DEFAULT_MEMORY_POLICY)
+def read_memory_policy(root: Path) -> dict[str, Any]:
+    current = read_json(policy_path(root), {}) or {}
+    policy = dict(current) if isinstance(current, dict) else {}
+    policy["schema_version"] = DEFAULT_MEMORY_POLICY["schema_version"]
     if isinstance(current, dict):
         for key, default in DEFAULT_MEMORY_POLICY.items():
             value = current.get(key)
@@ -64,8 +64,18 @@ def ensure_memory_policy(root: Path) -> dict[str, Any]:
                 # 用户明确调整过的其他正整数阈值仍保留。
                 legacy_defaults = {**LEGACY_EPOCH_DEFAULTS, **LEGACY_CONTEXT_DEFAULTS}
                 if current.get("schema_version") in {"1.0.0", "1.1.0"} and legacy_defaults.get(key) == value:
-                    continue
-                policy[key] = value
+                    policy[key] = default
+                else:
+                    policy[key] = value
+            else:
+                policy[key] = default
+    return policy
+
+
+def ensure_memory_policy(root: Path) -> dict[str, Any]:
+    path = policy_path(root)
+    current = read_json(path, {}) or {}
+    policy = read_memory_policy(root)
     if current != policy:
         atomic_write_json(path, policy)
     return policy

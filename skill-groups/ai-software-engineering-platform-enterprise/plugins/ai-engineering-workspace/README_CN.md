@@ -1,6 +1,8 @@
-# 04 工作区与多会话协作 5.14
+# 工作区与多会话协作
 
-本插件已经从“任务分流与 Worktree 工具”升级为大型软件工程多 Agent 控制平面，共 12 个 Skill。
+<!-- engineering-current-facts: version=5.17.0; plugins=5; skills=42; tests=237 -->
+
+本插件属于 Hiker Engineering Capability System（Hiker 工程能力系统），为大型软件工程提供多角色协作约束，共 12 个 Skill；它不是独立 Agent Runtime。桌面任务、Agent Runtime 与工具调用由 ChatGPT Desktop / Codex 宿主提供，本插件只提供任务、Git、Worktree、锁、证据与发布状态的能力和确定性门禁。
 
 ## 控制平面
 
@@ -18,10 +20,12 @@
 - **功能验收闭环**：需求、实现、测试、截图/日志、文档和状态闭环。
 - **代码所有权与合并控制**：检查分支流向、Conventional Commit、冲突、锁、架构守卫和合并证据。
 
-5.12 增加由总控独占管理的固定角色会话池和自动终态回收。实现/修复复用 writer，审核/测试/复验复用 assurance；普通任务进入空闲复用，项目终态自动归档并验证运行时释放。API 错误、超时、待启动、脏 Worktree 或回收未完成都不能触发替代会话。
+固定角色会话池由总控独占规划：实现/修复复用 writer，审核/测试/复验复用 assurance；普通任务完成后进入空闲复用。项目终态时，总控请求宿主归档并在宿主动作完成后调用本地探针验证运行时释放。API 错误、超时、待启动、脏 Worktree 或回收未完成都不能触发替代会话。
 
 普通局部任务只写最小范围、不变量和测试，不要求维护全量架构配置；公共表面、受保护模块或影响半径高的变更才渐进启用消费者登记、模块规则和工程图谱。
 
 七个角色是职责契约：Master、Planning、Developer、Review、Test、Merge、Document。它们可映射到 Codex 主任务、用户明确授权的 Subagent 或不同 Worktree；不要求每次都创建七个并行 Agent。
 
 全局自动应用模板位于 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md`。它要求会话开头显示轻量路由，并在真实加载、阶段切换或上下文恢复时显示一次去重中文应用回执；不会扩大 push、merge、部署或生产写入权限。
+
+桌面任务归档与本地工具运行时释放由 ChatGPT Desktop / Codex 宿主显式执行；本地脚本只验证并记录结果。进程探针、Worktree 状态或本地会话池不能替代宿主动作，也不得伪造桌面任务已归档。

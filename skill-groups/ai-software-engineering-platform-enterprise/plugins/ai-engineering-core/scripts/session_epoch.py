@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 from pathlib import Path
 from typing import Any
 
 from corelib import ai_root, atomic_write_json, read_json, state_lock, utc_now
-from context_memory import ensure_memory_policy
+from context_memory import read_memory_policy
 
 
 SCHEMA = "1.1.0"
@@ -42,9 +43,14 @@ def load(root: Path) -> dict[str, Any]:
         return data
 
 
+def peek(root: Path) -> dict[str, Any]:
+    data = read_json(state_file(root), {}) or {}
+    return data if isinstance(data, dict) and data else default_state()
+
+
 def assess(root: Path, state: dict[str, Any] | None = None) -> dict[str, Any]:
-    state = state or load(root)
-    policy = ensure_memory_policy(root)
+    state = state or peek(root)
+    policy = read_memory_policy(root)
     checks = {
         "substantive_turns": (int(state.get("substantive_turns") or 0), int(policy["max_session_epoch_turns"])),
         "tool_calls": (int(state.get("tool_calls") or 0), int(policy["max_session_epoch_tool_calls"])),
@@ -86,9 +92,40 @@ def record(root: Path, **increments: int) -> dict[str, Any]:
         return assess(root, state)
 
 
-def rotate(root: Path, checkpoint_id: str) -> dict[str, Any]:
-    if not checkpoint_id.strip():
+def _checkpoint_evidence(root: Path, checkpoint_id: str) -> dict[str, str]:
+    value = str(checkpoint_id or "").strip()
+    if not value:
         raise RuntimeError("session epoch rotation requires a checkpoint id")
+    resolved_root = root.resolve()
+    base = ai_root(resolved_root) / "runtime" / "checkpoints"
+    candidate = Path(value)
+    paths: list[Path] = []
+    if candidate.is_absolute():
+        paths.append(candidate.resolve())
+    else:
+        paths.extend(((resolved_root / candidate).resolve(), (base / candidate).resolve()))
+        if not candidate.suffix:
+            paths.extend(sorted(base.glob(f"*{candidate.name}*.json"), reverse=True)[:4])
+    selected = None
+    for path in dict.fromkeys(paths):
+        try:
+            path.relative_to(resolved_root)
+        except ValueError:
+            continue
+        if path.is_file():
+            selected = path
+            break
+    if selected is None:
+        raise RuntimeError("session epoch checkpoint does not exist")
+    payload = read_json(selected, {}) or {}
+    if not isinstance(payload, dict) or not payload.get("event") or not payload.get("created_at"):
+        raise RuntimeError("session epoch checkpoint evidence is invalid")
+    digest = hashlib.sha256(selected.read_bytes()).hexdigest()
+    return {"path": selected.relative_to(resolved_root).as_posix(), "sha256": digest}
+
+
+def rotate(root: Path, checkpoint_id: str) -> dict[str, Any]:
+    evidence = _checkpoint_evidence(root, checkpoint_id)
     with state_lock(root):
         current = load(root)
         archive = ai_root(root) / "archive" / "session-epochs" / f"epoch-{int(current.get('epoch') or 1):04d}.json"
@@ -96,7 +133,8 @@ def rotate(root: Path, checkpoint_id: str) -> dict[str, Any]:
             atomic_write_json(archive, current)
         next_state = default_state()
         next_state["epoch"] = int(current.get("epoch") or 1) + 1
-        next_state["last_checkpoint_id"] = checkpoint_id
+        next_state["last_checkpoint_id"] = evidence["path"]
+        next_state["last_checkpoint_sha256"] = evidence["sha256"]
         atomic_write_json(state_file(root), next_state)
         return assess(root, next_state)
 

@@ -6,10 +6,13 @@ import json
 import sys
 from pathlib import Path
 
+from audit_release_facts import audit as audit_release_facts
+
 REQUIRED_FILES = (
-    "README.md", "VERSION", "CHANGELOG.md", "AGENTS.md", "VALIDATE.ps1",
+    "README.md", "VERSION", "release-versions.json", "CHANGELOG.md", "AGENTS.md", "VALIDATE.ps1",
     "docs/INSTALLATION.md", "docs/USAGE.md", "docs/SKILL_INDEX.md",
     "docs/CAPABILITY_PACKS_ZH.md", "docs/SAFETY_RULES.md", "scripts/audit_public_content.py",
+    "scripts/audit_release_facts.py",
 )
 ALLOWED_PACKS = {"ai-software-engineering-platform-enterprise", "desktop-app-reconstruction-zh"}
 REMOVED_PATHS = (".agents/skills", "INSTALL.ps1", "UNINSTALL.ps1", "examples", "docs/THREE_SKILL_GROUPS_ZH.md")
@@ -124,6 +127,12 @@ def main() -> int:
         errors.extend(validate_public_docs(root, facts))
     except (OSError, KeyError, ValueError, json.JSONDecodeError) as exc:
         errors.append(f"cannot derive repository facts: {exc}")
+    release_facts = audit_release_facts(
+        root,
+        require_archives=True,
+        require_test_report=False,
+    )
+    errors.extend(f"release facts: {item}" for item in release_facts.get("errors", []))
     errors.extend(validate_no_temp(root))
     if errors:
         print("VALIDATION FAILED")

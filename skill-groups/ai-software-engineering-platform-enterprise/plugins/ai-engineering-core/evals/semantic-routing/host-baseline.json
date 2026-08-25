@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0.0",
+  "benchmark_id": "hiker-semantic-routing-2026-08-p1b",
+  "selection_authority": "current-chatgpt-codex-host",
+  "blindness_level": "payload-separated-same-development-session",
+  "external_model_calls": 0,
+  "gold_labels_in_selection_payload": false,
+  "selection_input": ["cases.json", "references/semantic-routing-catalog.md", "bounded case context"],
+  "predictions": [
+    {"id":"E01","disposition":"SELECT","candidates":["web-component-implementation"]},
+    {"id":"E02","disposition":"SELECT","candidates":["backend-quality-review"]},
+    {"id":"E03","disposition":"SELECT","candidates":["cs-ui-design"],"specializations":["client-qt"]},
+    {"id":"E04","disposition":"SELECT","candidates":["unity-component-implementation"]},
+
+    {"id":"N01","disposition":"SELECT","candidates":["backend-component-implementation"],"specializations":["backend-python"],"negated_terms":["Laravel","PHP方案"]},
+    {"id":"N02","disposition":"SELECT","candidates":["full-change-risk-review"],"negated_terms":["Worktree","merge"]},
+    {"id":"N03","disposition":"SELECT","candidates":["web-component-implementation"],"negated_terms":["UI设计"]},
+    {"id":"N04","disposition":"SELECT","candidates":["regression-test-planner"],"negated_terms":["发布","打包"]},
+
+    {"id":"H01","disposition":"SELECT","candidates":["web-component-implementation"],"negated_terms":["WPF"]},
+    {"id":"H02","disposition":"SELECT","candidates":["regression-test-planner"],"negated_terms":["merge"]},
+    {"id":"H03","disposition":"SELECT","candidates":["backend-quality-review"],"specializations":["backend-python"],"negated_terms":["Laravel"]},
+    {"id":"H04","disposition":"SELECT","candidates":["context-recovery"],"negated_terms":["Worktree"]},
+
+    {"id":"X01","disposition":"SELECT","candidates":["web-ui-design"],"negated_terms":["Unity"]},
+    {"id":"X02","disposition":"NONE","candidates":[]},
+    {"id":"X03","disposition":"SELECT","candidates":["web-quality-review"],"negated_terms":["数据库迁移"]},
+    {"id":"X04","disposition":"SELECT","candidates":["project-state-manager"],"negated_terms":["API Contract"]},
+
+    {"id":"M01","disposition":"SELECT","candidates":["backend-technology-router"],"specializations":["backend-python"],"negated_terms":["Laravel"]},
+    {"id":"M02","disposition":"SELECT","candidates":["cs-client-router"],"specializations":["client-electron-tauri"]},
+    {"id":"M03","disposition":"SELECT","candidates":["unity-ui-design"]},
+    {"id":"M04","disposition":"SELECT","candidates":["api-event-contract-design"]},
+
+    {"id":"A01","disposition":"UNKNOWN","candidates":[]},
+    {"id":"A02","disposition":"UNKNOWN","candidates":[]},
+    {"id":"A03","disposition":"UNKNOWN","candidates":[]},
+    {"id":"A04","disposition":"UNKNOWN","candidates":[]},
+
+    {"id":"C01","disposition":"SELECT","candidates":["web-component-implementation","backend-component-implementation"]},
+    {"id":"C02","disposition":"SELECT","candidates":["api-event-contract-design","database-migration-governance"]},
+    {"id":"C03","disposition":"SELECT","candidates":["workspace-task-router"]},
+    {"id":"C04","disposition":"SELECT","candidates":["multi-agent-project-governance","bounded-context-memory"]},
+
+    {"id":"P01","disposition":"SELECT","candidates":["full-change-risk-review"]},
+    {"id":"P02","disposition":"SELECT","candidates":["regression-test-planner"]},
+    {"id":"P03","disposition":"SELECT","candidates":["feature-acceptance-closure"],"negated_terms":["发布"]},
+    {"id":"P04","disposition":"SELECT","candidates":["release-readiness-review"]},
+
+    {"id":"Z01","disposition":"NONE","candidates":[]},
+    {"id":"Z02","disposition":"NONE","candidates":[]},
+    {"id":"Z03","disposition":"NONE","candidates":[]},
+
+    {"id":"D01","disposition":"SELECT","candidates":["web-component-implementation","backend-component-implementation"],"deferred":["regression-test-planner"],"future_terms":["回归测试"]},
+    {"id":"D02","disposition":"SELECT","candidates":["web-quality-review","backend-quality-review"],"deferred":["regression-test-planner","release-readiness-review"],"future_terms":["回归","发布检查"]},
+
+    {"id":"R01","disposition":"REJECT","candidates":[]},
+    {"id":"R02","disposition":"REJECT","candidates":[]}
+  ]
+}

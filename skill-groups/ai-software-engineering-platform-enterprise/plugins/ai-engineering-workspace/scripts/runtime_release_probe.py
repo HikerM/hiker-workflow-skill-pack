@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import argparse
-import ctypes
 import hashlib
 import json
-import os
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from session_pool import load_pool, resolved_slot_key, role_family
+from session_pool import load_pool, resolved_slot_key, role_family, runtime_identity, runtime_registration_id
+from process_identity import pid_presence
 from workspacelib import atomic_json, locked_state, repo_root, safe_id
 
 
@@ -21,30 +20,6 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def pid_alive(pid: int) -> bool:
-    if pid <= 0:
-        return False
-    if os.name == "nt":
-        process_query_limited_information = 0x1000
-        still_active = 259
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
-        if not handle:
-            return False
-        try:
-            exit_code = ctypes.c_ulong()
-            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
-                return False
-            return exit_code.value == still_active
-        finally:
-            kernel32.CloseHandle(handle)
-    try:
-        os.kill(pid, 0)
-        return True
-    except OSError:
-        return False
-
-
 def worktree_probe(repository: Path, worktree: str | None) -> dict[str, Any]:
     if not worktree:
         return {"status": "NOT_REGISTERED", "path": None, "clean": None}
@@ -53,6 +28,8 @@ def worktree_probe(repository: Path, worktree: str | None) -> dict[str, Any]:
         ["git", "worktree", "list", "--porcelain"], cwd=str(repository), text=True,
         encoding="utf-8", errors="replace", stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
     )
+    if result.returncode != 0:
+        return {"status": "PROBE_ERROR", "path": str(target), "clean": None}
     registered = {
         Path(line.split(" ", 1)[1]).resolve()
         for line in result.stdout.splitlines() if line.startswith("worktree ")
@@ -65,8 +42,22 @@ def worktree_probe(repository: Path, worktree: str | None) -> dict[str, Any]:
         ["git", "status", "--porcelain"], cwd=str(target), text=True,
         encoding="utf-8", errors="replace", stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
     )
-    clean = status.returncode == 0 and not status.stdout.strip()
+    if status.returncode != 0:
+        return {"status": "PROBE_ERROR", "path": str(target), "clean": None}
+    clean = not status.stdout.strip()
     return {"status": "KEPT_CLEAN" if clean else "DIRTY", "path": str(target), "clean": clean}
+
+
+def valid_runtime_identity(value: Any) -> bool:
+    return bool(
+        isinstance(value, dict)
+        and value.get("identity_version") == "pid-start-v1"
+        and isinstance(value.get("pid"), int)
+        and value["pid"] > 0
+        and isinstance(value.get("process_fingerprint"), str)
+        and len(value["process_fingerprint"]) == 64
+        and all(ch in "0123456789abcdef" for ch in value["process_fingerprint"])
+    )
 
 
 @locked_state
@@ -77,7 +68,7 @@ def create_probe(
     repository: str,
     thread_state: str,
     desktop_observation_id: str,
-    runtime_pids: list[int],
+    runtime_pids: list[int] | None = None,
     ownership_lane: str = "default",
 ) -> dict[str, Any]:
     state = load_pool(root)
@@ -88,9 +79,46 @@ def create_probe(
         raise RuntimeError("role slot not found")
     if not desktop_observation_id.strip():
         raise RuntimeError("desktop observation id is required")
-    pids = sorted(set(int(value) for value in runtime_pids if int(value) > 0))
-    alive = [value for value in pids if pid_alive(value)]
-    runtime_status = "RELEASED" if pids and not alive else "RUNNING" if alive else "NOT_OBSERVABLE"
+    registered = slot.get("runtime_processes")
+    registered = registered if isinstance(registered, list) else []
+    valid_registration = bool(registered) and all(valid_runtime_identity(value) for value in registered)
+    registered_pids = [int(value["pid"]) for value in registered if valid_runtime_identity(value)]
+    valid_registration = valid_registration and len(registered_pids) == len(set(registered_pids))
+    stored_registration_id = slot.get("runtime_registration_id")
+    valid_registration = valid_registration and bool(stored_registration_id) and stored_registration_id == runtime_registration_id(slot)
+    asserted_pids = sorted(set(int(value) for value in (runtime_pids or []) if int(value) > 0))
+    assertion_matches = not asserted_pids or asserted_pids == sorted(registered_pids)
+
+    process_observations = []
+    for registered_identity in registered if valid_registration else []:
+        pid = int(registered_identity["pid"])
+        current_identity = runtime_identity(pid)
+        presence = pid_presence(pid)
+        if current_identity is None:
+            status = "EXITED" if presence is False else "UNVERIFIABLE"
+        elif current_identity != registered_identity:
+            status = "IDENTITY_MISMATCH"
+        elif presence is False:
+            status = "EXITED"
+        elif presence is True:
+            status = "RUNNING"
+        else:
+            status = "UNVERIFIABLE"
+        process_observations.append({"pid": pid, "status": status})
+
+    statuses = {value["status"] for value in process_observations}
+    if not valid_registration:
+        runtime_status = "NOT_REGISTERED"
+    elif "IDENTITY_MISMATCH" in statuses:
+        runtime_status = "IDENTITY_MISMATCH"
+    elif "UNVERIFIABLE" in statuses:
+        runtime_status = "UNVERIFIABLE"
+    elif "RUNNING" in statuses:
+        runtime_status = "RUNNING"
+    elif statuses == {"EXITED"}:
+        runtime_status = "RELEASED"
+    else:
+        runtime_status = "NOT_OBSERVABLE"
     worktree = worktree_probe(Path(repository).resolve(), slot.get("worktree"))
     thread_ok = thread_state in {"ARCHIVED", "NOT_FOUND"}
     worktree_ok = worktree["status"] in {"CLOSED", "KEPT_CLEAN", "NOT_REGISTERED"}
@@ -99,13 +127,24 @@ def create_probe(
         blockers.append("desktop thread is not archived")
     if runtime_status != "RELEASED":
         blockers.append("runtime process release is not verified")
+    if not assertion_matches:
+        blockers.append("caller runtime PID assertion does not match registered slot identities")
     if not worktree_ok:
         blockers.append("worktree is dirty or has an unregistered remaining path")
     payload = {
         "schema_version": SCHEMA, "project_id": safe_id(project_id).upper(), "slot_key": key,
         "thread_id": slot.get("thread_id"), "desktop_observation_id": desktop_observation_id,
-        "thread_state": thread_state, "runtime_pids": pids, "alive_pids": alive,
+        "thread_state": thread_state,
+        "runtime_registration_id": stored_registration_id,
+        "registered_runtime_pids": registered_pids,
+        "asserted_runtime_pids": asserted_pids,
+        "runtime_process_observations": process_observations,
         "runtime_status": runtime_status, "worktree": worktree, "observed_at": now(),
+        "evidence_authority": {
+            "desktop_thread": "HOST_ASSERTED",
+            "runtime_processes": "LOCAL_VERIFIED",
+            "worktree": "LOCAL_VERIFIED",
+        },
         "result": "PASS" if not blockers else "BLOCKED", "blockers": blockers,
     }
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -124,11 +163,11 @@ def main() -> int:
     parser.add_argument("--ownership-lane", default="default")
     parser.add_argument("--thread-state", choices=["ARCHIVED", "NOT_FOUND", "ACTIVE", "UNKNOWN"], required=True)
     parser.add_argument("--desktop-observation-id", required=True)
-    parser.add_argument("--runtime-pid", action="append", type=int, default=[])
+    parser.add_argument("--assert-runtime-pid", "--runtime-pid", dest="assert_runtime_pid", action="append", type=int, default=[])
     args = parser.parse_args()
     root = repo_root(Path(args.root).resolve())
     try:
-        result = create_probe(root, args.project_id, args.role, args.repository or str(root), args.thread_state, args.desktop_observation_id, args.runtime_pid, args.ownership_lane)
+        result = create_probe(root, args.project_id, args.role, args.repository or str(root), args.thread_state, args.desktop_observation_id, args.assert_runtime_pid, args.ownership_lane)
         print(json.dumps({"ok": result["result"] == "PASS", "result": result}, ensure_ascii=False, indent=2))
         return 0 if result["result"] == "PASS" else 2
     except (OSError, RuntimeError, ValueError) as exc:

@@ -1,11 +1,22 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from workspacelib import atomic_json, common_dir, locked_state, read_json, safe_id
+from dispatch_state import OUTSTANDING_TURN_LEASES, load_dispatch
+from file_lock import load_locks
+from turn_lease import read_turn_lease
+
+
+CORE_SCRIPTS = Path(__file__).resolve().parents[2] / "ai-engineering-core" / "scripts"
+if str(CORE_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(CORE_SCRIPTS))
+from process_identity import process_identity as runtime_identity  # noqa: E402
 
 
 SCHEMA = "1.0.0"
@@ -83,10 +94,40 @@ def resolved_slot_key(state: dict[str, Any], project_id: str, repository: str, f
 
 
 def load_pool(root: Path) -> dict[str, Any]:
-    state = read_json(pool_file(root), {}) or {}
+    path = pool_file(root)
+    if path.is_file():
+        try:
+            state = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"session pool is damaged; creation is blocked until recovery: {exc}")
+        if not isinstance(state, dict):
+            raise RuntimeError("session pool is damaged; root value must be an object")
+    else:
+        state = {}
     state.setdefault("schema_version", SCHEMA)
     state.setdefault("slots", {})
+    if not isinstance(state.get("schema_version"), str):
+        raise RuntimeError("session pool is damaged; schema_version must be a string")
+    if not isinstance(state.get("slots"), dict):
+        raise RuntimeError("session pool is damaged; slots must be an object")
+    if any(not isinstance(key, str) or not isinstance(slot, dict) for key, slot in state["slots"].items()):
+        raise RuntimeError("session pool is damaged; every slot must be an object keyed by a string")
     return state
+
+
+def runtime_registration_id(slot: dict[str, Any]) -> str | None:
+    processes = slot.get("runtime_processes")
+    if not isinstance(processes, list) or not processes:
+        return None
+    payload = {
+        "slot_key": slot.get("slot_key"),
+        "task_id": slot.get("runtime_registration_task_id", slot.get("current_task_id")),
+        "thread_id": slot.get("thread_id"),
+        "bound_at": slot.get("bound_at"),
+        "runtime_processes": processes,
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def project_policy(root: Path) -> dict[str, int]:
@@ -96,6 +137,7 @@ def project_policy(root: Path) -> dict[str, int]:
         "max_resident_slots": int(configured.get("max_resident_slots", 6)),
         "max_pending_creates": int(configured.get("max_pending_creates", 1)),
         "max_writer_slots": int(configured.get("max_writer_slots", 2)),
+        "max_active_turns": int(configured.get("max_active_turns", 2)),
     }
 
 
@@ -106,8 +148,8 @@ def _resident(slot: dict[str, Any]) -> bool:
 def _expire_unbound_reservations(state: dict[str, Any]) -> bool:
     changed = False
     current = datetime.now(timezone.utc)
-    for key, slot in list(state.get("slots", {}).items()):
-        if slot.get("state") != "SETUP_PENDING" or slot.get("thread_id") or slot.get("client_thread_id"):
+    for slot in state.get("slots", {}).values():
+        if slot.get("state") != "SETUP_PENDING":
             continue
         try:
             created = datetime.fromisoformat(str(slot.get("reserved_at") or slot.get("bound_at")))
@@ -116,7 +158,8 @@ def _expire_unbound_reservations(state: dict[str, Any]) -> bool:
         except (TypeError, ValueError):
             created = current
         if (current - created).total_seconds() >= RESERVATION_TTL_SECONDS:
-            state["slots"].pop(key, None)
+            slot["state"] = "REQUERY_REQUIRED"
+            slot["requery_required_at"] = now()
             changed = True
     return changed
 
@@ -140,6 +183,10 @@ def plan(
     lane = normalized_lane(family, ownership_lane)
     key = resolved_slot_key(state, project_id, repository, family, lane)
     existing = state["slots"].get(key)
+    if existing and existing.get("state") == "REQUERY_REQUIRED" and observation == "EMPTY_CONFIRMED":
+        state["slots"].pop(key, None)
+        existing = None
+        expired = True
     policy = project_policy(root)
     project_slots = [slot for slot in state["slots"].values() if slot.get("project_id") == safe_id(project_id).upper() and _resident(slot)]
     pending = sum(1 for slot in project_slots if slot.get("state") == "SETUP_PENDING")
@@ -147,6 +194,8 @@ def plan(
 
     if observation in {"API_ERROR", "QUERY_TIMEOUT"}:
         action, reason = "BLOCK_QUERY", "桌面任务查询失败或超时，禁止猜测式创建替代会话"
+    elif existing and existing.get("state") == "REQUERY_REQUIRED":
+        action, reason = "BLOCK_QUERY", "会话创建预留已过期；必须重新查询宿主状态后才能继续"
     elif existing and existing.get("state") in RELEASE_BLOCKING_STATES:
         action, reason = "BLOCK_RELEASE_PENDING", "角色槽位尚未完成终态回收"
     elif existing and existing.get("state") == "SETUP_PENDING":
@@ -230,6 +279,7 @@ def bind(
     runtime_state: str,
     worktree: str | None = None,
     ownership_lane: str | None = None,
+    runtime_pids: list[int] | None = None,
 ) -> dict[str, Any]:
     state = load_pool(root)
     family = role_family(role)
@@ -240,6 +290,21 @@ def bind(
         raise RuntimeError("role slot is active for another task")
     if current.get("state") in RELEASE_BLOCKING_STATES:
         raise RuntimeError("role slot cannot be rebound before terminal release completes")
+    resolved_thread_id = thread_id or current.get("thread_id")
+    supplied_pids = None if runtime_pids is None else sorted(set(int(pid) for pid in runtime_pids if int(pid) > 0))
+    if supplied_pids is None:
+        registered_processes = list(current.get("runtime_processes") or []) if current.get("thread_id") == resolved_thread_id else []
+    else:
+        registered_processes = []
+        invalid_pids = []
+        for pid in supplied_pids:
+            identity = runtime_identity(pid)
+            if identity is None:
+                invalid_pids.append(pid)
+            else:
+                registered_processes.append(identity)
+        if invalid_pids:
+            raise RuntimeError(f"runtime process identity cannot be verified for PID(s): {invalid_pids}")
     entry = {
         "slot_key": key,
         "project_id": safe_id(project_id).upper(),
@@ -248,14 +313,18 @@ def bind(
         "ownership_lane": lane,
         "role": role,
         "state": runtime_state,
-        "thread_id": thread_id or current.get("thread_id"),
+        "thread_id": resolved_thread_id,
         "client_thread_id": client_thread_id or current.get("client_thread_id"),
         "current_task_id": safe_id(task_id).upper(),
         "base_sha": base_sha,
         "worktree": worktree or current.get("worktree"),
-        "bound_at": now(),
+        "bound_at": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
         "terminal_task_count": int(current.get("terminal_task_count", 0)),
+        "runtime_processes": registered_processes,
+        "runtime_identity_status": "VERIFIED" if registered_processes else "MISSING",
+        "runtime_registration_task_id": safe_id(task_id).upper(),
     }
+    entry["runtime_registration_id"] = runtime_registration_id(entry)
     state["slots"][key] = entry
     state["updated_at"] = now()
     atomic_json(pool_file(root), state)
@@ -288,10 +357,27 @@ def complete(
     if not slot or slot.get("current_task_id") != safe_id(task_id).upper():
         raise RuntimeError("task is not bound to the requested role slot")
     blockers = []
+    task_key = safe_id(task_id).upper()
+    turns = [
+        turn for turn in load_dispatch(root).get("turn_leases", {}).values()
+        if isinstance(turn, dict) and turn.get("task_id") == task_key
+    ]
+    active_turns = [turn for turn in turns if turn.get("status") in OUTSTANDING_TURN_LEASES]
+    active_runtime_leases = [
+        turn for turn in turns
+        if (read_turn_lease(root, str(turn.get("thread_key") or "")) or {}).get("lease_state") == "ACTIVE"
+    ]
+    task_locks = [item for item in load_locks(root).get("locks", []) if item.get("task_id") == task_key]
     if not checkpoint_id.strip():
         blockers.append("missing checkpoint")
+    if active_turns:
+        blockers.append("Turn is not confirmed or recovered")
+    if active_runtime_leases:
+        blockers.append("Turn lease is still active")
     if not locks_released:
         blockers.append("file locks not released")
+    elif task_locks:
+        blockers.append("file locks remain registered")
     if not resources_released:
         blockers.append("runtime release pending" if project_terminal else "external resources not released")
     if worktree_state not in {"CLEAN", "CLOSED", "PAUSED_DIRTY"}:
@@ -301,7 +387,10 @@ def complete(
     slot["last_outcome"] = outcome
     slot["last_checkpoint_id"] = checkpoint_id
     slot["last_candidate_id"] = candidate_id
-    slot["terminal_task_count"] = int(slot.get("terminal_task_count", 0)) + 1
+    completion_key = hashlib.sha256(f"{task_key}|{outcome}|{checkpoint_id}".encode("utf-8")).hexdigest()[:24]
+    if slot.get("last_completion_key") != completion_key:
+        slot["terminal_task_count"] = int(slot.get("terminal_task_count", 0)) + 1
+    slot["last_completion_key"] = completion_key
     slot["completed_at"] = now()
     slot["release_blockers"] = blockers
     only_terminal_probe_pending = project_terminal and blockers == ["runtime release pending"]
@@ -341,9 +430,22 @@ def release_ack(
     if slot.get("state") not in {"RELEASE_PENDING", "ARCHIVE_REQUESTED", "ARCHIVED_RUNTIME_UNVERIFIED"}:
         raise RuntimeError("role slot is not waiting for terminal release")
     probe = read_json(root / ".ai" / "evidence" / "runtime-release" / f"{safe_id(probe_id)}.json", {}) if probe_id else {}
+    probe_hash_valid = False
+    if isinstance(probe, dict) and probe:
+        hash_payload = dict(probe)
+        embedded_probe_id = hash_payload.pop("probe_id", None)
+        raw = json.dumps(hash_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        calculated_probe_id = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+        probe_hash_valid = embedded_probe_id == probe_id == calculated_probe_id
+    authorities = probe.get("evidence_authority") or {}
     probe_valid = bool(
-        probe and probe.get("result") == "PASS" and probe.get("slot_key") == key
+        probe_hash_valid and probe.get("result") == "PASS" and probe.get("slot_key") == key
+        and probe.get("project_id") == safe_id(project_id).upper()
         and probe.get("thread_id") == slot.get("thread_id")
+        and probe.get("runtime_registration_id") == slot.get("runtime_registration_id")
+        and authorities.get("desktop_thread") == "HOST_ASSERTED"
+        and authorities.get("runtime_processes") == "LOCAL_VERIFIED"
+        and authorities.get("worktree") == "LOCAL_VERIFIED"
     )
     if probe_valid:
         thread_archived = probe.get("thread_state") in {"ARCHIVED", "NOT_FOUND"}

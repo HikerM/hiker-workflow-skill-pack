@@ -9,7 +9,7 @@ description: 创建和推进带Task ID的工程任务状态机，记录目标、
 
 ```bash
 python <plugin-root>/scripts/governance_state.py --root . task-create --task-id KG-001 --goal "统一账户登录" --owner-agent "Planning Agent" --branch feature/KG-001-login --affected-files src/auth.ts tests/auth.test.ts
-python <plugin-root>/scripts/governance_state.py --root . transition --task-id KG-001 --to Planning --agent-role "Planning Agent"
+python <core>/scripts/hikerctl.py transition --task-id KG-001 --to Planning --agent-role "Planning Agent" --operation-id KG1-T1
 python <plugin-root>/scripts/governance_state.py --root . contract-set --task-id KG-001 --agent-role "Planning Agent" --allowed-files src/auth.ts tests/auth.test.ts --behavior-invariants "现有登录方式继续可用" --required-tests "认证单测" "登录回归"
 ```
 
@@ -27,8 +27,8 @@ Development 进入 Review 前必须生成与当前 Git HEAD、工作区指纹一
 
 进入 Development 前还必须服从项目并行预算和目标契约指纹。连续两个治理周期后，若范围、不变量和最低测试已满足，应直接进入首个安全业务切片；治理周期上限不得反向阻止 Development。日常状态和quick对账只读取活动Task索引，只有显式deep/full审计才扫描全部历史Task。
 
-桌面任务或 Subagent 调度前先运行 `dispatch_guard.py observe`。查询异常和超时分别记录为 `API_ERROR`、`QUERY_TIMEOUT`，都必须失败关闭；只有 `EMPTY_CONFIRMED` 才允许创建。随后运行 `environment-plan`：仓库、容器或设备任务继承项目环境，纯分析任务使用无项目环境，浏览器任务留在当前宿主。状态告警通过 `notify` 指纹去重，状态或证据变化时才再次显示。
+桌面任务或 Subagent 调度前先运行 `dispatch_guard.py observe`。查询异常和超时分别记录为 `API_ERROR`、`QUERY_TIMEOUT`，都必须失败关闭；只有 `EMPTY_CONFIRMED` 才允许创建。复用已有桌面任务时还必须运行 `turn-guard`，同时提交宿主外层状态和最新 Turn 状态：只有两者均证明可复用且 Turn 已终态才预留一次分派；发送成功后立即 `turn-ack --accepted`。活动、未知或状态不一致时禁止发送和重发，只允许一次有界复查，仍不一致就 Checkpoint 并暂停。随后运行 `environment-plan`：仓库、容器或设备任务继承项目环境，纯分析任务使用无项目环境，浏览器任务留在当前宿主。状态告警通过 `notify` 指纹去重，状态或证据变化时才再次显示。
 
 ```bash
-python <plugin-root>/scripts/governance_state.py --root . control --task-id KG-001 --action insert --new-task-id KG-002 --branch feature/KG-002-audit --instruction "插入审计日志需求"
+python <core>/scripts/hikerctl.py transition --task-id KG-001 --control-action insert --new-task-id KG-002 --branch feature/KG-002-audit --instruction "插入审计日志需求" --operation-id KG1-I1
 ```

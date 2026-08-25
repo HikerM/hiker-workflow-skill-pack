@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hiker-control-event.schema.json",
+  "title": "Hiker Control Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "trace_id",
+    "span_id",
+    "event_class",
+    "event_type",
+    "event_id",
+    "occurred_at",
+    "project_ref",
+    "summary_code",
+    "summary",
+    "phase",
+    "skill",
+    "duration_ms",
+    "result",
+    "cache_hit",
+    "evidence",
+    "operation_id",
+    "previous_event_hash",
+    "event_hash",
+    "privacy_class",
+    "suite_version",
+    "suite_fingerprint"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "event_id": {"type": "string", "minLength": 1, "maxLength": 64},
+    "trace_id": {"type": "string", "minLength": 1, "maxLength": 64},
+    "span_id": {"type": "string", "minLength": 1, "maxLength": 64},
+    "event_class": {"const": "TRACE_EVENT"},
+    "parent_id": {"type": ["string", "null"], "maxLength": 64},
+    "event_type": {"type": "string", "minLength": 1, "maxLength": 120},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "project_ref": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "task_id": {"type": ["string", "null"], "maxLength": 100},
+    "phase": {"type": "string", "maxLength": 40},
+    "skill": {
+      "type": "array",
+      "maxItems": 2,
+      "items": {"type": "string", "maxLength": 80}
+    },
+    "tool": {"type": ["string", "null"], "maxLength": 120},
+    "duration_ms": {"type": "number", "minimum": 0},
+    "result": {"type": "string", "maxLength": 40},
+    "gate_result": {"type": ["string", "null"], "maxLength": 80},
+    "cache_hit": {"type": "boolean"},
+    "summary_code": {
+      "enum": [
+        "ADMISSION_ACCEPTED",
+        "ADMISSION_BLOCKED",
+        "STATE_TRANSITIONED",
+        "STATE_TRANSITION_BLOCKED",
+        "CHECKPOINT_SAVED",
+        "HANDOFF_CREATED",
+        "HANDOFF_ACKNOWLEDGED",
+        "GOAL_REBOUND",
+        "GATE_PASSED",
+        "GATE_BLOCKED",
+        "RUNTIME_RELEASE_UNVERIFIED",
+        "CONTROL_EVENT"
+      ]
+    },
+    "summary": {"type": "string", "maxLength": 80},
+    "evidence": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+          "sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"}
+        }
+      }
+    },
+    "operation_id": {"type": "string", "minLength": 1, "maxLength": 100},
+    "import_id": {"type": ["string", "null"], "maxLength": 100},
+    "import_offset": {"type": ["integer", "null"], "minimum": 0},
+    "operation_fingerprint": {"type": ["string", "null"], "maxLength": 80},
+    "previous_event_hash": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "event_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "privacy_class": {"const": "METADATA_ONLY"},
+    "suite_version": {"type": "string"},
+    "suite_fingerprint": {"type": "string"}
+  }
+}

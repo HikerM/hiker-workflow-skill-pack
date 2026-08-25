@@ -18,13 +18,13 @@ sys.path.insert(0, str(WORKSPACE))
 from bounded_run import run_bounded  # noqa: E402
 from convergence_guard import record_progress  # noqa: E402
 from dispatch_guard import observe as dispatch_observe  # noqa: E402
-from goal_contract import set_contract  # noqa: E402
+from goal_contract import ensure_contract, set_contract  # noqa: E402
+from goal_change_transaction import apply_goal_change  # noqa: E402
 from governance_state import (  # noqa: E402
     create_task,
     init_project,
     load_task,
     record,
-    rebind_task_goal,
     save_task,
     set_change_contract,
     transition,
@@ -180,6 +180,8 @@ def scenario_long_master_and_output() -> dict:
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         assessment = epoch_record(root, substantive_turns=40, tool_calls=80, tool_output_chars=120_000, compactions=2)
+        checkpoint = root / ".ai" / "runtime" / "checkpoints" / "CP-EPOCH-001.json"
+        atomic_json(checkpoint, {"event": "checkpoint", "created_at": "2026-01-01T00:00:00+00:00"})
         rotated = epoch_rotate(root, "CP-EPOCH-001")
         bounded = run_bounded(
             root, "EVAL-LONG-OUTPUT",
@@ -189,7 +191,7 @@ def scenario_long_master_and_output() -> dict:
         return {
             "ok": all((
                 assessment["rotation_required"], rotated["epoch"] == 2,
-                rotated["last_checkpoint_id"] == "CP-EPOCH-001", bounded["truncated"],
+                rotated["last_checkpoint_id"] == ".ai/runtime/checkpoints/CP-EPOCH-001.json", bounded["truncated"],
                 Path(root / bounded["evidence_path"]).is_file(),
                 (root / ".ai/archive/session-epochs/epoch-0001.json").is_file(),
             )),
@@ -210,22 +212,49 @@ def scenario_goal_adjustment() -> dict:
             task_id="EV-201", goal="执行目标", owner_agent="Planning Agent", ownership_lane="service",
             branch="feature/EV-201", base_branch="develop", affected_files=[],
         ))
-        set_contract(root, "GOAL-ADJUST", "交付调整后的目标", non_goals=["旧扩展"], acceptance_ids=["AC-NEW"])
+        direct_revision_blocked = False
+        try:
+            set_contract(root, "GOAL-ADJUST", "交付调整后的目标", non_goals=["旧扩展"], acceptance_ids=["AC-NEW"])
+        except RuntimeError as error:
+            direct_revision_blocked = "goal-change" in str(error)
+        current = ensure_contract(root)
+        plan = {
+            "schema_version": "1.0.0",
+            "change_kind": "MODIFY",
+            "base_goal": {
+                "goal_id": current["goal_id"], "revision": current["revision"],
+                "fingerprint": current["fingerprint"],
+            },
+            "new_goal": {
+                "goal_id": current["goal_id"], "outcome": "交付调整后的目标",
+                "non_goals": ["旧扩展"], "acceptance_ids": ["AC-NEW"],
+                "behavior_invariants": [], "constraints": [], "priority_order": [],
+            },
+            "changed_surface_ids": ["GOAL:ACCEPTANCE"],
+            "tasks": [{
+                "task_id": "EV-201", "classification": "AFFECTED",
+                "impact_summary": "验收条件由 AC-OLD 调整为 AC-NEW",
+                "affected_surface_ids": ["GOAL:ACCEPTANCE"], "retained_surface_ids": [],
+                "invalidations": {
+                    "implementation_route_ids": [], "review_record_ids": [], "test_record_ids": [],
+                    "checkpoint_ids": [], "acceptance_ids": [],
+                },
+                "invalidate_candidate": False, "change_contract_required": True,
+            }],
+        }
+        apply_goal_change(root, plan, "eval-goal-adjustment")
+        rebound = load_task(root, "EV-201")
         stale_blocked = False
         try:
             transition(root, ns(task_id="EV-201", to="Planning", agent_role="Planning Agent", commit_id=None))
         except RuntimeError as error:
-            stale_blocked = "stale" in str(error)
-        rebound = rebind_task_goal(root, ns(
-            task_id="EV-201", agent_role="Planning Agent",
-            impact_summary="验收条件由 AC-OLD 调整为 AC-NEW",
-            retain_change=[], revise_change=["验收条件"], retire_change=["旧扩展"],
-        ))
+            stale_blocked = "goal adjustment" in str(error).lower()
         set_change_contract(root, contract_args("EV-201", []))
         planned = transition(root, ns(task_id="EV-201", to="Planning", agent_role="Planning Agent", commit_id=None))
         return {
-            "ok": stale_blocked and rebound["goal_binding"]["revision"] == 2 and planned["state"] == "Planning",
+            "ok": direct_revision_blocked and stale_blocked and rebound["goal_binding"]["revision"] == 2 and planned["state"] == "Planning",
             "evidence": {
+                "direct_revision_blocked": direct_revision_blocked,
                 "stale_task_blocked": stale_blocked, "rebound_revision": rebound["goal_binding"]["revision"],
                 "resumed_state": planned["state"],
             },

@@ -1,8 +1,10 @@
-# AI 协作 Skill 5.0：大型软件工程多 Agent 系统
+# Hiker 工程能力系统：大型软件工程多角色协作
+
+<!-- engineering-current-facts: version=5.17.0; plugins=5; skills=42; tests=237 -->
 
 ## 1. 系统定位
 
-这不是“让多个 Agent 一起写代码”的提示词集合，而是可安装到 ChatGPT Desktop / Codex 的工程控制系统。它把项目事实、任务生命周期、角色权限、Git分支、Worktree、共享文件锁、审核测试证据和发布门禁连成一套可恢复、可审计的状态机。
+Hiker Engineering Capability System（Hiker 工程能力系统）不是“让多个 Agent 一起写代码”的提示词集合，也不是独立 Agent Runtime。ChatGPT Desktop / Codex 提供 Agent Runtime、桌面任务和工具调用；本能力系统提供可安装的 Plugin、Skill 与本地确定性脚本，把项目事实、任务生命周期、角色权限、Git分支、Worktree、共享文件锁、审核测试证据和发布门禁连成一套可恢复、可审计的工程约束。
 
 适用架构：
 
@@ -30,8 +32,10 @@ ai-engineering-workspace/
 │  ├─ task-lifecycle-manager/
 │  ├─ workspace-task-router/
 │  ├─ worktree-task-manager/
+│  ├─ worktree-safe-convergence/
 │  ├─ file-lock-manager/
 │  ├─ feature-acceptance-closure/
+│  ├─ long-chain-change-convergence/
 │  ├─ change-ownership-merge/
 │  ├─ multi-project-portfolio-manager/
 │  └─ plugin-application-receipt/
@@ -161,10 +165,15 @@ Developer完成 → Conventional Commit → Review PASS → Test PASS
 
 ## 6. 任务状态模型
 
+<!-- task-lifecycle: Created → Planning → Development → Review → Testing → MergedPendingCleanup → Merged → Released -->
+
+合法主路径：`Created → Planning → Development → Review → Testing → MergedPendingCleanup → Merged → Released`。
+
 ```text
-Created → Planning → Development → Review → Testing → Merged → Released
-                         ↑          │
-                         └──────────┘ 发现问题回到Development
+Created → Planning → Development → Review → Testing
+                         ↑          │          │
+                         └──────────┘          ↓
+                 MergedPendingCleanup → Merged → Released
 ```
 
 任务记录：Task ID、目标、状态、控制状态、负责人角色、Git branch/base、影响文件、Commit ID、审核、测试、截图/日志、文档、决定、禁止事项、风险、闭环和发布结果。
@@ -180,7 +189,7 @@ Created → Planning → Development → Review → Testing → Merged → Relea
 
 ## 8. 自动验收闭环
 
-“代码已生成”不是完成。合并门禁同时要求：实现Commit、独立Review PASS、Test PASS及命令记录、可打开的截图或日志、CHANGELOG已更新、ARCHITECTURE已更新或给出不适用理由、分支正确、工作区干净、锁已释放、状态一致。
+“代码已生成”不是完成。合并门禁同时要求：实现Commit、独立Review PASS、Test PASS及命令记录、可打开的截图或日志、CHANGELOG已更新、ARCHITECTURE已更新或给出不适用理由、分支正确、工作区干净、锁已释放、状态一致。合并提交已经产生但任务 Worktree 尚未安全关闭时，任务必须停留在 `MergedPendingCleanup`，不能提前写成 `Merged`。
 
 发布再增加：Merged状态、merge commit、构建/部署/迁移/回滚证据、数据库/API兼容检查和发布验证PASS。
 
@@ -223,3 +232,5 @@ Created → Planning → Development → Review → Testing → Merged → Relea
 运行个人安装器后，它会默认安装启用五个插件，并把 `templates/GLOBAL_AGENTS_AI_ENGINEERING.md` 的标记区块安全合并到 `~/.codex/AGENTS.md`。它只允许“智能工程轻量路由”自动触发，其他入口保持手动；首次实质动作前只用一行中文显示实际使用的插件和 Skill，结束时不重复显示未变化的回执。重复安装不会重复追加，原文件会备份，可用 `--no-merge-global-agents` 退出。
 
 这只影响选择与透明度，不赋予额外外部写权限。push、merge、部署、生产数据写入仍需用户请求或既有明确授权。
+
+桌面任务归档与本地工具运行时释放由 ChatGPT Desktop / Codex 宿主显式执行；本地脚本只验证并记录结果。脚本不得伪造“已归档”或“已释放”，宿主动作未完成或证据不足时保留未验证状态并阻止创建替代任务，但不应让无须新隔离运行时的已有工作退回治理空转。

@@ -1,44 +1,47 @@
-# 智能软件工程平台 5.16 验证报告
+# 智能软件工程平台 5.17 验证报告
 
-生成版本：`5.16.0+codex.20260824100427`
+生成版本：`5.17.0+codex.20260825194113`
 
 ## 已执行结果
 
-- 五插件全量单元回归：138项全部通过（核心43、质量26、客户端7、浏览器端与服务端14、工作区48）。
-- 路由行为评测：96项正向与43项负向全部通过；简单解释类慢问题不会进入工程路由，明确插件改造仍会进入。
-- 路由冷进程性能：20次P95为111.55毫秒，低于200毫秒发布门限；范围不包含网络与模型服务端延迟。
+- 五插件全量单元回归：237项全部通过（核心70、质量36、客户端15、浏览器端与服务端19、工作区97），源码测试指纹为 `ee5dfbea525763e8919a`。
+- 真实语义路由评测：39项宿主选择用例全部通过；Top1准确率、Top2召回、拒绝/unknown质量均为1.0，错误插件率、过度加载率和不必要Skill率均为0，外部模型调用为0。
+- 路由冷进程性能：20次增量P95为114.63毫秒、原始P95为143.69毫秒，分别低于200/500毫秒发布门限；范围不包含网络与模型服务端延迟。
 - 发布级Skill一致性审核：5个插件、42个Skill全部通过；结构、路由、职责、权限、可用性和性能均为0错误、0警告。
-- 桌面稳定性门禁：全局性能内核3045字节；42个Skill前置描述合计9602字节；Skill正文合计131866字节；无生命周期Hook。
+- 桌面稳定性门禁：全局性能内核3673字节；42个Skill前置描述合计9602字节；Skill正文合计132755字节；无生命周期Hook。
 - 五插件版本栅栏：完整版本一致，套件指纹可写入项目路由状态；旧指纹普通开发被阻断，上下文恢复迁移通过。
-- 安装冒烟：个人Marketplace、桌面启用配置、全局规则合并、重复安装、单活动缓存、卸载恢复和项目安装全部通过。
+- 安装验证：隔离临时HOME中的个人Marketplace、五插件源码、5.17缓存、桌面启用配置和全局规则哈希一致；未修改当前Codex 5.15安装。
 - 总控推进多维评估：小型真实开发、大型动态并行、长期总控纪元和目标中途调整4个场景全部通过。
-- 长会话门禁：75%软阈值只推荐自然边界Checkpoint；硬阈值仍要求Checkpoint与唯一新总控纪元接管。
+- Crash Recovery E2E：原子提交、Trace补偿、PREPARED/DOMAIN_COMMITTED中断、dead PID、PID复用和损坏锁8项通过；Desktop Turn生命周期12项通过。
+- Goal Change E2E：AFFECTED/UNAFFECTED/SUPERSEDED/REQUIRES_REVIEW、消费者证据失效、撤销和中断恢复16项通过。
+- Event Pressure E2E：10,001事件、冷热Rotation、显式恢复、STREAM聚合、RED/DRAINING、损坏segment和热查询有界12项通过。
+- Multi Session E2E：会话租约、固定writer/assurance槽、最多两个运行通道、重复派发阻断、Worktree和资源释放相关Workspace回归57项通过。
+- 长会话门禁：75%软阈值只推荐自然边界Checkpoint；硬阈值要求Checkpoint与唯一新总控纪元接管。
 - 有界输出：12001字符完整输出写证据文件，会话摘要为525字符。
-- 仓库洁净度验证：PASS；发布前测试输出目录与Python缓存均已移除。
-- 公开内容审计：扫描578个受控及发布包文本条目，0项敏感信息发现。
+- Architecture Self Guard：105个生产Python文件通过；`hikerctl.py` 196行、`governance_state.py` 648行，Task状态保持单一权威writer。
+- 公开内容审计：扫描633个受控及发布包文本条目，0项敏感信息发现。
 - 桌面软件等价重建1.3.0独立验证：PASS，0错误、0警告。
-- 发布包：5个5.16.0 ZIP已生成并通过完整性检查；旧5.15.0 ZIP已移出发布目录。
+- 发布包：5个5.17.0 ZIP已生成并通过源码文件级完整性检查；旧5.16.0 ZIP已移出发布目录。
 
-## 5.16 新增门禁
+## 5.17 发布门禁
 
-- `GLOBAL_AGENTS_AI_ENGINEERING.md`：只保留约3KB性能内核；快速问题不运行脚本，普通项目按证据一次准入，治理路径按风险启用。
-- `suite_version.py`：定位同一来源、同一完整版本的五插件与Skill；禁止旧核心拼接其他插件的新版本。
-- `suite_router.py`：准入指纹绑定目标修订、动作、仓库身份、HEAD、脏状态、Manifest和套件版本；可信命中可复用。
-- `statectl.py`：路由状态保存 `suite_version` 与 `suite_fingerprint`；旧任务必须先完成恢复迁移。
-- `context_memory.py` 与工作区有界上下文：会话热注入默认4000字符，活动摘要8000字符，热Checkpoint和任务摘要索引同步收紧。
-- `session_epoch.py`：增加75%软阈值，软阈值不强制轮换；硬阈值才阻断继续执行。
-- `run_all_tests.py`：支持按插件测试分片和源码指纹证据；部分测试不会覆盖发布级全量报告。
-- `desktop_stability_gate.py`：新增全局模板、单个Skill描述、描述总量和Skill正文总量预算，防止以后重新膨胀。
-- `install_personal.py`：默认只保留一个活动缓存版本，旧版进入可恢复备份；明确旧任务只Checkpoint、不继续混合写入。
+- `self_governance.py`：按Architecture → Privacy → Version Facts → Tests → Performance → Package Facts → Release Gate顺序失败关闭。
+- `control_kernel.py`：operation journal统一Task状态提交语义，Domain提交后Trace失败只进入补偿，不诱导业务重放。
+- `desktop_turn_lifecycle.py` 与 `runtime_release_probe.py`：以Turn租约和运行时身份阻断重复发送，并验证进程释放。
+- `event_store.py`、`event_budget.py` 与 `desktop_pressure.py`：保持热索引有界，压力升高时收敛新dispatch。
+- `goal_change_transaction.py`：结构化影响分类在一个可恢复修订事务内更新多Task绑定与证据有效性。
+- `evaluate_semantic_routing.py`：评分宿主给出的结构化选择，不读取gold作为选择输入，不按关键词推导Skill。
+- `audit_release_facts.py` 与 `release-versions.json`：统一README、Manifest、安装文档、ZIP和checksums的当前版本事实。
+- `package_release.py`：先在临时候选目录验证完整五包，再原子发布，任何源码或包事实漂移均不更新 `dist`。
 
 ## 发布包摘要
 
 | 插件 | 文件 | SHA-256 |
 |---|---|---|
-| 智能工程核心 | `dist/ai-engineering-core-5.16.0.zip` | `f815debd9a401b473f7ce66a0f6f6f12b03a7c0481221aca505e521856caefb7` |
-| 质量、风险与发布 | `dist/ai-engineering-quality-5.16.0.zip` | `74bb5936c1d204caa64e09fc5b9024baaf5698f5890d61d2382e6ed144506230` |
-| 客户端工程 | `dist/ai-engineering-unity-5.16.0.zip` | `17b6b716ecf9ba81121ebc2cc9dbb217d1edae047982f48b62a96854f83b0eaf` |
-| 浏览器端与服务端工程 | `dist/ai-engineering-web-5.16.0.zip` | `a53f57ef6ef9c5b3999c998378dbe8ee97783a0f64db6419e6c2f9971a11bdb9` |
-| 工作区与多会话协作 | `dist/ai-engineering-workspace-5.16.0.zip` | `87a334cc10c3a1d654eb83032b2f074bc85bccfdde4288d48091be99643b6a0b` |
+| 智能工程核心 | `dist/ai-engineering-core-5.17.0.zip` | `752426cc7e496e5eb58926f1b4a4f88597f5bf1c220eeaef3b7f8fee5d278027` |
+| 质量、风险与发布 | `dist/ai-engineering-quality-5.17.0.zip` | `7668a58e1e667639afc99ff4f22222e324eb25dbc5f0c25c0e6fe5bcc30f4698` |
+| 客户端工程 | `dist/ai-engineering-unity-5.17.0.zip` | `2f72f0a71abead4f62cd8c9906810ef7e85ab9b7403bf81a13f507986a473be8` |
+| 浏览器端与服务端工程 | `dist/ai-engineering-web-5.17.0.zip` | `d46e316709148a426cbe91a733d41564162577dbfcd1621061070b9e432daf32` |
+| 工作区与多会话协作 | `dist/ai-engineering-workspace-5.17.0.zip` | `1670f642d24297a8b2a8d37ef9c2fc74492004e25257aba6ff154b409eca2fbf` |
 
 本报告不包含本机安装路径、用户信息、公司信息、真实项目信息或会话标识。

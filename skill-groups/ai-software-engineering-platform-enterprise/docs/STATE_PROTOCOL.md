@@ -56,4 +56,8 @@
 当前插件 manifest 不自动注册这些事件；上述名称是脚本输入/输出协议，需由 Skill 或外部编排显式调用。
 - `context-validator`：状态无效或协议不兼容时阻止自动继续。
 
-新版项目使用 `Created → Planning → Development → Review → Testing → Merged → Released`。暂停、调整和恢复属于控制状态，不得跳过生命周期门禁；插入需求必须创建新的Task ID并记录依赖。
+<!-- task-lifecycle: Created → Planning → Development → Review → Testing → MergedPendingCleanup → Merged → Released -->
+
+任务生命周期直接以 `governance_state.TASK_STATES` 为机器事实源，当前合法主路径是 `Created → Planning → Development → Review → Testing → MergedPendingCleanup → Merged → Released`。合并提交完成但任务 Worktree 尚未安全关闭时必须停留在 `MergedPendingCleanup`；暂停、调整和恢复属于控制状态，不得跳过生命周期门禁；插入需求必须创建新的Task ID并记录依赖。
+
+ChatGPT Desktop / Codex 是 Agent Runtime 和桌面任务动作的宿主。桌面任务归档、任务切换及本地工具运行时释放必须由宿主显式执行；本地脚本只验证并记录结果，不得凭本地状态写入伪造宿主动作。宿主证据不足时使用未验证状态，不得宣称已经完成释放。

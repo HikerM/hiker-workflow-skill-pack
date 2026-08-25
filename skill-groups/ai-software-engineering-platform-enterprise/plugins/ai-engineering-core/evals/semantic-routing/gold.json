@@ -1,0 +1,77 @@
+{
+  "schema_version": "1.0.0",
+  "benchmark_id": "hiker-semantic-routing-2026-08-p1b",
+  "thresholds": {
+    "min_top1_accuracy": 0.85,
+    "min_top2_recall": 0.90,
+    "max_wrong_plugin_rate": 0.02,
+    "max_overload_rate": 0.0,
+    "max_unnecessary_skill_rate": 0.05,
+    "min_reject_unknown_quality": 0.85,
+    "min_deferred_recall": 1.0
+  },
+  "categories": {
+    "explicit-positive": ["E01", "E02", "E03", "E04"],
+    "negation": ["N01", "N02", "N03", "N04"],
+    "historical-reference": ["H01", "H02", "H03", "H04"],
+    "example-reference": ["X01", "X02", "X03", "X04"],
+    "migration": ["M01", "M02", "M03", "M04"],
+    "ambiguous": ["A01", "A02", "A03", "A04"],
+    "multi-domain": ["C01", "C02", "C03", "C04"],
+    "phase-change": ["P01", "P02", "P03", "P04"],
+    "no-skill": ["Z01", "Z02", "Z03"],
+    "bounded-selection": ["D01", "D02"],
+    "reject-unknown": ["R01", "R02"]
+  },
+  "labels": [
+    {"id":"E01","disposition":"SELECT","acceptable_top1":["web-component-implementation"],"required_top2":["web-component-implementation"],"allowed_skills":["web-component-implementation"],"max_selected":1},
+    {"id":"E02","disposition":"SELECT","acceptable_top1":["backend-quality-review"],"required_top2":["backend-quality-review"],"allowed_skills":["backend-quality-review"],"max_selected":1},
+    {"id":"E03","disposition":"SELECT","acceptable_top1":["cs-ui-design"],"required_top2":["cs-ui-design"],"allowed_skills":["cs-ui-design"],"allowed_specializations":["client-qt"],"max_selected":1},
+    {"id":"E04","disposition":"SELECT","acceptable_top1":["unity-component-implementation"],"required_top2":["unity-component-implementation"],"allowed_skills":["unity-component-implementation"],"max_selected":1},
+
+    {"id":"N01","disposition":"SELECT","acceptable_top1":["backend-component-implementation"],"required_top2":["backend-component-implementation"],"allowed_skills":["backend-component-implementation"],"allowed_specializations":["backend-python"],"forbidden_specializations":["backend-laravel-php"],"max_selected":1},
+    {"id":"N02","disposition":"SELECT","acceptable_top1":["full-change-risk-review"],"required_top2":["full-change-risk-review"],"allowed_skills":["full-change-risk-review"],"forbidden_skills":["worktree-task-manager","change-ownership-merge"],"max_selected":1},
+    {"id":"N03","disposition":"SELECT","acceptable_top1":["web-component-implementation"],"required_top2":["web-component-implementation"],"allowed_skills":["web-component-implementation"],"forbidden_skills":["web-ui-design"],"max_selected":1},
+    {"id":"N04","disposition":"SELECT","acceptable_top1":["regression-test-planner"],"required_top2":["regression-test-planner"],"allowed_skills":["regression-test-planner"],"forbidden_skills":["release-readiness-review"],"max_selected":1},
+
+    {"id":"H01","disposition":"SELECT","acceptable_top1":["web-component-implementation"],"required_top2":["web-component-implementation"],"allowed_skills":["web-component-implementation"],"forbidden_skills":["cs-component-implementation"],"max_selected":1},
+    {"id":"H02","disposition":"SELECT","acceptable_top1":["regression-test-planner"],"required_top2":["regression-test-planner"],"allowed_skills":["regression-test-planner"],"forbidden_skills":["change-ownership-merge"],"max_selected":1},
+    {"id":"H03","disposition":"SELECT","acceptable_top1":["backend-quality-review"],"required_top2":["backend-quality-review"],"allowed_skills":["backend-quality-review"],"allowed_specializations":["backend-python"],"forbidden_specializations":["backend-laravel-php"],"max_selected":1},
+    {"id":"H04","disposition":"SELECT","acceptable_top1":["context-recovery"],"required_top2":["context-recovery"],"allowed_skills":["context-recovery"],"forbidden_skills":["worktree-task-manager"],"max_selected":1},
+
+    {"id":"X01","disposition":"SELECT","acceptable_top1":["web-ui-design"],"required_top2":["web-ui-design"],"allowed_skills":["web-ui-design"],"forbidden_skills":["unity-ui-design"],"max_selected":1},
+    {"id":"X02","disposition":"NONE","allowed_skills":[],"forbidden_skills":["cs-client-router","cs-ui-design"],"max_selected":0},
+    {"id":"X03","disposition":"SELECT","acceptable_top1":["web-quality-review"],"required_top2":["web-quality-review"],"allowed_skills":["web-quality-review"],"forbidden_skills":["database-migration-governance"],"max_selected":1},
+    {"id":"X04","disposition":"SELECT","acceptable_top1":["project-state-manager"],"required_top2":["project-state-manager"],"allowed_skills":["project-state-manager"],"forbidden_skills":["api-event-contract-design"],"max_selected":1},
+
+    {"id":"M01","disposition":"SELECT","acceptable_top1":["backend-technology-router"],"required_top2":["backend-technology-router"],"allowed_skills":["backend-technology-router"],"allowed_specializations":["backend-python"],"forbidden_specializations":["backend-laravel-php"],"max_selected":1},
+    {"id":"M02","disposition":"SELECT","acceptable_top1":["cs-client-router"],"required_top2":["cs-client-router"],"allowed_skills":["cs-client-router"],"allowed_specializations":["client-electron-tauri"],"max_selected":1},
+    {"id":"M03","disposition":"SELECT","acceptable_top1":["unity-ui-design"],"required_top2":["unity-ui-design"],"allowed_skills":["unity-ui-design"],"max_selected":1},
+    {"id":"M04","disposition":"SELECT","acceptable_top1":["api-event-contract-design"],"required_top2":["api-event-contract-design"],"allowed_skills":["api-event-contract-design"],"max_selected":1},
+
+    {"id":"A01","disposition":"UNKNOWN","allowed_skills":[],"max_selected":0},
+    {"id":"A02","disposition":"UNKNOWN","allowed_skills":[],"max_selected":0},
+    {"id":"A03","disposition":"UNKNOWN","allowed_skills":[],"max_selected":0},
+    {"id":"A04","disposition":"UNKNOWN","allowed_skills":[],"max_selected":0},
+
+    {"id":"C01","disposition":"SELECT","acceptable_top1":["web-component-implementation"],"required_top2":["web-component-implementation","backend-component-implementation"],"allowed_skills":["web-component-implementation","backend-component-implementation"],"max_selected":2},
+    {"id":"C02","disposition":"SELECT","acceptable_top1":["api-event-contract-design"],"required_top2":["api-event-contract-design","database-migration-governance"],"allowed_skills":["api-event-contract-design","database-migration-governance"],"max_selected":2},
+    {"id":"C03","disposition":"SELECT","acceptable_top1":["workspace-task-router"],"required_top2":["workspace-task-router"],"allowed_skills":["workspace-task-router"],"max_selected":1},
+    {"id":"C04","disposition":"SELECT","acceptable_top1":["multi-agent-project-governance"],"required_top2":["multi-agent-project-governance","bounded-context-memory"],"allowed_skills":["multi-agent-project-governance","bounded-context-memory"],"max_selected":2},
+
+    {"id":"P01","disposition":"SELECT","acceptable_top1":["full-change-risk-review"],"required_top2":["full-change-risk-review"],"allowed_skills":["full-change-risk-review"],"max_selected":1},
+    {"id":"P02","disposition":"SELECT","acceptable_top1":["regression-test-planner"],"required_top2":["regression-test-planner"],"allowed_skills":["regression-test-planner"],"max_selected":1},
+    {"id":"P03","disposition":"SELECT","acceptable_top1":["feature-acceptance-closure"],"required_top2":["feature-acceptance-closure"],"allowed_skills":["feature-acceptance-closure"],"forbidden_skills":["release-readiness-review"],"max_selected":1},
+    {"id":"P04","disposition":"SELECT","acceptable_top1":["release-readiness-review"],"required_top2":["release-readiness-review"],"allowed_skills":["release-readiness-review"],"max_selected":1},
+
+    {"id":"Z01","disposition":"NONE","allowed_skills":[],"max_selected":0},
+    {"id":"Z02","disposition":"NONE","allowed_skills":[],"max_selected":0},
+    {"id":"Z03","disposition":"NONE","allowed_skills":[],"max_selected":0},
+
+    {"id":"D01","disposition":"SELECT","acceptable_top1":["web-component-implementation"],"required_top2":["web-component-implementation","backend-component-implementation"],"allowed_skills":["web-component-implementation","backend-component-implementation"],"required_deferred":["regression-test-planner"],"max_selected":2},
+    {"id":"D02","disposition":"SELECT","acceptable_top1":["web-quality-review"],"required_top2":["web-quality-review","backend-quality-review"],"allowed_skills":["web-quality-review","backend-quality-review"],"required_deferred":["regression-test-planner","release-readiness-review"],"max_selected":2},
+
+    {"id":"R01","disposition":"REJECT","allowed_skills":[],"max_selected":0},
+    {"id":"R02","disposition":"REJECT","allowed_skills":[],"max_selected":0}
+  ]
+}

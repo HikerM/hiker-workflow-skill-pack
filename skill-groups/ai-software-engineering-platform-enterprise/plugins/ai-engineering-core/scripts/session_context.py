@@ -43,7 +43,15 @@ def main() -> int:
         goal_line = f"项目目标契约：{goal.get('goal_id')} r{goal.get('revision')} / {str(goal.get('fingerprint') or '')[:12]}；结果：{str(goal.get('outcome') or '')[:400]}"
     epoch_line = f"总控纪元：{epoch['epoch']}；轮换={'需要' if epoch['rotation_required'] else '无需'}；原因：{','.join(epoch['reasons']) or '无'}"
     binding_line = f"会话绑定：Task={task_id or 'master'}；Role={payload.get('role_family') or payload.get('roleFamily') or 'unknown'}；Lane={payload.get('ownership_lane') or payload.get('ownershipLane') or 'default'}"
-    context = "\n".join([f"[智能工程状态协议 {version}]", f"会话来源：{payload.get('source')}", binding_line, f"Git分支/提交：{git.get('branch')} / {str(git.get('head'))[:12]}", f"恢复来源：{active_path.relative_to(root).as_posix()}", receipt, epoch_line, goal_line, active, f"## 锁定决策（共 {len(all_locked)} 项）", *(locked or ["- 无"]), *( ["- 列表已截断；修改前按需读取 .ai/governance/locked-decisions.json。"] if len(all_locked)>len(locked) else [] ), "规则：正式状态优先于聊天摘要；只执行绑定Task与Lane；继续前不得覆盖锁定决策；用户中断指令按控制状态处理。"])
+    context = "\n".join([
+        f"[智能工程状态协议 {version}]", f"会话来源：{payload.get('source')}", binding_line,
+        f"Git分支/提交：{git.get('branch')} / {str(git.get('head'))[:12]}",
+        f"恢复来源：{active_path.relative_to(root).as_posix()}", receipt, epoch_line, goal_line,
+        "规则：正式状态优先于聊天摘要；只执行绑定Task与Lane；继续前不得覆盖锁定决策；用户中断指令按控制状态处理。",
+        f"## 锁定决策（共 {len(all_locked)} 项）", *(locked or ["- 无"]),
+        *(["- 列表已截断；修改前按需读取 .ai/governance/locked-decisions.json。"] if len(all_locked) > len(locked) else []),
+        "## 当前有界工作集", active,
+    ])
     context = limit_text(context, policy["session_context_max_chars"], ".ai/ 与四个根状态文档")
     out = {"continue": True, "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": context}}
     print(json.dumps(out, ensure_ascii=False)); return 0

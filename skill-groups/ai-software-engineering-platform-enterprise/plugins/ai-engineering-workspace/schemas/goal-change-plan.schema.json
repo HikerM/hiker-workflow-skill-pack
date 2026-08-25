@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hiker.local/schemas/goal-change-plan.schema.json",
+  "title": "Hiker Goal Change Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "base_goal",
+    "new_goal",
+    "changed_surface_ids",
+    "tasks"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "change_kind": {
+      "enum": ["ADD", "REMOVE", "MODIFY", "ARCHITECTURE", "STACK_MIGRATION", "UNDO"]
+    },
+    "undo_of_revision": {"type": "integer", "minimum": 1},
+    "base_goal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goal_id", "revision", "fingerprint"],
+      "properties": {
+        "goal_id": {"type": "string", "minLength": 1},
+        "revision": {"type": "integer", "minimum": 1},
+        "fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
+    "new_goal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goal_id", "outcome"],
+      "properties": {
+        "goal_id": {"type": "string", "minLength": 1},
+        "outcome": {"type": "string", "minLength": 1},
+        "non_goals": {"$ref": "#/$defs/boundedStrings"},
+        "acceptance_ids": {"$ref": "#/$defs/boundedStrings"},
+        "behavior_invariants": {"$ref": "#/$defs/boundedStrings"},
+        "constraints": {"$ref": "#/$defs/boundedStrings"},
+        "priority_order": {"$ref": "#/$defs/boundedStrings"}
+      }
+    },
+    "changed_surface_ids": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 200,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/surfaceId"}
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 200,
+      "items": {"$ref": "#/$defs/taskClassification"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"change_kind": {"const": "UNDO"}}, "required": ["change_kind"]},
+      "then": {"required": ["undo_of_revision"]},
+      "else": {"not": {"required": ["undo_of_revision"]}}
+    }
+  ],
+  "$defs": {
+    "boundedStrings": {
+      "type": "array",
+      "maxItems": 200,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 500}
+    },
+    "surfaceId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$"
+    },
+    "invalidations": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "implementation_route_ids": {"$ref": "#/$defs/boundedStrings"},
+        "review_record_ids": {"$ref": "#/$defs/boundedStrings"},
+        "test_record_ids": {"$ref": "#/$defs/boundedStrings"},
+        "checkpoint_ids": {"$ref": "#/$defs/boundedStrings"},
+        "acceptance_ids": {"$ref": "#/$defs/boundedStrings"}
+      }
+    },
+    "taskClassification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_id",
+        "classification",
+        "impact_summary",
+        "affected_surface_ids",
+        "retained_surface_ids",
+        "invalidations"
+      ],
+      "properties": {
+        "task_id": {"type": "string", "minLength": 1, "maxLength": 100},
+        "classification": {
+          "enum": ["AFFECTED", "UNAFFECTED", "SUPERSEDED", "REQUIRES_REVIEW"]
+        },
+        "impact_summary": {"type": "string", "minLength": 1, "maxLength": 500},
+        "affected_surface_ids": {
+          "type": "array",
+          "maxItems": 200,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/surfaceId"}
+        },
+        "retained_surface_ids": {
+          "type": "array",
+          "maxItems": 200,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/surfaceId"}
+        },
+        "invalidations": {"$ref": "#/$defs/invalidations"},
+        "invalidate_candidate": {"type": "boolean"},
+        "change_contract_required": {"type": "boolean"}
+      }
+    }
+  }
+}

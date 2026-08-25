@@ -14,10 +14,28 @@ PATTERNS = (
     ("EMAIL", re.compile(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b")),
     ("PHONE", re.compile(r"(?<!\d)(?:\+?86[- ]?)?1[3-9]\d{9}(?!\d)")),
     ("THREAD_OR_GUID", re.compile(r"(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b")),
-    ("WINDOWS_USER_PATH", re.compile(r"(?i)C:\\Users\\(?!<|%)[^\\\s<>]+\\")),
-    ("UNIX_USER_PATH", re.compile(r"(?i)/(?:Users|home)/(?!<|\$|\{)[^/\s<>]+/")),
+    (
+        "WINDOWS_USER_PATH",
+        re.compile(
+            r"(?i)\b[A-Z]:(?:\\+|/+)Users(?:\\+|/+)(?!<|%)[^\\/\s<>\"]+(?:\\+|/+)"
+        ),
+    ),
+    (
+        "UNIX_USER_PATH",
+        re.compile(
+            r"(?i)(?:\\?/)(?:Users|home)(?:\\?/)(?!<|\$|\{)[^/\\\s<>\"]+(?:\\?/)"
+        ),
+    ),
     ("CREDENTIAL_URL", re.compile(r"(?i)https?://[^\s/:]+:[^\s/@]+@")),
-    ("SECRET_LITERAL", re.compile(r"(?i)(api[_-]?key|password|passwd|private[_-]?key|access[_-]?token)\s*[:=]\s*['\"][^'\"]+['\"]")),
+    (
+        "SECRET_LITERAL",
+        re.compile(
+            r"(?i)(?:api[_-]?key|password|passwd|private[_-]?key|access[_-]?token|client[_-]?secret)"
+            r"\s*[:=]\s*['\"](?!<|\$\{|%|\*{3}|REDACTED|YOUR_)[^'\"]{8,}['\"]"
+        ),
+    ),
+    ("BEARER_TOKEN", re.compile(r"(?i)\bBearer\s+(?!<|\$\{|REDACTED)[A-Z0-9._~+/-]{20,}={0,2}\b")),
+    ("PRIVATE_KEY_BLOCK", re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----")),
 )
 
 
@@ -38,9 +56,6 @@ def _scan_text(name: str, text: str) -> list[dict[str, object]]:
         for code, pattern in PATTERNS:
             if pattern.search(line):
                 findings.append({"code": code, "path": name, "line": line_no})
-        for token in re.findall(r"(?i)\b[A-Z0-9_-]*Hiker[A-Z0-9_-]*\b", line):
-            if token.lower() != "hiker":
-                findings.append({"code": "NON_CANONICAL_PERSONAL_IDENTIFIER", "path": name, "line": line_no})
     return findings
 
 
@@ -87,7 +102,7 @@ def audit(root: Path) -> dict[str, object]:
                     findings.append({"code": "NON_CANONICAL_AUTHOR", "path": relative, "line": 1})
     return {
         "ok": not findings,
-        "allowed_personal_identifier": "Hiker",
+        "allowed_product_identifiers": ["Hiker", "hikerctl", "HIKER_CONTROL_*"],
         "scanned_text_entries": scanned,
         "finding_count": len(findings),
         "findings": findings[:200],

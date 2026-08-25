@@ -1,5 +1,15 @@
 # 更新记录
 
+## 0.12.0
+
+- 智能软件工程平台升级到5.17.0：Control Kernel统一Task状态写入口，并以operation journal明确区分PREPARED、DOMAIN_COMMITTED、TRACE_PENDING、COMPLETE和受控恢复。
+- 建立Task/Turn崩溃恢复、运行时身份锁、幂等重试与重复派发阻断；后端中断后不再盲目重放已提交业务动作。
+- 新增有界Event生命周期、冷热分段归档、Turn摘要和GREEN/YELLOW/RED/DRAINING压力门禁，10,000+事件后日常查询仍只读取热索引。
+- Goal Change使用AFFECTED、UNAFFECTED、SUPERSEDED、REQUIRES_REVIEW结构化影响分类；局部修订保留未受影响成果和证据。
+- Self Governance将Architecture、Privacy、Version Facts、Tests、Performance、Package Facts和Release Gate串成失败关闭的发布流水线。
+- 真实语义路由Eval覆盖正向、否定、历史/示例引用、迁移、模糊、多领域、阶段变化和无需Skill场景；不引入关键词路由或外部模型调用。
+- Laravel、NodeTS、Unity和Qt按统一专项成熟度模板增加真实工程证据、按需检查器、正反样例与回归测试；保持5插件、42个Skill及默认Token预算不变。
+
 ## 0.11.0
 
 - 智能软件工程平台升级到5.16.0：增加快速、项目和治理三条性能路径，简单问答不再运行项目路由。

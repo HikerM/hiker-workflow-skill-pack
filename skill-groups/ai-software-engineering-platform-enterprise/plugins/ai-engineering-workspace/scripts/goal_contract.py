@@ -16,6 +16,10 @@ def contract_file(root: Path) -> Path:
     return root / ".ai" / "governance" / "goal-contract.json"
 
 
+def active_change_file(root: Path) -> Path:
+    return root / ".ai" / "governance" / "goal-change-active.json"
+
+
 def _stable_payload(data: dict[str, Any]) -> dict[str, Any]:
     return {
         "goal_id": data.get("goal_id"),
@@ -51,6 +55,39 @@ def empty_contract() -> dict[str, Any]:
     return data
 
 
+def build_contract(
+    previous: dict[str, Any],
+    goal_id: str,
+    outcome: str,
+    non_goals: list[str] | None = None,
+    acceptance_ids: list[str] | None = None,
+    behavior_invariants: list[str] | None = None,
+    constraints: list[str] | None = None,
+    priority_order: list[str] | None = None,
+) -> dict[str, Any]:
+    if not outcome.strip():
+        raise RuntimeError("goal outcome is required")
+    data = {
+        "schema_version": SCHEMA,
+        "status": "ACTIVE",
+        "goal_id": safe_id(goal_id).upper(),
+        "revision": int(previous.get("revision") or 0) + 1,
+        "outcome": outcome.strip(),
+        "non_goals": list(dict.fromkeys(non_goals or [])),
+        "acceptance_ids": list(dict.fromkeys(acceptance_ids or [])),
+        "behavior_invariants": list(dict.fromkeys(behavior_invariants or [])),
+        "constraints": list(dict.fromkeys(constraints or [])),
+        "priority_order": list(dict.fromkeys(priority_order or [])),
+    }
+    data["fingerprint"] = fingerprint(data)
+    return data
+
+
+def _has_indexed_tasks(root: Path) -> bool:
+    index = read_json(root / ".ai" / "governance" / "task-index.json", {}) or {}
+    return any(isinstance(item, dict) and item.get("task_id") for item in index.get("tasks", []))
+
+
 @locked_state
 def ensure_contract(root: Path) -> dict[str, Any]:
     path = contract_file(root)
@@ -72,27 +109,44 @@ def set_contract(
     constraints: list[str] | None = None,
     priority_order: list[str] | None = None,
 ) -> dict[str, Any]:
-    if not outcome.strip():
-        raise RuntimeError("goal outcome is required")
     previous = ensure_contract(root)
-    revision = int(previous.get("revision") or 0) + 1
-    data = {
-        "schema_version": SCHEMA,
-        "status": "ACTIVE",
-        "goal_id": safe_id(goal_id).upper(),
-        "revision": revision,
-        "outcome": outcome.strip(),
-        "non_goals": list(dict.fromkeys(non_goals or [])),
-        "acceptance_ids": list(dict.fromkeys(acceptance_ids or [])),
-        "behavior_invariants": list(dict.fromkeys(behavior_invariants or [])),
-        "constraints": list(dict.fromkeys(constraints or [])),
-        "priority_order": list(dict.fromkeys(priority_order or [])),
-    }
-    data["fingerprint"] = fingerprint(data)
+    if previous.get("status") == "ACTIVE" and _has_indexed_tasks(root):
+        raise RuntimeError("active goal revisions with tasks must use hikerctl goal-change")
+    data = build_contract(
+        previous, goal_id, outcome, non_goals, acceptance_ids,
+        behavior_invariants, constraints, priority_order,
+    )
     if previous.get("status") == "ACTIVE":
         archive = root / ".ai" / "archive" / "goal-contracts" / f"{safe_id(str(previous.get('goal_id') or 'goal'))}-r{int(previous.get('revision') or 0)}.json"
         if not archive.exists():
             atomic_json(archive, previous)
+    atomic_json(contract_file(root), data)
+    return data
+
+
+@locked_state
+def activate_staged_contract(root: Path, data: dict[str, Any], operation_id: str) -> dict[str, Any]:
+    marker = read_json(active_change_file(root), {}) or {}
+    if (
+        marker.get("operation_id") != safe_id(operation_id)
+        or marker.get("status") not in {"PREPARED", "APPLYING", "PROJECTED"}
+        or marker.get("new_goal_fingerprint") != data.get("fingerprint")
+    ):
+        raise RuntimeError("goal contract activation requires the matching active goal-change transaction")
+    current = ensure_contract(root)
+    if current.get("fingerprint") == data.get("fingerprint"):
+        return current
+    if (
+        data.get("revision") != int(current.get("revision") or 0) + 1
+        or data.get("goal_id") != current.get("goal_id")
+    ):
+        raise RuntimeError("staged goal contract no longer follows the active revision")
+    archive = (
+        root / ".ai" / "archive" / "goal-contracts"
+        / f"{safe_id(str(current.get('goal_id') or 'goal'))}-r{int(current.get('revision') or 0)}.json"
+    )
+    if not archive.exists():
+        atomic_json(archive, current)
     atomic_json(contract_file(root), data)
     return data
 
@@ -131,6 +185,23 @@ def verify_binding(root: Path, binding: dict[str, Any] | None) -> dict[str, Any]
     if binding.get("scope") != "project":
         return {"ok": True, "status": "TASK_LOCAL", "binding": binding}
     current = ensure_contract(root)
+    change_path = active_change_file(root)
+    change = read_json(change_path, {}) or {}
+    if change_path.exists() and not change:
+        return {
+            "ok": False,
+            "status": "GOAL_CHANGE_STATE_DAMAGED",
+            "binding": binding,
+        }
+    if change.get("status") in {"PREPARED", "APPLYING", "PROJECTED"}:
+        return {
+            "ok": False,
+            "status": "GOAL_CHANGE_IN_PROGRESS",
+            "binding": binding,
+            "operation_id": change.get("operation_id"),
+            "base_revision": change.get("base_goal_revision"),
+            "target_revision": change.get("new_goal_revision"),
+        }
     ok = (
         current.get("status") == "ACTIVE"
         and binding.get("goal_id") == current.get("goal_id")

@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hiker.local/schemas/control-operation.schema.json",
+  "title": "Hiker Control Operation Journal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "revision", "operations"],
+  "properties": {
+    "schema_version": {"const": "2.0.0"},
+    "revision": {"type": "integer", "minimum": 0},
+    "migrated_from": {"type": "string"},
+    "operations": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/operation"}
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "operation": {
+      "type": "object",
+      "required": [
+        "command", "operation_type", "payload_hash", "status", "started_at",
+        "attempts", "retry_count", "before_fingerprint",
+        "intended_after_fingerprint", "trace_status"
+      ],
+      "properties": {
+        "command": {"type": "string", "maxLength": 80},
+        "operation_type": {"type": "string", "maxLength": 80},
+        "task_id": {"type": ["string", "null"]},
+        "payload_hash": {"$ref": "#/$defs/sha256"},
+        "status": {
+          "enum": [
+            "PREPARED", "DOMAIN_COMMITTED", "TRACE_PENDING", "COMPLETE",
+            "FAILED_BEFORE_COMMIT", "RECOVERY_REQUIRED"
+          ]
+        },
+        "started_at": {"type": "string"},
+        "prepared_at": {"type": "string"},
+        "attempts": {"type": "integer", "minimum": 1},
+        "retry_count": {"type": "integer", "minimum": 0},
+        "before_fingerprint": {"$ref": "#/$defs/sha256"},
+        "intended_after_fingerprint": {"$ref": "#/$defs/sha256"},
+        "committed_after_fingerprint": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "domain_commit_timestamp": {"type": ["string", "null"]},
+        "trace_status": {"enum": ["NOT_ATTEMPTED", "PENDING", "COMMITTED", "UNKNOWN"]},
+        "domain_result": {"type": "object"},
+        "result": {"type": "object"},
+        "trace_pending_at": {"type": "string"},
+        "trace_committed_at": {"type": "string"},
+        "completed_at": {"type": "string"},
+        "failed_before_commit_at": {"type": "string"},
+        "recovery_required_at": {"type": "string"},
+        "recovery_observed_fingerprint": {"type": ["string", "null"]},
+        "error_code": {"type": "string"},
+        "error_fingerprint": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

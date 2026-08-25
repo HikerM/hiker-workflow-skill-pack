@@ -1,7 +1,7 @@
 {
   "name": "ai-engineering-unity",
-  "version": "5.16.0+codex.20260824100427",
-  "description": "\u901a\u7528C/S\u5ba2\u6237\u7aef\u8def\u7531\u3001\u8bbe\u8ba1\u3001\u5b9e\u73b0\u4e0e\u5ba1\u6838\uff0c\u542bUnity\u4e13\u9879\u80fd\u529b",
+  "version": "5.17.0+codex.20260825194113",
+  "description": "通用C/S客户端路由、设计、实现与审核，含Unity专项能力",
   "author": {
     "name": "Hiker"
   },
@@ -14,9 +14,9 @@
   ],
   "skills": "./skills/",
   "interface": {
-    "displayName": "03 \u5ba2\u6237\u7aef\u5de5\u7a0b",
-    "shortDescription": "\u591a\u6280\u672f\u6808C/S\u5ba2\u6237\u7aef\u5de5\u7a0b\u4e0eUnity\u4e13\u9879\u80fd\u529b",
-    "longDescription": "\u4ee5\u8f7b\u91cf\u8def\u7531\u6309\u9700\u652f\u6301Unity\u3001Qt\u3001.NET\u684c\u9762\u3001Electron/Tauri\u3001Flutter\u3001Android\u3001Apple\u539f\u751f\u3001React Native\u3001Java\u684c\u9762\u548c\u5d4c\u5165\u5f0fHMI\uff1b\u8986\u76d6\u8bbe\u8ba1\u7cfb\u7edf\u3001\u7ec4\u4ef6\u5b9e\u73b0\u3001\u5ba2\u6237\u7aef\u751f\u547d\u5468\u671f\u3001API\u5951\u7ea6\u548c\u72ec\u7acb\u8d28\u91cf\u5ba1\u6838\u3002",
+    "displayName": "03 客户端工程",
+    "shortDescription": "多技术栈C/S客户端工程与Unity专项能力",
+    "longDescription": "以轻量路由按需支持Unity、Qt、.NET桌面、Electron/Tauri、Flutter、Android、Apple原生、React Native、Java桌面和嵌入式HMI；覆盖设计系统、组件实现、客户端生命周期、API契约和独立质量审核。",
     "developerName": "Hiker",
     "category": "Productivity",
     "capabilities": [
@@ -24,8 +24,8 @@
       "Write"
     ],
     "defaultPrompt": [
-      "\u8bc6\u522b\u5f53\u524dC/S\u5ba2\u6237\u7aef\u6280\u672f\u6808\uff0c\u53ea\u542f\u7528\u5f53\u524d\u9636\u6bb5\u6240\u9700\u80fd\u529b\u3002",
-      "\u6309\u73b0\u6709\u5ba2\u6237\u7aef\u6846\u67b6\u8bbe\u8ba1\u3001\u5b9e\u73b0\u6216\u5ba1\u6838\u754c\u9762\uff0c\u5e76\u4e0e\u540e\u7aefAPI\u5951\u7ea6\u4fdd\u6301\u4e00\u81f4\u3002"
+      "识别当前C/S客户端技术栈，只启用当前阶段所需能力。",
+      "按现有客户端框架设计、实现或审核界面，并与后端API契约保持一致。"
     ],
     "brandColor": "#32363F",
     "composerIcon": "./assets/icon.png",

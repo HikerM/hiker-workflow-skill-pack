@@ -23,7 +23,7 @@ def main()->int:
         memory=json.loads(run([sys.executable,str(CORE/"statectl.py"),"--root",str(root),"memory-status"],root).stdout).get("memory",{});checks.append(("bounded-memory",len(session)<=6501 and memory.get("active_context_chars",99999)<=12000 and (root/".ai/governance/context-retention.json").exists() and (root/".ai/runtime/checkpoint-ledger.json").exists()))
         run([sys.executable,str(WORK/"governance_state.py"),"--root",str(root),"init","--project-id","SMOKE","--architecture","bs"],root)
         run([sys.executable,str(WORK/"governance_state.py"),"--root",str(root),"task-create","--task-id","KG-001","--goal","smoke web feature","--branch","feature/KG-001-web"],root)
-        run([sys.executable,str(WORK/"governance_state.py"),"--root",str(root),"transition","--task-id","KG-001","--to","Planning","--agent-role","Planning Agent"],root)
+        run([sys.executable,str(CORE/"hikerctl.py"),"--root",str(root),"transition","--task-id","KG-001","--to","Planning","--agent-role","Planning Agent","--operation-id","SMOKE-TRANSITION-001"],root)
         run([sys.executable,str(WORK/"convergence_guard.py"),"--root",str(root),"--task-id","KG-001","init","--criterion","AC-001|现有行为保持可用|runtime","--strategy","最小有界改造"],root)
         run([sys.executable,str(WORK/"convergence_guard.py"),"--root",str(root),"--task-id","KG-001","route-set","--responsibility","feature-entry","--route-id","current-entry","--status","ACTIVE"],root)
         run([sys.executable,str(WORK/"convergence_guard.py"),"--root",str(root),"--task-id","KG-001","evidence-record","--criterion-id","AC-001","--level","runtime","--status","PASS","--value","smoke runtime passed","--fingerprint","smoke-runtime-v1"],root)

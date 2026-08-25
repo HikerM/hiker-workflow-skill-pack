@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0.0",
+  "template": "docs/SPECIALIZATION_MATURITY_TEMPLATE.md",
+  "policy": {
+    "on_demand_only": true,
+    "default_prompt": false,
+    "writes_state_by_default": false,
+    "external_model_api": false,
+    "min_dimensions": 6
+  },
+  "profiles": [
+    {
+      "id": "laravel-php",
+      "plugin": "ai-engineering-web",
+      "rules": "plugins/ai-engineering-workspace/skills/workspace-task-router/references/backend-other.md",
+      "script": "plugins/ai-engineering-web/scripts/backend_specialization.py",
+      "arguments": ["--family", "laravel"],
+      "test": "plugins/ai-engineering-web/tests/test_backend_specialization.py",
+      "positive_case": "test_laravel_positive_evidence_covers_all_dimensions",
+      "negative_case": "test_laravel_negative_detects_unresolved_version_and_controller_leak",
+      "dimensions": ["identity", "route-controller-service", "migration-index", "transaction", "validation-dto", "queue", "auth", "test-evidence"]
+    },
+    {
+      "id": "node-typescript",
+      "plugin": "ai-engineering-web",
+      "rules": "plugins/ai-engineering-workspace/skills/workspace-task-router/references/backend-node-typescript.md",
+      "script": "plugins/ai-engineering-web/scripts/backend_specialization.py",
+      "arguments": ["--family", "node-ts"],
+      "test": "plugins/ai-engineering-web/tests/test_backend_specialization.py",
+      "positive_case": "test_node_typescript_positive_evidence_covers_build_contract_and_db",
+      "negative_case": "test_node_typescript_negative_blocks_missing_lock_and_flags_controller_db",
+      "dimensions": ["identity-lock", "typescript-config", "module-boundary", "async-error", "api-contract", "database", "build-test"]
+    },
+    {
+      "id": "unity",
+      "plugin": "ai-engineering-unity",
+      "rules": "plugins/ai-engineering-unity/skills/unity-component-implementation/SKILL.md",
+      "script": "plugins/ai-engineering-unity/scripts/unity_specialization.py",
+      "arguments": [],
+      "test": "plugins/ai-engineering-unity/tests/test_unity_specialization.py",
+      "positive_case": "test_unity_positive_evidence_covers_all_dimensions",
+      "negative_case": "test_unity_negative_detects_lifecycle_gc_and_asset_failures",
+      "dimensions": ["identity-packages", "asmdef", "lifecycle", "ui-system", "gc-allocation", "asset-reference", "build-platform", "test-evidence"]
+    },
+    {
+      "id": "qt",
+      "plugin": "ai-engineering-unity",
+      "rules": "plugins/ai-engineering-unity/skills/cs-client-router/references/cs-qt.md",
+      "script": "plugins/ai-engineering-unity/scripts/qt_specialization.py",
+      "arguments": [],
+      "test": "plugins/ai-engineering-unity/tests/test_qt_specialization.py",
+      "positive_case": "test_qt_positive_evidence_covers_version_lifecycle_and_deployment",
+      "negative_case": "test_qt_negative_detects_unknown_version_and_cross_thread_direct_connection",
+      "dimensions": ["identity-version", "build-system", "signals-slots", "ownership", "threading", "resources", "deployment", "test-evidence"]
+    }
+  ]
+}

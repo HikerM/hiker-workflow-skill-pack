@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0.0",
+  "release": "5.18",
+  "default_prompt_bytes_added": 0,
+  "rules": [
+    {
+      "id": "GOV-SEMANTIC-RISK",
+      "classification": "hybrid",
+      "model_responsibility": "interpret the ten risk dimensions from bounded project facts",
+      "runtime_enforcement": ["plugins/ai-engineering-quality/scripts/adaptive_governance.py", "plugins/ai-engineering-quality/schemas/risk-context.schema.json"],
+      "tests": ["plugins/ai-engineering-quality/tests/test_adaptive_governance.py"],
+      "default_activation": false
+    },
+    {
+      "id": "GOV-VERIFICATION-BUDGET",
+      "classification": "machine_enforceable",
+      "model_responsibility": null,
+      "runtime_enforcement": ["plugins/ai-engineering-quality/scripts/adaptive_governance.py"],
+      "tests": ["plugins/ai-engineering-quality/tests/test_adaptive_governance.py"],
+      "default_activation": false
+    },
+    {
+      "id": "GOV-RUNTIME-REUSE",
+      "classification": "machine_enforceable",
+      "model_responsibility": null,
+      "runtime_enforcement": ["plugins/ai-engineering-quality/scripts/runtime_reuse.py", "plugins/ai-engineering-quality/schemas/runtime-reuse.schema.json"],
+      "tests": ["plugins/ai-engineering-quality/tests/test_incremental_governance.py"],
+      "default_activation": false
+    },
+    {
+      "id": "GOV-EVIDENCE-FRESHNESS",
+      "classification": "machine_enforceable",
+      "model_responsibility": null,
+      "runtime_enforcement": ["plugins/ai-engineering-quality/scripts/evidence_cache.py", "plugins/ai-engineering-quality/schemas/evidence-summary.schema.json"],
+      "tests": ["plugins/ai-engineering-quality/tests/test_incremental_governance.py"],
+      "default_activation": false
+    },
+    {
+      "id": "GOV-INCREMENTAL-DESIGN",
+      "classification": "hybrid",
+      "model_responsibility": "choose the design solution for the affected screen",
+      "runtime_enforcement": ["plugins/ai-engineering-quality/scripts/ui_design_model.py"],
+      "tests": ["plugins/ai-engineering-quality/tests/test_product_assurance.py"],
+      "default_activation": false
+    },
+    {
+      "id": "GOV-BOUNDED-COMPONENT-REGISTRY",
+      "classification": "machine_enforceable",
+      "model_responsibility": null,
+      "runtime_enforcement": ["plugins/ai-engineering-quality/scripts/component_registry_v2.py", "plugins/ai-engineering-web/scripts/bs_ui_adapter.py", "plugins/ai-engineering-unity/scripts/cs_ui_adapter.py"],
+      "tests": ["plugins/ai-engineering-quality/tests/test_product_assurance.py"],
+      "default_activation": false
+    },
+    {
+      "id": "GOV-ATOMIC-STATE",
+      "classification": "machine_enforceable",
+      "model_responsibility": null,
+      "runtime_enforcement": ["plugins/ai-engineering-core/scripts/control_kernel.py"],
+      "tests": ["plugins/ai-engineering-core/tests/test_control_atomicity.py"],
+      "default_activation": false
+    },
+    {
+      "id": "GOV-CONVERGENCE",
+      "classification": "machine_enforceable",
+      "model_responsibility": null,
+      "runtime_enforcement": ["plugins/ai-engineering-workspace/scripts/convergence_guard.py"],
+      "tests": ["plugins/ai-engineering-workspace/tests/test_workspace.py"],
+      "default_activation": false
+    },
+    {
+      "id": "GUIDE-IMPLEMENTATION-ORDER",
+      "classification": "reasoning_guidance",
+      "model_responsibility": "choose implementation order and diagnostic path within the accepted boundaries",
+      "runtime_enforcement": [],
+      "tests": [],
+      "default_activation": false
+    },
+    {
+      "id": "GUIDE-ARCHITECTURE-TRADEOFF",
+      "classification": "reasoning_guidance",
+      "model_responsibility": "compare architecture trade-offs and preserve project-native decisions",
+      "runtime_enforcement": [],
+      "tests": [],
+      "default_activation": false
+    }
+  ]
+}

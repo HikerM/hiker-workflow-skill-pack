@@ -49,9 +49,18 @@ def unity_commands(root:Path,changes:list[str])->list[dict]:
         cwd=project.relative_to(root).as_posix() or ".";out += [{"name":"unity-editmode","command":"${UNITY_EDITOR} -batchmode -quit -projectPath . -runTests -testPlatform EditMode -testResults .ai/evidence/unity-editmode.xml","cwd":cwd,"source":"Unity Test Framework","status":"REQUIRES_ENV"},{"name":"unity-playmode","command":"${UNITY_EDITOR} -batchmode -quit -projectPath . -runTests -testPlatform PlayMode -testResults .ai/evidence/unity-playmode.xml","cwd":cwd,"source":"Unity Test Framework","status":"REQUIRES_ENV"}]
     return out
 def plan(root:Path,risk:dict)->dict:
-    changes=[x.get("path","") for x in risk.get("changes",[])];tags=set(risk.get("risk",{}).get("tags",[]));commands=package_commands(root,changes)+python_commands(root,changes)+dotnet_commands(root,changes)+unity_commands(root,changes);seen=set();commands=[x for x in commands if not ((x["cwd"],x["command"]) in seen or seen.add((x["cwd"],x["command"])))]
+    changes=[x.get("path","") for x in risk.get("changes",[])];tags=set(risk.get("risk",{}).get("tags",[]));level=str(risk.get("risk",{}).get("level") or "MEDIUM").upper();governance=risk.get("semantic_assessment",{}) if isinstance(risk.get("semantic_assessment"),dict) else {};activation=str(governance.get("activation") or ("NONE" if level=="LOW" else "TARGETED" if level=="MEDIUM" else "GOVERNED"));commands=package_commands(root,changes)+python_commands(root,changes)+dotnet_commands(root,changes)+unity_commands(root,changes);seen=set();commands=[x for x in commands if not ((x["cwd"],x["command"]) in seen or seen.add((x["cwd"],x["command"])))]
     mandatory=[];recommended=[];manual=[]
-    for c in commands:(mandatory if c["name"] in {"lint","typecheck","test","test:unit","python-tests","dotnet-tests","unity-editmode"} else recommended).append(c)
+    if level=="LOW" and activation=="NONE":
+        priority={"test:unit":0,"python-tests":0,"dotnet-tests":0,"unity-editmode":0,"test":1,"lint":2,"typecheck":3,"build":4}
+        selected={}
+        for command in sorted(commands,key=lambda item:(item["cwd"],priority.get(item["name"],9),item["name"])):
+            selected.setdefault(command["cwd"],command)
+        mandatory=list(selected.values());recommended=[command for command in commands if command not in mandatory]
+    elif level=="MEDIUM":
+        for command in commands:(mandatory if command["name"] in {"lint","typecheck","test","test:unit","python-tests","dotnet-tests","unity-editmode"} else recommended).append(command)
+    else:
+        mandatory=list(commands)
     if "database" in tags:manual.append("在可回滚副本上执行迁移、降级和数据一致性验证")
     if "security" in tags:manual.append("验证认证、授权、越权、会话失效和敏感信息路径")
     if "contracts" in tags:manual.append("验证 API/DTO 向后兼容和所有消费者")
@@ -60,7 +69,7 @@ def plan(root:Path,risk:dict)->dict:
     gaps=[]
     if not commands:gaps.append("没有从受影响子项目的真实配置发现测试或构建命令")
     if not (repo_ai(root)/"quality/test-map.json").exists():gaps.append("没有项目级需求/模块到测试用例映射")
-    return {"schema_version":1,"generated_at":now(),"risk_level":risk.get("risk",{}).get("level"),"mandatory":mandatory,"recommended":recommended,"manual":manual,"gaps":gaps,"note":"所有命令均为计划状态；只有产生执行证据后才能标记通过。"}
+    return {"schema_version":2,"generated_at":now(),"risk_level":level,"governance_activation":activation,"scope_mode":governance.get("scope_mode","AFFECTED_SCOPE" if changes else "PROJECT_CONFIG"),"mandatory":mandatory,"recommended":recommended,"manual":manual,"gaps":gaps,"note":"所有命令均为计划状态；只有产生执行证据后才能标记通过。"}
 def to_md(data:dict)->str:
     rows=lambda xs:markdown_table([[x.get("name"),x.get("cwd"),x.get("command"),x.get("status"),x.get("source")] for x in xs],["名称","目录","命令","状态","来源"]) if xs else "无。"
     return "\n".join(["# 回归测试范围规划","",f"风险等级：**{data.get('risk_level')}**","","## 必须执行",rows(data["mandatory"]),"","## 建议执行",rows(data["recommended"]),"","## 人工验证",*(f"- {x}" for x in data["manual"]),"","## 未映射缺口",*(f"- {x}" for x in data["gaps"]),"",data["note"]])+"\n"

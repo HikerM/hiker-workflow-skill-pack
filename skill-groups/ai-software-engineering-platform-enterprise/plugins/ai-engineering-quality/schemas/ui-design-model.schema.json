@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hiker.local/schemas/ui-design-model-2.0.0.json",
+  "title": "Hiker semantic UI design model",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "project_ui_id",
+    "revision",
+    "architecture",
+    "technology",
+    "project_facts",
+    "visual_context",
+    "decisions",
+    "screens",
+    "migration",
+    "fingerprint"
+  ],
+  "properties": {
+    "schema_version": {"const": "2.0.0"},
+    "project_ui_id": {"type": "string", "minLength": 1, "maxLength": 160},
+    "revision": {"type": "integer", "minimum": 0},
+    "architecture": {"enum": ["BS", "CS", "HYBRID"]},
+    "technology": {"$ref": "#/$defs/observation"},
+    "project_facts": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/observation"}},
+    "visual_context": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/observation"}},
+    "decisions": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/decision"}},
+    "screens": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/screen"}},
+    "migration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "source_schema", "source_ref"],
+      "properties": {
+        "status": {"enum": ["NATIVE_5_18", "MIGRATED_BOUNDED"]},
+        "source_schema": {"type": ["string", "null"]},
+        "source_ref": {"type": ["string", "null"]}
+      }
+    },
+    "fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  },
+  "$defs": {
+    "stringList": {"type": "array", "maxItems": 128, "items": {"type": "string", "minLength": 1}},
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "subject", "value", "source_refs"],
+      "properties": {
+        "status": {"enum": ["OBSERVED", "INFERRED", "UNKNOWN"]},
+        "subject": {"type": "string", "minLength": 1},
+        "value": {},
+        "source_refs": {"type": "array", "maxItems": 16, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision_id", "authority", "status", "topic", "value", "rationale", "source_refs", "affected_scope", "supersedes", "superseded_by", "fingerprint"],
+      "properties": {
+        "decision_id": {"type": "string", "minLength": 1},
+        "authority": {"enum": ["SYSTEM_INVARIANT", "USER_LOCKED_DECISION", "PROJECT_FACT", "ARCHITECTURE_CONSTRAINT", "APPROVED_BASELINE", "ADAPTIVE_POLICY", "MODEL_PROPOSAL"]},
+        "status": {"enum": ["ACTIVE", "SUPERSEDED"]},
+        "topic": {"type": "string", "minLength": 1},
+        "value": {},
+        "rationale": {"type": "string", "minLength": 1},
+        "source_refs": {"type": "array", "maxItems": 16, "items": {"type": "string", "minLength": 1}},
+        "affected_scope": {"type": "array", "maxItems": 64, "items": {"type": "string", "minLength": 1}},
+        "supersedes": {"type": ["string", "null"]},
+        "superseded_by": {"type": ["string", "null"]},
+        "fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
+    "region": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["region_id", "semantic_role"],
+      "properties": {
+        "region_id": {"type": "string", "minLength": 1},
+        "semantic_role": {"type": "string", "minLength": 1}
+      }
+    },
+    "strategy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "candidates", "rationale"],
+      "properties": {
+        "kind": {"enum": ["candidate", "hybrid", "custom"]},
+        "candidates": {"$ref": "#/$defs/stringList"},
+        "rationale": {"type": "string", "minLength": 1}
+      }
+    },
+    "screen": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["screen_id", "primary_task", "information_hierarchy", "focal_point", "reading_path", "density_profile", "navigation_relationships", "content_regions", "components", "states", "interactions", "presentation_refs", "acceptance", "composition_strategy"],
+      "properties": {
+        "screen_id": {"type": "string", "minLength": 1},
+        "primary_task": {"type": "string", "minLength": 1},
+        "information_hierarchy": {"$ref": "#/$defs/stringList"},
+        "focal_point": {"type": "string", "minLength": 1},
+        "reading_path": {"$ref": "#/$defs/stringList"},
+        "density_profile": {"type": "string", "minLength": 1},
+        "navigation_relationships": {"$ref": "#/$defs/stringList"},
+        "content_regions": {"type": "array", "minItems": 1, "maxItems": 128, "items": {"$ref": "#/$defs/region"}},
+        "components": {"$ref": "#/$defs/stringList"},
+        "states": {"$ref": "#/$defs/stringList"},
+        "interactions": {"$ref": "#/$defs/stringList"},
+        "presentation_refs": {"$ref": "#/$defs/stringList"},
+        "acceptance": {"$ref": "#/$defs/stringList"},
+        "composition_strategy": {"$ref": "#/$defs/strategy"}
+      }
+    }
+  }
+}

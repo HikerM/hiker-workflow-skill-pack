@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hiker.local/schemas/evidence-summary.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "evidence_id", "status", "affected_scope", "evidence_key", "findings", "artifacts", "summary_only"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "evidence_id": {"type": "string", "minLength": 1},
+    "status": {"enum": ["VALID", "BLOCKED"]},
+    "affected_scope": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "evidence_key": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "findings": {"type": "array", "maxItems": 32, "items": {"type": "object"}},
+    "artifacts": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ref", "sha256", "bytes"],
+        "properties": {
+          "ref": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+          "bytes": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "summary_only": {"const": true}
+  }
+}

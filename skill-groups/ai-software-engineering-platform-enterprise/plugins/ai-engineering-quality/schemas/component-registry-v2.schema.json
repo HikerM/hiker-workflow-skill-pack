@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hiker.local/schemas/component-registry-v2.0.0.json",
+  "title": "Hiker design to code component registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "registry_id", "revision", "scope", "components", "migration", "fingerprint"],
+  "properties": {
+    "schema_version": {"const": "2.0.0"},
+    "registry_id": {"type": "string", "minLength": 1},
+    "revision": {"type": "integer", "minimum": 0},
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "refs"],
+      "properties": {
+        "mode": {"enum": ["AFFECTED", "EXPLICIT"]},
+        "refs": {"type": "array", "maxItems": 64, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "components": {"type": "array", "maxItems": 2000, "items": {"$ref": "#/$defs/component"}},
+    "migration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "source_schema", "source_ref"],
+      "properties": {
+        "status": {"enum": ["NATIVE_5_18", "MIGRATED_BOUNDED"]},
+        "source_schema": {"type": ["string", "null"]},
+        "source_ref": {"type": ["string", "null"]}
+      }
+    },
+    "fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  },
+  "$defs": {
+    "evidencedValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "value", "source_refs"],
+      "properties": {
+        "status": {"enum": ["OBSERVED", "INFERRED", "UNKNOWN"]},
+        "value": {},
+        "source_refs": {"type": "array", "maxItems": 16, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "strings": {"type": "array", "maxItems": 64, "items": {"type": "string", "minLength": 1}},
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["component_id", "semantic_role", "design_component", "code_component", "variants", "states", "tokens", "accessibility", "platform", "usage_rules", "technology_adapter", "implementation_layer", "fingerprint"],
+      "properties": {
+        "component_id": {"type": "string", "minLength": 1},
+        "semantic_role": {"$ref": "#/$defs/evidencedValue"},
+        "design_component": {"$ref": "#/$defs/evidencedValue"},
+        "code_component": {"$ref": "#/$defs/evidencedValue"},
+        "variants": {"$ref": "#/$defs/strings"},
+        "states": {"$ref": "#/$defs/strings"},
+        "tokens": {"$ref": "#/$defs/strings"},
+        "accessibility": {"$ref": "#/$defs/strings"},
+        "platform": {"enum": ["BS", "CS", "SHARED"]},
+        "usage_rules": {"$ref": "#/$defs/strings"},
+        "technology_adapter": {"$ref": "#/$defs/evidencedValue"},
+        "implementation_layer": {"enum": ["token", "primitive", "reusable_component", "domain_component", "page_composition", "project_native"]},
+        "fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    }
+  }
+}

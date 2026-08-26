@@ -1,10 +1,10 @@
 # Hiker 中文工程能力仓库
 
-<!-- repository-facts: repo=0.12.0; engineering=5.17.0; plugins=5; engineering-skills=42; desktop=1.3.0; desktop-skills=5; total-skills=47 -->
+<!-- repository-facts: repo=0.13.0; engineering=5.18.0; plugins=5; engineering-skills=42; desktop=1.3.0; desktop-skills=5; total-skills=47 -->
 
 这是面向 ChatGPT/Codex 桌面应用的软件工程能力仓库。仓库已经收敛，只保留两套用途明确、安装边界独立的能力包。
 
-> 仓库版本：`0.12.0`
+> 仓库版本：`0.13.0`
 >
 > 当前规模：`2` 套能力包、共 `47` 个 Skill
 >
@@ -14,12 +14,12 @@
 
 | 能力包 | 版本 | 规模 | 适用范围 | 使用方式 |
 |---|---:|---:|---|---|
-| 智能软件工程平台 | 5.17.0 | 5 个插件、42 个原子 Skill | 从零开发、存量接管、B/S、C/S、后端、大型工程、多会话、Git、测试、质量与发布 | ChatGPT 语义选择，规则守门，按阶段懒加载 |
+| 智能软件工程平台 | 5.18.0 | 5 个插件、42 个原子 Skill | 从零开发、存量接管、B/S、C/S、Service/Data、产品级UI与错误体验、大型工程、多会话、Git、测试、质量与发布 | ChatGPT 语义选择，规则守门，按阶段懒加载 |
 | 桌面软件等价重建 | 1.3.0 | 5 个 Skill | 已授权桌面软件的发现、规格、技术方案、实现、差分验证与发布 | 用户手动选择，阶段路由每次只加载一个原子 Skill |
 
 两套能力不会在同一消息中自动全部加载。详细说明见 [能力包中文详解](docs/CAPABILITY_PACKS_ZH.md)，完整名称见 [Skill 索引](docs/SKILL_INDEX.md)。
 
-## 智能软件工程平台 5.17.0
+## 智能软件工程平台 5.18.0
 
 平台由一个轻量入口和42个原子 Skill 组成。ChatGPT 根据用户当前目标、否定项、阶段和有界工程证据选择最多两个原子 Skill；确定性脚本只校验候选存在性、阶段、架构证据、权限、源码身份和数量，不按关键词代替模型决策。
 
@@ -33,7 +33,21 @@
 | 工作区与多会话协作 | 12 | 项目状态、任务生命周期、多智能体、文件锁、Worktree、实现收敛、合并和验收闭环 |
 | 质量、风险与发布 | 6 | 独立设计复审、完整变更风险、交互冲突、工程图谱、回归范围和发布审核 |
 
-### 5.17.0 的增强重点
+### 5.18.0 的增强重点
+
+- **B/S 与 C/S 工程深化**：顶层按 Engineering Control Core、B/S、C/S、共享 Service & Data、Assurance 分层；Vue、React、Laravel、Unity、Qt 等仍只是按项目事实选择的 Technology Adapter。
+- **语义 UI Design IR**：用业务任务、信息层级、阅读路径、状态、交互与验收表达设计，不把页面锁成 sidebar/cards/columns 模板；视觉输入严格区分 `OBSERVED`、`INFERRED` 与 `UNKNOWN`。
+- **Decision Authority 与增量变更**：系统不变量、用户锁定决策、项目事实、架构约束、批准基线、适应策略和模型提案具有明确权威级别；用户修改只通过 Goal Change 使受影响的 Design、Screen、Component 与 Evidence 变为 `STALE`。
+- **Component Registry 2.0 与 Design-to-Code**：绑定 Design ↔ Code、变体、状态、Token、可访问性、平台和真实源码指纹；适配器只观察显式或 Git 变更范围，不默认扫描组件库。
+- **真实 Runtime 与 Fidelity Evidence**：把设计、源码、候选、目标修订、屏幕状态、架构、技术和视口绑定到运行证据；机器检查 overflow/clipping/overlap/state/token，感知质量保持独立审核，不使用虚假总分。
+- **Presentation / Content / Interaction Copy**：阻断数据库内部 ID、raw enum、SQL、堆栈和本机路径直出，同时允许有业务含义的工单号、合同号等；内容压力依赖真实运行测量，不用固定字符数或列数替代语义。
+- **协议中立 Error Contract**：兼容 REST、Problem Details、GraphQL、gRPC、C/S Local 与项目协议，分离用户消息和开发诊断，强制 Error ID 可反查并检测 catch-and-hide。
+- **有界产品保障**：旧项目没有 UI IR 时保持零写兼容；活动门禁只读小型热索引，截图与冷证据显式按需读取，不增加默认 Prompt、Skill 或模型调用。
+- **风险自适应稀疏治理**：10维风险画像和Verification Budget控制Validator、Runtime、Evidence与Review范围；控制不可接受结果，不规定模型推理或实现步骤。
+- **增量Runtime与Evidence**：浏览器/客户端身份、Design IR、Component Registry和Evidence均绑定指纹与Affected Scope；完整截图和日志默认不进入主上下文。
+- **交付效率可测量**：Governance Tax、Development Velocity和Time-to-Accepted-Change进入发布性能门禁；默认路由上下文和Prompt相对5.17不增长。
+
+### 保持不变的 5.17 可靠性基线
 
 - **可靠Control Kernel**：Task状态只有一个权威写协调入口；operation journal区分Domain提交与Trace补偿，重复请求不会重放已提交业务动作。
 - **可恢复Desktop生命周期**：Turn租约、Checkpoint、终态、归档和释放形成闭环；app-server中断后进入受控恢复，不盲目重复派发。

@@ -1,0 +1,138 @@
+{
+  "schema_version": "1.0.0",
+  "target": "Hiker 5.18 — B/S & C/S Engineering Depth",
+  "edges": [
+    {
+      "requirement": "Decision Authority and semantic UI Design IR",
+      "status": "NEW",
+      "capability": ["product-ui-design-model"],
+      "runtime": ["ui_design_model.py", "product_model_common.py"],
+      "skills": ["web-ui-design", "cs-ui-design", "unity-ui-design", "design-readiness-review"],
+      "state": [".ai/ui/project-ui.json"],
+      "evidence": ["design fingerprint", "decision lineage", "visual context provenance"],
+      "tests": ["test_product_assurance.py"],
+      "regression_scope": ["routing unchanged", "old project no-write migration"]
+    },
+    {
+      "requirement": "Design to code Component Registry 2.0",
+      "status": "SUPERSEDES_LEGACY_INCREMENTALLY",
+      "capability": ["product-component-fidelity"],
+      "runtime": ["component_registry_v2.py", "bs_ui_adapter.py", "cs_ui_adapter.py"],
+      "skills": ["web-component-implementation", "cs-component-implementation", "unity-component-implementation"],
+      "state": [".ai/ui/component-registry.json"],
+      "evidence": ["code source fingerprint", "design mapping", "technology observation"],
+      "tests": ["test_product_assurance.py", "test_web.py", "test_unity.py"],
+      "regression_scope": ["legacy component_registry.py remains migration input", "explicit affected paths only"]
+    },
+    {
+      "requirement": "Runtime capture and design fidelity",
+      "status": "NEW",
+      "capability": ["candidate-stale-evidence", "product-component-fidelity"],
+      "runtime": ["runtime_ui_evidence.py", "visual_fidelity.py"],
+      "skills": ["web-quality-review", "cs-quality-review", "unity-quality-review", "design-readiness-review"],
+      "state": ["existing Evidence/Candidate/STALE plus bounded .ai/ui evidence index"],
+      "evidence": ["design/registry/source/candidate/goal bindings", "artifact hash", "objective and perceptual verdicts"],
+      "tests": ["test_product_assurance.py", "test_product_e2e.py", "real Playwright verification"],
+      "regression_scope": ["candidate guard", "release review", "privacy"]
+    },
+    {
+      "requirement": "Presentation, leakage, content and interaction copy",
+      "status": "NEW",
+      "capability": ["product-presentation-error"],
+      "runtime": ["presentation_guard.py", "content_assurance.py"],
+      "skills": ["web-ui-design", "cs-ui-design", "web-quality-review", "cs-quality-review"],
+      "state": [".ai/ui/presentation-contract.json"],
+      "evidence": ["hashed samples", "runtime content measurements", "copy runtime fit"],
+      "tests": ["test_product_assurance.py"],
+      "regression_scope": ["delivery hygiene", "privacy", "release gate"]
+    },
+    {
+      "requirement": "Protocol-neutral error semantics and diagnostic correlation",
+      "status": "NEW",
+      "capability": ["product-presentation-error"],
+      "runtime": ["error_experience_guard.py"],
+      "skills": ["api-event-contract-design", "web-quality-review", "cs-quality-review", "full-change-risk-review"],
+      "state": [".ai/ui/error-contract.json", "cold diagnostic evidence refs"],
+      "evidence": ["error_id/trace/version/source correlation", "redaction status", "catch block hash"],
+      "tests": ["test_product_assurance.py"],
+      "regression_scope": ["REST", "Problem Details", "GraphQL", "gRPC", "C/S local", "custom protocols"]
+    },
+    {
+      "requirement": "B/S and C/S architecture-level adaptive validation",
+      "status": "NEW",
+      "capability": ["bs-engineering", "cs-engineering", "assurance"],
+      "runtime": ["architecture_product_profile.py", "bs_ui_adapter.py", "cs_ui_adapter.py"],
+      "skills": ["web-ui-design", "web-component-implementation", "web-quality-review", "cs-ui-design", "cs-component-implementation", "cs-quality-review"],
+      "state": [".ai/ui/architecture-profile.json"],
+      "evidence": ["project fact provenance", "selected dimension evidence"],
+      "tests": ["test_product_assurance.py", "test_product_e2e.py"],
+      "regression_scope": ["Unity remains C/S specialization", "Service/Data remains shared logical layer"]
+    },
+    {
+      "requirement": "UI/Presentation/Error Goal Change invalidation",
+      "status": "AFFECTED",
+      "capability": ["goal-change", "candidate-stale-evidence"],
+      "runtime": ["goal_change_model.py", "goal_change_transaction.py"],
+      "skills": ["project-state-manager", "task-lifecycle-manager"],
+      "state": ["task.product_evidence records inside existing task transaction"],
+      "evidence": ["surface-bound product evidence ids", "STALE reason", "transaction fingerprints"],
+      "tests": ["test_goal_change.py"],
+      "regression_scope": ["AFFECTED", "UNAFFECTED", "mid-transaction crash recovery"]
+    },
+    {
+      "requirement": "5.18 product release gate",
+      "status": "AFFECTED",
+      "capability": ["release-self-governance"],
+      "runtime": ["product_release_gate.py", "release_review.py"],
+      "skills": ["release-readiness-review"],
+      "state": ["existing release evidence; product gate NOT_APPLICABLE without UI IR"],
+      "evidence": ["current default visual", "architecture/presentation/content/error PASS"],
+      "tests": ["test_product_assurance.py", "test_quality.py"],
+      "regression_scope": ["old projects", "candidate/source drift", "cold history independence"]
+    },
+    {
+      "requirement": "5.17 control, context, session, crash, event, worktree and package behavior",
+      "status": "UNAFFECTED",
+      "capability": ["deterministic-semantic-routing", "bounded-context-session-recovery", "control-kernel-crash-recovery", "desktop-turn-multi-session", "worktree-lock-ownership-merge", "event-pressure-lifecycle", "long-chain-convergence", "privacy-architecture-version-package"],
+      "runtime": ["unchanged 5.17 authoritative modules"],
+      "skills": ["unchanged ownership and loading limits"],
+      "state": ["no new control-plane state"],
+      "evidence": ["full old regression and release gates"],
+      "tests": ["all pre-5.18 tests"],
+      "regression_scope": ["G1-G10", "G26-G30", "G44"]
+    },
+    {
+      "requirement": "Maximum model freedom with risk-adaptive sparse governance",
+      "status": "NEW",
+      "capability": ["risk-adaptive-governance", "verification-budget", "governance-tax"],
+      "runtime": ["adaptive_governance.py", "risk_review.py", "test_plan.py"],
+      "skills": ["full-change-risk-review"],
+      "state": ["existing risk report only; no second state writer"],
+      "evidence": ["ten semantic dimensions", "authorized validators and runtime targets", "exact governance tax metrics"],
+      "tests": ["test_adaptive_governance.py", "benchmark_governance_precision.py"],
+      "regression_scope": ["G31-G33", "G38-G41"]
+    },
+    {
+      "requirement": "Incremental runtime, design, registry and cold evidence reuse",
+      "status": "NEW",
+      "capability": ["runtime-identity-reuse", "incremental-design", "incremental-registry", "cold-evidence-summary"],
+      "runtime": ["runtime_reuse.py", "evidence_cache.py", "ui_design_model.py", "component_registry_v2.py"],
+      "skills": ["unchanged lazy-loaded product skills"],
+      "state": ["existing product evidence refs; bounded runtime descriptor supplied on demand"],
+      "evidence": ["fingerprint-bound reuse decisions", "scope-local invalidation", "artifact ref/hash/bytes only"],
+      "tests": ["test_incremental_governance.py", "test_product_assurance.py"],
+      "regression_scope": ["G34-G37", "G40"]
+    },
+    {
+      "requirement": "Time-to-Accepted-Change and development velocity evidence",
+      "status": "NEW",
+      "capability": ["delivery-velocity-assurance"],
+      "runtime": ["benchmark_delivery_velocity.py", "self_governance.py"],
+      "skills": ["none added"],
+      "state": ["no default project state"],
+      "evidence": ["A-D scenario timings", "first-pass acceptance", "rework cycles", "NOT_MEASURED markers"],
+      "tests": ["test_self_governance.py"],
+      "regression_scope": ["G41-G43"]
+    }
+  ]
+}

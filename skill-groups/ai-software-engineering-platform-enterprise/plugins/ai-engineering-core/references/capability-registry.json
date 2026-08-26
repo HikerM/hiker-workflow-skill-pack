@@ -1,6 +1,13 @@
 {
   "schema_version": "1.0.0",
-  "positioning": "Hiker Engineering Capability System",
+  "positioning": "Hiker Engineering Capability System — B/S & C/S Engineering Depth",
+  "architecture_layers": [
+    {"id": "engineering-control-core", "plugins": ["ai-engineering-core", "ai-engineering-workspace"]},
+    {"id": "bs-engineering", "plugins": ["ai-engineering-web"]},
+    {"id": "cs-engineering", "plugins": ["ai-engineering-unity"]},
+    {"id": "service-data-engineering", "plugins": ["ai-engineering-web"], "logical_shared_layer": true},
+    {"id": "assurance", "plugins": ["ai-engineering-quality"]}
+  ],
   "loading_policy": {
     "semantic_owner": "ChatGPT Desktop / Codex",
     "guard_owner": "Hiker Control Kernel",
@@ -156,6 +163,24 @@
     }
   ],
   "specializations": [
+    {
+      "id": "product-ui-design-model",
+      "display_name": "UI语义设计模型",
+      "skills": ["web-ui-design", "cs-ui-design", "unity-ui-design", "design-readiness-review"],
+      "checks": ["Decision Authority", "OBSERVED/INFERRED/UNKNOWN", "语义构图", "有界迁移"]
+    },
+    {
+      "id": "product-component-fidelity",
+      "display_name": "设计到代码与视觉一致性",
+      "skills": ["web-component-implementation", "cs-component-implementation", "unity-component-implementation", "design-readiness-review"],
+      "checks": ["Component Registry 2.0", "Runtime Snapshot", "客观检查", "独立感知审核", "Candidate/STALE"]
+    },
+    {
+      "id": "product-presentation-error",
+      "display_name": "呈现与错误体验",
+      "skills": ["api-event-contract-design", "web-quality-review", "cs-quality-review", "full-change-risk-review", "release-readiness-review"],
+      "checks": ["Presentation Contract", "Schema-to-UI Leakage", "Content Stress", "Error Contract", "Error ID Correlation"]
+    },
     {
       "id": "web-design-system",
       "display_name": "Web设计系统",

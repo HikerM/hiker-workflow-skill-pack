@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hiker.local/schemas/runtime-reuse.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "runtime_id", "platform", "status", "source_fingerprint", "project_config_fingerprint", "technology_fingerprint", "environment_fingerprint", "relevant_state_fingerprint", "authenticated_session_fingerprint", "capabilities", "targets"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "runtime_id": {"type": "string", "minLength": 1, "maxLength": 160},
+    "platform": {"enum": ["BS_BROWSER", "CS_CLIENT"]},
+    "status": {"enum": ["READY", "IDLE", "BUSY", "FAILED", "CLOSED"]},
+    "source_fingerprint": {"type": "string", "minLength": 1, "maxLength": 160},
+    "project_config_fingerprint": {"type": "string", "minLength": 1, "maxLength": 160},
+    "technology_fingerprint": {"type": "string", "minLength": 1, "maxLength": 160},
+    "environment_fingerprint": {"type": "string", "minLength": 1, "maxLength": 160},
+    "relevant_state_fingerprint": {"type": "string", "minLength": 1, "maxLength": 160},
+    "authenticated_session_fingerprint": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["session_reuse", "incremental_reload"],
+      "properties": {
+        "session_reuse": {"type": "boolean"},
+        "incremental_reload": {"type": "boolean"}
+      }
+    },
+    "targets": {"type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 160}}
+  }
+}

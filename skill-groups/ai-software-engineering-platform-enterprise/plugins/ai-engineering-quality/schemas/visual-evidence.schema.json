@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hiker.local/schemas/visual-evidence-1.0.0.json",
+  "title": "Hiker bound visual fidelity evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "evidence_type", "evidence_id", "candidate_id", "goal_revision", "design_version", "design_fingerprint", "registry_fingerprint", "source_commit", "workspace_fingerprint", "source_fingerprint", "screen_id", "state", "architecture", "technology", "viewport", "expected", "actual", "objective_checks", "perceptual_review", "blockers", "verdict", "fingerprint"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "evidence_type": {"const": "VISUAL_FIDELITY"},
+    "evidence_id": {"type": "string", "minLength": 1},
+    "candidate_id": {"type": ["string", "null"]},
+    "goal_revision": {"type": ["integer", "null"]},
+    "design_version": {"type": "integer", "minimum": 0},
+    "design_fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "registry_fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "source_commit": {"type": ["string", "null"]},
+    "workspace_fingerprint": {"type": ["string", "null"]},
+    "source_fingerprint": {"type": "string", "minLength": 1},
+    "screen_id": {"type": "string", "minLength": 1},
+    "state": {"type": "string", "minLength": 1},
+    "architecture": {"enum": ["BS", "CS"]},
+    "technology": {"type": "string", "minLength": 1},
+    "viewport": {"type": "object"},
+    "expected": {"type": "object"},
+    "actual": {"type": "object"},
+    "objective_checks": {"type": "object"},
+    "perceptual_review": {"type": "object"},
+    "blockers": {"type": "array", "items": {"type": "object"}},
+    "verdict": {"enum": ["PASS", "BLOCKED", "REQUIRES_REVIEW", "STALE"]},
+    "fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

@@ -6,6 +6,7 @@ from component_registry import build
 from web_audit import audit
 from weblib import glob_match
 from backend_guard import audit as backend_audit, detect as backend_detect
+from bs_ui_adapter import observe as observe_bs_ui
 
 class WebTests(unittest.TestCase):
     def test_node_modules_is_not_scanned(self):
@@ -87,4 +88,14 @@ class WebTests(unittest.TestCase):
             root=Path(td);(root/"package.json").write_text(json.dumps({"engines":{"node":">=22"},"dependencies":{"express":"^5.1.0"}}),encoding="utf-8");(root/"pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n",encoding="utf-8")
             stack=backend_detect(root)["stacks"][0]
             self.assertEqual(("Express","5.1.0",">=22","pnpm"),(stack["framework"],stack["framework_version"],stack["runtime"],stack["package_manager"]))
+    def test_bs_ui_adapter_requires_explicit_scope_and_observes_project_facts(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);(root/"src/components").mkdir(parents=True)
+            (root/"package.json").write_text(json.dumps({"dependencies":{"vue":"3.5.1"}}),encoding="utf-8")
+            (root/"src/components/RecordRow.vue").write_text("<button aria-label='Open' class='bg-primary'>Open</button><script>const loading=true</script>",encoding="utf-8")
+            data=observe_bs_ui(root,["src/components/RecordRow.vue"])
+            self.assertEqual(data["scope"]["mode"],"EXPLICIT")
+            self.assertEqual(data["technology"]["status"],"OBSERVED")
+            self.assertEqual(data["bounded"]["scanned_files"],1)
+            self.assertEqual(data["components"][0]["semantic_role"]["status"],"UNKNOWN")
 if __name__=="__main__": unittest.main()

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hiker.local/schemas/error-contract-1.0.0.json",
+  "title": "Hiker protocol-neutral error semantics",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "contract_id", "revision", "protocol", "classifications", "fingerprint"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "contract_id": {"type": "string", "minLength": 1},
+    "revision": {"type": "integer", "minimum": 0},
+    "protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["family", "serialization", "existing_contract_ref", "semantic_mappings"],
+      "properties": {
+        "family": {"enum": ["REST", "PROBLEM_DETAILS", "GRAPHQL", "GRPC", "CS_LOCAL", "CUSTOM"]},
+        "serialization": {"type": ["string", "null"]},
+        "existing_contract_ref": {"type": ["string", "null"]},
+        "semantic_mappings": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["classification", "user_message", "developer_diagnostic", "error_code", "correlation", "retry"],
+          "properties": {
+            "classification": {"type": "string", "minLength": 1},
+            "user_message": {"type": "string", "minLength": 1},
+            "developer_diagnostic": {"type": "string", "minLength": 1},
+            "error_code": {"type": "string", "minLength": 1},
+            "correlation": {"type": "string", "minLength": 1},
+            "retry": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "classifications": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "kind", "retry_semantics", "user_message_policy", "diagnostic_requirements"],
+        "properties": {
+          "code": {"type": "string", "minLength": 1},
+          "kind": {"enum": ["EXPECTED_BUSINESS", "UNEXPECTED_SYSTEM"]},
+          "retry_semantics": {"enum": ["NEVER", "SAFE", "AFTER_CHANGE", "UNKNOWN"]},
+          "user_message_policy": {"type": "string", "minLength": 1},
+          "diagnostic_requirements": {"type": "array", "items": {"type": "string", "minLength": 1}}
+        }
+      }
+    },
+    "fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

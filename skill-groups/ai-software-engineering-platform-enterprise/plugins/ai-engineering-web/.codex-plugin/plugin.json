@@ -1,6 +1,6 @@
 {
   "name": "ai-engineering-web",
-  "version": "5.17.0+codex.20260825194113",
+  "version": "5.18.0+codex.20260826161321",
   "description": "非模板化浏览器端设计系统、服务端契约与实现、数据库迁移和全栈质量审核",
   "author": {
     "name": "Hiker"

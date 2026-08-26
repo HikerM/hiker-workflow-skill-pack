@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Hiker Risk-Adaptive Governance Assessment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "assessment_id",
+    "event_type",
+    "delivery_intent",
+    "user_requested_reduction",
+    "affected_scope",
+    "dimensions"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "assessment_id": {"type": "string", "minLength": 1, "maxLength": 240},
+    "event_type": {
+      "enum": [
+        "ORDINARY_IMPLEMENTATION",
+        "GOAL_CHANGE",
+        "ARCHITECTURE_BOUNDARY_CHANGE",
+        "SHARED_WRITER_CONFLICT",
+        "CANDIDATE_FREEZE",
+        "HIGH_RISK_DATA_CHANGE",
+        "SECURITY_BOUNDARY",
+        "RELEASE"
+      ]
+    },
+    "delivery_intent": {"enum": ["PRODUCTION", "PROTOTYPE", "EXPERIMENTAL", "DEMO"]},
+    "user_requested_reduction": {"type": "boolean"},
+    "affected_scope": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 240}
+    },
+    "affected_capabilities": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 240}
+    },
+    "requested_validators": {
+      "type": "array",
+      "maxItems": 12,
+      "uniqueItems": true,
+      "items": {
+        "enum": ["DESIGN_FIDELITY", "PRESENTATION", "CONTENT_STRESS", "ERROR_DIAGNOSTIC", "INTERACTION", "CONTRACT", "DATA", "SECURITY", "RUNTIME", "REGRESSION", "ARCHITECTURE", "RELEASE_GATE"]
+      }
+    },
+    "runtime_targets": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["surface_id", "states", "environments"],
+        "properties": {
+          "surface_id": {"type": "string", "minLength": 1, "maxLength": 240},
+          "states": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 240}},
+          "environments": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 240}}
+        }
+      }
+    },
+    "full_scan_reason": {
+      "type": ["string", "null"],
+      "enum": [null, "REGISTRY_MISSING", "REGISTRY_CORRUPTION", "TECHNOLOGY_MIGRATION", "MAJOR_COMPONENT_ARCHITECTURE_CHANGE", "EXPLICIT_REBUILD"]
+    },
+    "source_fingerprint": {"type": "string", "maxLength": 240},
+    "design_fingerprint": {"type": "string", "maxLength": 240},
+    "project_config_fingerprint": {"type": "string", "maxLength": 240},
+    "technology_fingerprint": {"type": "string", "maxLength": 240},
+    "environment_fingerprint": {"type": "string", "maxLength": 240},
+    "state_id": {"type": "string", "maxLength": 240},
+    "dimensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "business_criticality",
+        "data_impact",
+        "security_impact",
+        "reversibility",
+        "shared_scope",
+        "architecture_impact",
+        "runtime_impact",
+        "user_visibility",
+        "release_impact",
+        "evidence_uncertainty"
+      ],
+      "properties": {
+        "business_criticality": {"$ref": "#/$defs/dimension"},
+        "data_impact": {"$ref": "#/$defs/dimension"},
+        "security_impact": {"$ref": "#/$defs/dimension"},
+        "reversibility": {"$ref": "#/$defs/dimension"},
+        "shared_scope": {"$ref": "#/$defs/dimension"},
+        "architecture_impact": {"$ref": "#/$defs/dimension"},
+        "runtime_impact": {"$ref": "#/$defs/dimension"},
+        "user_visibility": {"$ref": "#/$defs/dimension"},
+        "release_impact": {"$ref": "#/$defs/dimension"},
+        "evidence_uncertainty": {"$ref": "#/$defs/dimension"}
+      }
+    }
+  },
+  "$defs": {
+    "dimension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "basis", "reason", "evidence_refs"],
+      "properties": {
+        "level": {"enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]},
+        "basis": {"enum": ["MODEL_ASSESSMENT", "PROJECT_FACT", "USER_DECISION", "APPROVED_BASELINE", "UNKNOWN"]},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 240},
+        "evidence_refs": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 240}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0.0",
+  "release": "5.17.0",
+  "source_commit": "a39639b0b70c58bceab4b41b4bc995ddbd206da2",
+  "skill_count": 42,
+  "skill_body_bytes": 132157,
+  "default_surfaces": {
+    "router_skill": {
+      "git_blob": "c19651a4411c51d7ddf54cc7337e6740a2d45a00",
+      "bytes": 6293
+    },
+    "semantic_catalog": {
+      "git_blob": "dc87439be498937e8949095608d6b4dd699819ad",
+      "bytes": 5961
+    }
+  },
+  "fast_and_ordinary_project_tax": {
+    "injected_context_bytes": 0,
+    "injected_prompt_bytes": 0,
+    "governance_tool_calls": 0,
+    "repository_scans": 0,
+    "state_reads": 0,
+    "state_writes": 0,
+    "evidence_writes": 0,
+    "screenshots": 0,
+    "browser_or_client_launches": 0,
+    "review_cycles": 0,
+    "validation_cycles": 0,
+    "generated_governance_artifacts": 0,
+    "runtime_duration_ms": 0
+  },
+  "invariants": [
+    "FAST executes zero governance scripts and writes zero state",
+    "ordinary PROJECT work does not enter governed journal or trace by default",
+    "only selected skills enter model context",
+    "governed evidence is fingerprinted and scope-bound"
+  ]
+}

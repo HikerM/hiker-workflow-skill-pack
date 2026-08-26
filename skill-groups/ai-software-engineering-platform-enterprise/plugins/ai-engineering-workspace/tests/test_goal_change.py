@@ -99,13 +99,14 @@ class GoalChangeClosureTests(unittest.TestCase):
     ) -> dict:
         invalidations = {
             "implementation_route_ids": [], "review_record_ids": [],
-            "test_record_ids": [], "checkpoint_ids": [], "acceptance_ids": [],
+            "test_record_ids": [], "product_evidence_ids": [], "checkpoint_ids": [], "acceptance_ids": [],
         }
         if invalidate:
             invalidations = {
                 "implementation_route_ids": [f"route-{task_id}"],
                 "review_record_ids": [f"review-{task_id}"],
                 "test_record_ids": [f"test-{task_id}"],
+                "product_evidence_ids": [],
                 "checkpoint_ids": [f"cp-{task_id}"], "acceptance_ids": ["AC-001"],
             }
         return {
@@ -260,6 +261,71 @@ class GoalChangeClosureTests(unittest.TestCase):
             ], ["SURFACE:DB"])
             with self.assertRaisesRegex(RuntimeError, "is closed"):
                 self.execute(root, plan, "goal-closed-affected")
+
+    def test_ui_goal_change_stales_only_affected_product_evidence(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.setUpProject(root)
+            task = self.createTask(root, "KG-001", owned=["UI:RECORDS", "UI:DETAILS"])
+            goal = ensure_contract(root)
+            task["product_evidence"] = {
+                "status": "PASS",
+                "binding": {"goal_revision": goal["revision"], "goal_fingerprint": goal["fingerprint"]},
+                "records": [
+                    {"id": "visual-records", "status": "PASS", "surface_ids": ["UI:RECORDS"], "evidence_type": "VISUAL_FIDELITY"},
+                    {"id": "visual-courses", "status": "PASS", "surface_ids": ["UI:COURSES"], "evidence_type": "VISUAL_FIDELITY"},
+                ],
+            }
+            save_task(root, task)
+            entry = self.entry("KG-001", "AFFECTED", affected=["UI:RECORDS"], replan=True)
+            entry["invalidations"]["product_evidence_ids"] = ["visual-records"]
+            self.execute(root, self.plan(root, [entry], ["UI:RECORDS"]), "goal-ui-product")
+            current = load_task(root, "KG-001")
+            records = {item["id"]: item for item in current["product_evidence"]["records"]}
+            self.assertEqual("STALE", records["visual-records"]["status"])
+            self.assertEqual("PASS", records["visual-courses"]["status"])
+            self.assertEqual("PARTIAL", current["product_evidence"]["status"])
+
+    def test_unaffected_ui_task_rebinds_without_losing_product_evidence(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.setUpProject(root)
+            task = self.createTask(root, "KG-001", owned=["UI:COURSES"])
+            goal = ensure_contract(root)
+            task["product_evidence"] = {
+                "status": "PASS",
+                "binding": {"goal_revision": goal["revision"], "goal_fingerprint": goal["fingerprint"]},
+                "records": [{"id": "visual-courses", "status": "PASS", "surface_ids": ["UI:COURSES"]}],
+            }
+            save_task(root, task)
+            before = load_task(root, "KG-001")["product_evidence"]["records"]
+            self.execute(root, self.plan(root, [self.entry("KG-001", "UNAFFECTED", retained=["UI:DETAILS"])], ["UI:RECORDS"]), "goal-ui-unaffected")
+            current = load_task(root, "KG-001")
+            self.assertEqual(before, current["product_evidence"]["records"])
+            self.assertEqual(2, current["product_evidence"]["binding"]["goal_revision"])
+
+    def test_ui_goal_change_recovers_mid_transaction_without_double_staling(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.setUpProject(root)
+            for task_id, surface in (("KG-001", "UI:RECORDS"), ("KG-002", "UI:DETAILS")):
+                task = self.createTask(root, task_id, owned=[surface])
+                goal = ensure_contract(root)
+                task["product_evidence"] = {
+                    "status": "PASS", "binding": {"goal_revision": goal["revision"], "goal_fingerprint": goal["fingerprint"]},
+                    "records": [{"id": f"visual-{task_id}", "status": "PASS", "surface_ids": [surface]}],
+                }
+                save_task(root, task)
+            affected = self.entry("KG-001", "AFFECTED", affected=["UI:RECORDS"], replan=True)
+            affected["invalidations"]["product_evidence_ids"] = ["visual-KG-001"]
+            plan = self.plan(root, [affected, self.entry("KG-002", "UNAFFECTED", retained=["UI:DETAILS"])], ["UI:RECORDS"])
+
+            def crash(stage: str) -> None:
+                if stage == "after_task:KG-001":
+                    raise SimulatedProcessExit()
+
+            with self.assertRaises(SimulatedProcessExit):
+                self.execute(root, plan, "goal-ui-crash", crash)
+            self.execute(root, plan, "goal-ui-crash")
+            records = load_task(root, "KG-001")["product_evidence"]["records"]
+            self.assertEqual(1, sum(1 for item in records if item["status"] == "STALE"))
 
     def test_damaged_active_transaction_marker_fails_closed(self):
         with tempfile.TemporaryDirectory() as td:

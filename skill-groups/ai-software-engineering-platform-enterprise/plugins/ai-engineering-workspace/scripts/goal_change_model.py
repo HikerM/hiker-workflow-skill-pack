@@ -18,6 +18,7 @@ INVALIDATION_FIELDS = {
     "implementation_route_ids",
     "review_record_ids",
     "test_record_ids",
+    "product_evidence_ids",
     "checkpoint_ids",
     "acceptance_ids",
 }
@@ -107,6 +108,7 @@ def _validate_references(task: dict[str, Any], entry: dict[str, Any]) -> None:
         "implementation_route_ids": _route_ids(task),
         "review_record_ids": _record_ids(task, "review"),
         "test_record_ids": _record_ids(task, "tests"),
+        "product_evidence_ids": _record_ids(task, "product_evidence"),
         "checkpoint_ids": _checkpoint_ids(task),
         "acceptance_ids": {
             str(item.get("id"))
@@ -147,6 +149,9 @@ def _validate_surface_evidence(task: dict[str, Any], entry: dict[str, Any]) -> N
         ),
         "test_record_ids": _surface_bound_ids(
             (task.get("tests") or {}).get("records") or [], "id", surfaces
+        ),
+        "product_evidence_ids": _surface_bound_ids(
+            (task.get("product_evidence") or {}).get("records") or [], "id", surfaces
         ),
         "checkpoint_ids": _surface_bound_ids(
             task.get("checkpoint_refs") or [], "checkpoint_id", surfaces
@@ -324,13 +329,19 @@ def _rebind_evidence(evidence: dict[str, Any], binding: dict[str, Any]) -> None:
         lineage["goal_fingerprint"] = binding.get("fingerprint")
 
 
-def _mark_records(records: list[Any], selected: set[str]) -> list[dict[str, Any]]:
+def _mark_records(
+    records: list[Any],
+    selected: set[str],
+    *,
+    status: str = "INVALID",
+    reason_field: str = "invalidated_reason",
+) -> list[dict[str, Any]]:
     invalidated: list[dict[str, Any]] = []
     for item in records:
         if isinstance(item, dict) and str(item.get("id")) in selected:
             invalidated.append(copy.deepcopy(item))
-            item["status"] = "INVALID"
-            item["invalidated_reason"] = "GOAL_REVISION_SCOPE"
+            item["status"] = status
+            item[reason_field] = "GOAL_REVISION_SCOPE"
     return invalidated
 
 
@@ -365,6 +376,7 @@ def project_task(
         projected["goal_binding"] = new_binding
         _rebind_evidence(projected.get("review") or {}, new_binding)
         _rebind_evidence(projected.get("tests") or {}, new_binding)
+        _rebind_evidence(projected.get("product_evidence") or {}, new_binding)
         projected.setdefault("carried_goal_evidence", []).append({
             "at": timestamp,
             "operation_id": safe_id(operation_id),
@@ -402,6 +414,19 @@ def project_task(
                 evidence["status"] = "PARTIAL" if valid else "PENDING"
             _rebind_evidence(evidence, new_binding)
             projected[key] = evidence
+        product = projected.get("product_evidence") or {"status": "PENDING", "records": []}
+        selected_product = set(invalidations["product_evidence_ids"])
+        invalidated["product_evidence_ids"] = _mark_records(
+            product.get("records") or [],
+            selected_product,
+            status="STALE",
+            reason_field="stale_reason",
+        )
+        if selected_product:
+            valid_product = [item for item in product.get("records") or [] if item.get("status") not in {"INVALID", "STALE"}]
+            product["status"] = "PARTIAL" if valid_product else "PENDING"
+        _rebind_evidence(product, new_binding)
+        projected["product_evidence"] = product
         convergence = projected.get("convergence") or {}
         route_ids = set(invalidations["implementation_route_ids"])
         routes = convergence.get("implementation_routes") or []

@@ -145,6 +145,13 @@ class QualityTests(unittest.TestCase):
     def test_test_plan_uses_real_package_scripts(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);repo(root);(root/"package.json").write_text(json.dumps({"packageManager":"pnpm@9","scripts":{"lint":"eslint .","build":"vite build"}}));data=plan(root,{"risk":{"level":"MEDIUM","tags":[]},"changes":[]});commands={x["command"] for x in data["mandatory"]+data["recommended"]};self.assertIn("pnpm lint",commands);self.assertIn("pnpm build",commands);self.assertNotIn("npm test -- --runInBand",commands)
+    def test_test_plan_is_risk_proportionate_not_a_fixed_workflow(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);repo(root);(root/"package.json").write_text(json.dumps({"packageManager":"pnpm@9","scripts":{"lint":"eslint .","test":"vitest run","build":"vite build"}}))
+            low=plan(root,{"risk":{"level":"LOW","tags":[]},"semantic_assessment":{"activation":"NONE","scope_mode":"NONE"},"changes":[]})
+            high=plan(root,{"risk":{"level":"HIGH","tags":[]},"semantic_assessment":{"activation":"GOVERNED","scope_mode":"AFFECTED_SCOPE"},"changes":[]})
+            self.assertEqual(1,len(low["mandatory"]));self.assertGreaterEqual(len(low["recommended"]),2);self.assertEqual("NONE",low["governance_activation"])
+            self.assertEqual(3,len(high["mandatory"]));self.assertEqual([],high["recommended"]);self.assertEqual("GOVERNED",high["governance_activation"])
     def test_release_review_requires_governed_merged_task_and_docs(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);repo(root);data=release_review(root,"KG-001");self.assertEqual("BLOCKED",data["result"])

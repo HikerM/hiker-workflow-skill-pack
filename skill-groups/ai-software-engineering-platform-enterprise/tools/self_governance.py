@@ -9,8 +9,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from benchmark_product_assurance import benchmark as benchmark_product_assurance
+from benchmark_governance_precision import benchmark as benchmark_governance_precision
+from benchmark_delivery_velocity import benchmark as benchmark_delivery_velocity
 from benchmark_router import benchmark as benchmark_router
 from audit_skill_coherence import audit as audit_skill_coherence
+from audit_governance_enforcement import audit as audit_governance_enforcement
 from desktop_stability_gate import audit as audit_desktop_stability
 from evaluate_master_progression import evaluate as evaluate_master_progression
 from evaluate_router import evaluate as evaluate_router
@@ -66,12 +70,15 @@ def architecture_gate(repository_root: Path = REPOSITORY_ROOT, suite: Path = SUI
         text = (governance.parent / extracted).read_text(encoding="utf-8")
         if "def save_task(" in text or "atomic_json(task_file" in text:
             errors.append(f"{extracted} introduced a second Task domain writer")
+    enforcement = audit_governance_enforcement(suite)
+    errors.extend(f"governance enforcement: {item}" for item in enforcement.get("errors", []))
     facts = {
         "production_python_files": len(files),
         "largest": sorted(({"path": name, "lines": lines} for name, lines in sizes.items()), key=lambda item: item["lines"], reverse=True)[:10],
         "hikerctl_lines": hikerctl_lines,
         "governance_state_lines": sizes.get(governance.relative_to(repository_root).as_posix()),
         "single_task_writer": not any("second Task domain writer" in item for item in errors),
+        "governance_enforcement": enforcement,
     }
     return _stage("architecture", not errors, errors=errors, facts=facts, seconds=time.perf_counter() - started)
 
@@ -136,6 +143,9 @@ def tests_gate(repository_root: Path = REPOSITORY_ROOT, suite: Path = SUITE) -> 
 def performance_gate(suite: Path = SUITE) -> dict[str, Any]:
     started = time.perf_counter()
     router = benchmark_router(20, 200.0)
+    product = benchmark_product_assurance()
+    governance = benchmark_governance_precision()
+    delivery = benchmark_delivery_velocity()
     desktop = audit_desktop_stability(suite)
     errors = []
     if not router.get("ok"):
@@ -144,8 +154,17 @@ def performance_gate(suite: Path = SUITE) -> dict[str, Any]:
             f"incremental P95 {router.get('p95_ms')}ms/{router.get('max_p95_ms')}ms, "
             f"raw P95 {router.get('raw_p95_ms')}ms/{router.get('max_raw_p95_ms')}ms"
         )
+    errors.extend(f"product assurance: {item}" for item in product.get("errors", []))
+    errors.extend(f"adaptive governance: {item}" for item in governance.get("errors", []))
+    errors.extend(f"delivery velocity: {item}" for item in delivery.get("errors", []))
     errors.extend(desktop.get("errors", []))
-    return _stage("performance", not errors, errors=errors, facts={"router": router, "desktop": desktop.get("metrics", {})}, seconds=time.perf_counter() - started)
+    return _stage(
+        "performance",
+        not errors,
+        errors=errors,
+        facts={"router": router, "product_assurance": product, "adaptive_governance": governance, "delivery_velocity": delivery, "desktop": desktop.get("metrics", {})},
+        seconds=time.perf_counter() - started,
+    )
 
 
 def package_gate(suite: Path = SUITE, archive_dir: Path | None = None) -> dict[str, Any]:

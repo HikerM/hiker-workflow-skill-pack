@@ -8,7 +8,7 @@ description: 在现有Web技术栈中按已审核设计实现非模板化页面�
 ## 实现前
 
 1. 读取 `.ai/context/tech-stack.json`；
-2. 运行 [component_registry.py](../../scripts/component_registry.py) 更新组件清单；
+2. 未采用 UI IR 的旧项目可继续用 [component_registry.py](../../scripts/component_registry.py) 生成 legacy 清单；采用 5.18 后，`component_registry_v2.py` 是唯一 Design↔Code Registry 写入口，先用 [bs_ui_adapter.py](../../scripts/bs_ui_adapter.py) 对显式受影响文件采集代码事实，再合并语义映射；
 3. 读取已通过独立复审的页面规格、API契约、视觉方向、Design Token、间距/色彩规范、组件复用清单和锁定决策；
 4. 核对核心页面紧凑构图契约中的主任务、构图模式、焦点、阅读路径、疏密区域、签名元素、卡片理由和非卡片替代。若缺失或复审仍有 P0/P1，只返回一次定向缺口并退回受影响设计；不得另建会话、全量矩阵或反复治理；
 5. 输出影响文件、Token 映射、复用/扩展/组合组件、新增组件理由和验证命令。
@@ -51,6 +51,8 @@ description: 在现有Web技术栈中按已审核设计实现非模板化页面�
 普通实现步骤连续完成并自动保存检查点。用户中途调整时只重做受影响部分，不丢弃已完成的服务、类型或测试。
 
 日常视觉验证只覆盖本次变更的主页面、一个窄屏尺寸、一个主要桌面尺寸和本次修改的隐藏/失败状态；发布阶段才扩展到完整分辨率矩阵。相同源码指纹和状态已有 PASS 证据时复用，避免重复截图和长时间占用浏览器。
+
+采用 5.18 时按 Registry 的 `implementation_layer` 生成有界 Design-to-Code 计划；优先 Token→Primitive→Reusable→Domain→Page，但项目已有分层不同则保持 `project_native`，不得借机重构。Runtime Snapshot 只记录布局、状态、Token 与截图引用，不保存完整页面源码或 stream 内容。
 
 ## 完成证据
 

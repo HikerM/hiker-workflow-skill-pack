@@ -1,6 +1,6 @@
 {
   "name": "ai-engineering-workspace",
-  "version": "5.17.0+codex.20260825194113",
+  "version": "5.18.0+codex.20260826161321",
   "description": "大型B/S与C/S工程的阶段路由、任务防重、候选冻结、长链路诊断、Git与验收闭环治理",
   "author": {
     "name": "Hiker"

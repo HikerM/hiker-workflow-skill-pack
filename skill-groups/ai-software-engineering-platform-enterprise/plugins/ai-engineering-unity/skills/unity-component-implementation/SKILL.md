@@ -5,6 +5,8 @@ description: 在现有Unity版本和UI体系中实现Prefab、VisualElement、Re
 
 # Unity组件与页面实现
 
+采用 5.18 时先执行通用 C/S Design→Registry→Runtime Evidence 链，再由 Unity 专项验证 Prefab/VisualTree、Canvas/Anchor、Scene、Input 与资源生命周期；不得另建 Unity 专属的第二套设计状态或视觉证据账本。
+
 ## 实现前
 
 1. 读取 `.ai/context/tech-stack.json` 和锁定决策；

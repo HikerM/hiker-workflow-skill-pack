@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hiker.local/schemas/architecture-product-profile-1.0.0.json",
+  "title": "Hiker adaptive B/S or C/S product evidence profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "profile_id", "architecture", "project_facts", "required_dimensions", "dimensions", "fingerprint"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "profile_id": {"type": "string", "minLength": 1},
+    "architecture": {"enum": ["BS", "CS"]},
+    "project_facts": {"type": "array", "maxItems": 128, "items": {"type": "object"}},
+    "required_dimensions": {"type": "array", "maxItems": 32, "items": {"type": "string", "minLength": 1}},
+    "dimensions": {
+      "type": "object",
+      "maxProperties": 32,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status", "evidence_refs", "reason"],
+        "properties": {
+          "status": {"enum": ["PASS", "BLOCKED", "UNKNOWN", "NOT_APPLICABLE"]},
+          "evidence_refs": {"type": "array", "maxItems": 32, "items": {"type": "string", "minLength": 1}},
+          "reason": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

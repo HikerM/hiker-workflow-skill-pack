@@ -9,6 +9,8 @@ description: 独立只读审核非Unity C/S的视觉、组件、线程、生命�
 
 审核：
 
+- 采用 5.18 时独立核验 UI IR、Registry、Architecture Profile、Presentation/Error Contract 与 Runtime Evidence；机器布局检查不代替感知审核，未采用 UI IR 的旧项目不强制迁移；
+
 - 实现是否保持真实框架、架构边界、UI线程和生命周期；
 - Design Token、色彩、间距、排版、焦点、密度、状态与组件复用是否真实落地；
 - 是否出现普通后台模板、默认组件库皮肤、重复卡片汤或无焦点的单调等权布局；

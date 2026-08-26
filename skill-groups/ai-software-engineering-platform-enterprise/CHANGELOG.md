@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 5.18.0
+
+- 在5.17控制平面上增加B/S、C/S、共享Service & Data和Assurance逻辑分层；具体框架继续作为按项目事实选择的Technology Adapter，插件仍为5个、Skill仍为42个。
+- 新增语义UI Design IR、三层约束与Decision Authority，支持standard、hybrid和custom策略；观察事实区分OBSERVED、INFERRED、UNKNOWN，用户决策只通过现有Goal Change增量失效受影响证据。
+- 新增Component Registry 2.0、Design-to-Code计划、B/S与C/S有界观察适配器；默认不扫描全仓，旧组件清单按需迁移并把未知映射保持为显式gap。
+- 新增Runtime UI Evidence与Design Fidelity，分离overflow/clipping/overlap/state/token等客观检查和独立感知审核，所有PASS绑定设计、Registry、源码、候选、目标修订、屏幕状态和视口。
+- 新增Presentation Contract、Schema-to-UI Leakage、Content Stress和Interaction Copy检查，允许有业务含义的编号但阻断技术ID、raw enum、SQL、堆栈与本机路径直出。
+- 新增协议中立Error Contract、用户/开发诊断双通道、可反查Error ID及catch-and-hide检测，兼容REST、Problem Details、GraphQL、gRPC、C/S Local和项目企业协议。
+- 产品发布门禁对老项目无UI IR时保持NOT_APPLICABLE；启用后只读9个热状态文件。1000条冷历史不进入日常扫描，默认Prompt/Skill加载量和外部模型调用均不增加。
+- 新增B/S、C/S、Presentation、Error和Goal Change产品证据E2E，并重新执行完整5.17可靠性回归、真实浏览器运行、隐私、架构、路由、性能、打包与隔离安装门禁。
+- 新增10维Risk-Adaptive Governance与Verification Budget：LOW只允许受影响范围的最小验证，MEDIUM使用定向运行与回归，HIGH/CRITICAL才启用独立复审、回滚证据和发布门禁；治理定义前置条件、不变量、证据与验收，不固定模型的推理或实现步骤。
+- 新增Runtime身份复用、Evidence指纹复用/局部失效、单屏Design IR补丁和Component Registry有界增量更新；完整截图与日志只保留冷存储引用、哈希和有界摘要。
+- 新增Governance Tax、Development Velocity A-D场景、Time-to-Accepted-Change与规则机器化审计；默认路由Skill和语义目录保持5.17 blob不变，默认新增上下文/Prompt为0。
+
 ## 5.17.0
 
 - Control Kernel成为Task业务状态的唯一写协调入口；operation journal提供明确提交边界、幂等重试、Trace补偿和RECOVERY_REQUIRED失败关闭语义。

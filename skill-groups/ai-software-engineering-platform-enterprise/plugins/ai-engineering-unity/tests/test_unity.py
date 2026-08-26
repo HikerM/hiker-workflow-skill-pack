@@ -5,6 +5,7 @@ PLUGIN=Path(__file__).resolve().parents[1];sys.path.insert(0,str(PLUGIN/"scripts
 from unity_audit import audit
 from unity_registry import build
 from client_stack import classify
+from cs_ui_adapter import observe as observe_cs_ui
 
 class UnityTests(unittest.TestCase):
     def make_project(self,root:Path):
@@ -43,4 +44,12 @@ class UnityTests(unittest.TestCase):
     def test_client_stack_reports_version_evidence_and_gaps(self):
         data=classify({"projects":[{"manifest":"App.csproj","languages":[{"name":"C#","version":None}],"frameworks":[{"name":"WPF","version":"net8.0-windows","evidence":"TargetFramework"}]}]})
         self.assertEqual("dotnet-desktop",data["family"]);self.assertEqual("net8.0-windows",next(x for x in data["technologies"] if x["name"]=="WPF")["version"]);self.assertIn("C#",data["version_gaps"])
+    def test_cs_ui_adapter_uses_explicit_scope_and_keeps_unseen_semantics_unknown(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);(root/"ui").mkdir()
+            (root/"ui/Main.qml").write_text("Item { property bool busy: true; Accessible.name: 'Main' }",encoding="utf-8")
+            data=observe_cs_ui(root,["ui/Main.qml"])
+            self.assertEqual(data["scope"]["mode"],"EXPLICIT")
+            self.assertEqual(data["technology"]["value"]["families"],["qt"])
+            self.assertEqual(data["components"][0]["design_component"]["status"],"UNKNOWN")
 if __name__=="__main__":unittest.main()

@@ -1,0 +1,64 @@
+{
+  "schema_version": "1.0.0",
+  "evidence_id": "HIKER-5.18-BS-RUNTIME-20260826",
+  "evidence_type": "REAL_BROWSER_RUNTIME_CAPTURE",
+  "captured_at": "2026-08-26T08:09:26Z",
+  "tool": {
+    "name": "playwright-cli",
+    "version": "0.1.18",
+    "external_model_calls": 0
+  },
+  "source": {
+    "fixture_ref": "plugins/ai-engineering-quality/tests/fixtures/bs-runtime/index.html",
+    "fixture_sha256": "93b5717ad90f1d1e58fc2d91d9dd3e2b93f2d1ad67e2d6e3ecd3ea3c1156b219",
+    "http_status": 200
+  },
+  "design_version": "5.18-bs-runtime-fixture-1",
+  "screen_id": "runtime-status",
+  "state": "details-expanded",
+  "architecture": "BS",
+  "technology": "project-native-html-css-js",
+  "viewport": {
+    "width": 390,
+    "height": 844,
+    "device_scale_factor": 1
+  },
+  "expected": {
+    "primary_status_visible": true,
+    "details_interaction_operable": true,
+    "horizontal_overflow": false,
+    "vertical_overflow": false,
+    "console_errors": 0,
+    "console_warnings": 0
+  },
+  "actual": {
+    "page_title": "运行状态检查",
+    "interaction": {
+      "control": "查看检查详情",
+      "result_text": "收起检查详情",
+      "aria_expanded": "true"
+    },
+    "status_panel": {
+      "x": 16,
+      "y": 150.796875,
+      "width": 358,
+      "height": 259,
+      "scroll_width": 356,
+      "client_width": 356,
+      "scroll_height": 257,
+      "client_height": 257
+    },
+    "console_errors": 0,
+    "console_warnings": 0,
+    "capture_ref": "docs/evidence/5.18-bs-runtime-mobile.png",
+    "capture_sha256": "4fd16f262edb8862db8f58d5d272184c765c0ac3c75f55c08bf84412b805d689",
+    "capture_bytes": 22973
+  },
+  "findings": [],
+  "verdict": "PASS",
+  "privacy": {
+    "absolute_paths_retained": false,
+    "prompt_or_chat_retained": false,
+    "source_content_retained": false
+  }
+}

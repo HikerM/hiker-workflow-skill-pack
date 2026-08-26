@@ -5,6 +5,8 @@ description: 只读审核Unity代码、Prefab、Scene、meta/GUID、页面生命
 
 # Unity质量审核
 
+Unity 视觉与呈现结论复用通用 C/S/Assurance 的 UI IR、Presentation/Error、Fidelity 与 Candidate/STALE；本审核在其上独立核验 UGUI/UI Toolkit、Prefab/Scene、CanvasScaler、Input、GC、资源引用、构建目标和平台约束，不以通用 PASS 代替 Unity 专项证据。
+
 运行：
 
 ```bash

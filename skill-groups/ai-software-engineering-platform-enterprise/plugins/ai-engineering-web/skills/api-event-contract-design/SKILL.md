@@ -8,3 +8,5 @@ description: 为已有真实服务端技术栈设计或增量修改版本化API�
 先读取需求差异、现有契约、消费者和技术版本。输出版本化契约、兼容矩阵、错误模型、权限、幂等与回滚方案。
 
 公共契约必须登记消费者及最低消费者回归；破坏性变化必须采用新版本或提供迁移窗口。契约定版前，前端、客户端和服务端实现不得各自猜测字段。
+
+采用 5.18 Error Contract 时只统一分类、用户消息、开发诊断、错误码、Correlation 与 Retry 语义，并映射到项目已有 REST、Problem Details、GraphQL、gRPC、C/S Local 或自有协议；不得强制改用统一 JSON。Error ID 必须能反查脱敏诊断证据，未知异常不得被 Global Handler 静默吞掉。

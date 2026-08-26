@@ -8,9 +8,14 @@ sys.path.insert(0,str(REPOSITORY_ROOT/"scripts"))
 from audit_release_facts import audit as audit_release_facts
 from evaluate_router import evaluate as evaluate_router
 from audit_skill_coherence import audit as audit_skill_coherence
+from audit_governance_enforcement import audit as audit_governance_enforcement
+from benchmark_delivery_velocity import benchmark as benchmark_delivery_velocity
+from benchmark_product_assurance import benchmark as benchmark_product_assurance
+from benchmark_governance_precision import benchmark as benchmark_governance_precision
 from benchmark_router import benchmark as benchmark_router
 from evaluate_master_progression import evaluate as evaluate_master_progression
 from desktop_stability_gate import audit as audit_desktop_stability
+from verify_clean_install import verify as verify_clean_install
 NAME_RE=re.compile(r"^[a-z0-9][a-z0-9-]*$")
 def frontmatter(path:Path)->dict:
     text=path.read_text(encoding="utf-8");m=re.match(r"^---\n(.*?)\n---\n",text,re.S)
@@ -100,12 +105,22 @@ def main()->int:
     if not master_progression["ok"]:errors.append("总控多维推进评估失败: "+", ".join(item["scenario"] for item in master_progression["results"] if not item["ok"]))
     router_performance=benchmark_router(20,200.0)
     if not router_performance["ok"]:errors.append(f"轻量路由性能失败: P95 {router_performance['p95_ms']}ms > {router_performance['max_p95_ms']}ms")
+    product_performance=benchmark_product_assurance()
+    if not product_performance["ok"]:errors.extend(f"产品保障性能失败: {item}" for item in product_performance["errors"])
+    governance_precision=benchmark_governance_precision()
+    if not governance_precision["ok"]:errors.extend(f"治理精度失败: {item}" for item in governance_precision["errors"])
+    delivery_velocity=benchmark_delivery_velocity()
+    if not delivery_velocity["ok"]:errors.extend(f"交付效率失败: {item}" for item in delivery_velocity["errors"])
+    enforcement=audit_governance_enforcement(ROOT)
+    if not enforcement["ok"]:errors.extend(f"治理规则机器化失败: {item}" for item in enforcement["errors"])
     coherence=audit_skill_coherence(ROOT)
     if not coherence["ok"]:errors.extend(f"Skill一致性审核: {item['code']} {item['skill']} {item['message']}" for item in coherence["errors"])
     warnings.extend(f"Skill一致性审核: {item['code']} {item['skill']} {item['message']}" for item in coherence["warnings"])
     desktop_stability=audit_desktop_stability(ROOT)
     if not desktop_stability["ok"]:errors.extend(f"桌面稳定性: {item}" for item in desktop_stability["errors"])
     warnings.extend(f"桌面稳定性: {item}" for item in desktop_stability["warnings"])
-    report={"ok":not errors,"plugin_count":len(plugins),"skill_count":len(skill_names),"unit_tests":{"ok":bool(unit_report.get("ok")),"plugin_results":[{"plugin":item.get("plugin"),"ok":item.get("ok"),"seconds":item.get("seconds")} for item in unit_report.get("results",[])]},"release_facts":release_facts,"router_eval":router_eval,"master_progression":master_progression,"router_performance":router_performance,"skill_coherence":coherence,"desktop_stability":desktop_stability,"errors":errors,"warnings":warnings}
+    clean_install=verify_clean_install(ROOT,ROOT/"dist")
+    if not clean_install["ok"]:errors.extend(f"隔离安装: {item}" for item in clean_install["errors"])
+    report={"ok":not errors,"plugin_count":len(plugins),"skill_count":len(skill_names),"unit_tests":{"ok":bool(unit_report.get("ok")),"plugin_results":[{"plugin":item.get("plugin"),"ok":item.get("ok"),"seconds":item.get("seconds")} for item in unit_report.get("results",[])]},"release_facts":release_facts,"router_eval":router_eval,"master_progression":master_progression,"router_performance":router_performance,"product_assurance_performance":product_performance,"governance_precision":governance_precision,"delivery_velocity":delivery_velocity,"governance_enforcement":enforcement,"skill_coherence":coherence,"desktop_stability":desktop_stability,"clean_install":clean_install,"errors":errors,"warnings":warnings}
     print(json.dumps(report,ensure_ascii=False,indent=2));return 0 if not errors else 2
 if __name__=="__main__":raise SystemExit(main())

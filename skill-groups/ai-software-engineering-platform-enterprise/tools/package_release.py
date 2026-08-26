@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 import shutil
 import tempfile
+import time
 import zipfile
 from pathlib import Path
 from typing import Any, Callable
 
 from package_facts import package_plan, sha256, source_files
 from self_governance import finalize_pipeline, package_gate, run_pipeline
+from verify_clean_install import verify as verify_clean_install
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -64,6 +66,7 @@ def release(
     *,
     preflight_runner: Callable[..., dict[str, Any]] = run_pipeline,
     builder: Callable[[Path, Path], list[dict[str, Any]]] = build_candidates,
+    installer_verifier: Callable[[Path, Path], dict[str, Any]] = verify_clean_install,
     publisher: Callable[[Path, Path, list[str]], list[str]] = publish_candidates,
 ) -> dict[str, Any]:
     preflight = preflight_runner(repository_root, suite)
@@ -76,12 +79,44 @@ def release(
         final = finalize_pipeline(preflight, candidate_stage)
         if not final["ok"]:
             return {"ok": False, "phase": "package-facts", "self_governance": final, "published": False}
+        install_started = time.perf_counter()
+        try:
+            install_verification = installer_verifier(suite, candidate_dir)
+        except Exception as exc:  # noqa: BLE001 - a release verifier must fail closed
+            install_verification = {
+                "ok": False,
+                "errors": [f"unhandled clean-install verification error: {type(exc).__name__}: {exc}"],
+            }
+        install_stage = {
+            "name": "clean_install",
+            "status": "PASS" if install_verification.get("ok") else "BLOCKED",
+            "seconds": round(time.perf_counter() - install_started, 3),
+            "errors": list(install_verification.get("errors", [])),
+            "facts": install_verification,
+        }
+        final = {
+            **final,
+            "ok": install_stage["status"] == "PASS",
+            "pipeline": [*final["pipeline"][:-1], "clean_install", "release_gate"],
+            "stages": [*final["stages"], install_stage],
+            "release_gate": "PASS" if install_stage["status"] == "PASS" else "BLOCKED",
+            "blocked_stage": None if install_stage["status"] == "PASS" else "clean_install",
+        }
+        if not final["ok"]:
+            return {
+                "ok": False,
+                "phase": "clean-install",
+                "self_governance": final,
+                "install_verification": install_verification,
+                "published": False,
+            }
         expected = list(candidate_stage["facts"]["plan"]["expected_archives"])
         removed = publisher(candidate_dir, dist, expected)
     return {
         "ok": True,
         "phase": "release-gate",
         "self_governance": final,
+        "install_verification": install_verification,
         "packages": outputs,
         "stale_packages_removed": removed,
         "published": True,

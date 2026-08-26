@@ -1,4 +1,4 @@
-# 智能软件工程平台 5.17（Control Kernel与工程治理版）
+# 智能软件工程平台 5.18（B/S与C/S工程能力深化版）
 
 这是面向 ChatGPT Work / Codex 桌面端的大型软件工程插件套件。它不再把所有能力堆进一个超长 Skill，而是拆成 5 个可独立启用的中文插件：
 
@@ -10,7 +10,13 @@
 
 当前套件包含 5 个插件、42 个原子能力。只有用户可见的“智能工程轻量路由”可隐式触发，其余41个能力手动可见并按需懒加载；正常回执只显示实际应用的中文插件和中文 Skill 名称。路由先确认唯一 Git Worktree 并只读取当前源码的跟踪 Manifest；历史工作目录由快速库存、只读接管、证据分类、两阶段安全关闭和合并后收敛控制。0→1项目先建立稳定需求ID、冲突/未知账本和自动决策Checkpoint；平台、架构、部署、数据、安全或核心技术栈变化记录候选、证据、风险、回退与选择后非阻塞继续，不弹出审批。用户提供的架构或功能拆分被视为待验证假设，先反证、补全遗漏和比较有真实权衡的替代方案；已有部分源码的项目先建立证据化能力基线并做需求差异对账。大型界面按当前模块治理隐藏表面、状态机、浮层、焦点、快捷键、请求乱序和重复提交，不扫描全仓交互配置。复杂长链路任务额外登记分层验收、唯一实现路径、真实实验预算和部署哈希；只有工程健康状态变化时才向用户显示去重中文告警。
 
-5.17 在5.16性能内核上补齐可靠治理：Control Kernel统一Task状态写协调，operation journal提供幂等提交与Trace补偿；Task/Turn崩溃恢复禁止盲目重发；Event采用有界冷热生命周期和Desktop Pressure门禁；Goal Change只失效受影响Task与证据；Self Governance在打包前后强制验证源码、版本和发行物。简单问答仍为零脚本，普通项目仍按证据最多一次准入，完整治理只服务复杂任务。全局模板约3KB、42个Skill前置描述低于10KB，五插件必须来自同一完整版本。
+5.18 在5.17控制平面之上增加产品交付深度：B/S与C/S共享语义UI Design IR、Decision Authority、Component Registry 2.0、Design-to-Code、Runtime/Fidelity Evidence、Presentation/Content/Interaction Copy和协议中立Error Contract；Service & Data作为B/S与C/S共同消费的逻辑层，具体技术栈仍由项目事实和按需Adapter决定。机器层使用Schema、Validator、Evidence和有界Adapter，未增加Skill数量，也没有把固定UI风格、页面模板或技术栈写成硬约束。
+
+5.18 同时采用“最大模型自由度 + 最小必要治理”：模型继续自由选择需求理解、架构、设计、实现顺序、诊断与工具路径；Runtime只约束工程事实、状态一致性、安全边界和不可接受结果。10维风险画像把治理分为LOW、MEDIUM、HIGH、CRITICAL，Verification Budget只授权当前风险与Affected Scope需要的Validator、Runtime目标和Evidence。普通低风险任务不进入完整架构审核、全仓扫描或Visual Matrix；高风险数据、安全和发布变化才主动变慢。
+
+Runtime、Evidence和Design模型均支持指纹化增量复用。浏览器或客户端会话只有在源码、项目配置、技术、环境、相关状态和认证会话身份仍可信时才复用；技术栈变化会强制重建。完整截图、视觉差异和日志留在冷证据中，主上下文只接收引用、哈希和有界发现摘要。机器可验证规则已登记为Validator、Schema或Runtime Guard，不重复膨胀默认Prompt。
+
+5.17 的可靠治理完整保留：Control Kernel统一Task状态写协调，operation journal提供幂等提交与Trace补偿；Task/Turn崩溃恢复禁止盲目重发；Event采用有界冷热生命周期和Desktop Pressure门禁；Goal Change现在还可增量失效受影响的UI、Presentation与Error证据；Self Governance在打包前后强制验证源码、版本和发行物。简单问答仍为零脚本，普通项目仍按证据最多一次准入，完整治理只服务复杂任务。全局模板约3KB、42个Skill前置描述低于10KB，五插件必须来自同一完整版本。
 
 个人安装器默认完成插件复制、个人Marketplace注册、五插件桌面端启用，以及 `~/.codex/AGENTS.md` 性能内核的安全合并。默认只保留一个活动缓存版本，旧版进入可恢复备份；安装后旧任务必须Checkpoint并停止写入，由新任务核验版本后接管。
 
@@ -59,6 +65,8 @@
 - **全局透明应用**：会话第一条助手输出先显示中文轻量路由名称；模型语义选择、守门校验和 Skill 完整读取后再显示实际活跃原子 Skill。相同阶段不重复，阶段切换或压缩恢复时重显。
 - **发布级全套审计**：增强插件套件时检查五个插件全部 Skill 的登记、触发重叠、职责曲解、权限、手动提示、路由覆盖和上下文体积；普通项目请求不会执行这项全量审计。
 - **测试按影响分片**：日常使用 `tools/run_all_tests.py --plugin <插件ID>` 只测试受影响插件；完整测试与五插件一致性审核只在发布收尾执行。
+- **治理按真实风险稀疏触发**：普通实现连续执行；只有Goal Change、架构边界、共享Writer冲突、Candidate Freeze、高风险数据、安全边界和发布等事件触发治理。验证超出预算时要求重新分级，不允许悄悄扩大范围。
+- **治理税可验证**：Governance Tax记录上下文、Prompt、工具调用、扫描、状态/证据写入、截图、Runtime启动、Review/Validation轮次和时长；无法与5.17做同场景比较的数字明确标记 `NOT_MEASURED`。
 
 ## 推荐启用组合
 

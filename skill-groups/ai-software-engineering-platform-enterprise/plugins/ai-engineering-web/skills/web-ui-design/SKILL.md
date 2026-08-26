@@ -14,12 +14,14 @@ description: 为现有B/S项目增量设计非模板化Web界面、Design Token�
 
 ## 核心工作流
 
+当前任务采用 5.18 UI IR 时，以 `.ai/ui/project-ui.json` 为唯一机器设计事实：由 `ui_design_model.py` 记录 Decision Authority、OBSERVED/INFERRED/UNKNOWN、语义构图、状态、呈现引用与验收。构图策略只是候选，必须允许 `custom`/`hybrid`；不得写成固定侧栏、卡片数或列数。旧项目没有 UI IR 时不自动建档，只对本次受影响 UI 显式渐进迁移。
+
 1. 从角色目标、工作流入口与结果、导航/路由和验收场景发现页面及交互表面；区分独立页面、嵌入式工作区、对话框/抽屉、后台过程和跨页面状态，不为凑清单虚构页面。
 2. 为每个表面记录需求与工作流来源、用户角色、入口/出口、所属核心流程、实际技术约束和复杂度理由。
 3. 按复杂度规则选择标准设计或深度设计。出现结构化编辑、富文本、媒体资源、空间画布、实时通信、自动保存、并发、发布快照、多角色权限、大文件或离线恢复等信号时，不得按普通信息页处理。
    对下拉框、菜单、弹窗、抽屉、Popover、日期/树选择、编辑器、上传和响应式导航等隐藏表面，建立稳定交互 ID、状态转换、并发/取消、浮层/焦点和非默认状态证据；出现跨模块或运行时冲突风险时，交给 `interaction-conflict-governance` 做有界检查，不在本 Skill 复制全量规则。
 4. 在画页面前建立项目专属视觉方向与最小设计系统：明确视觉性格、信息密度、层级语法、语义色彩、间距尺度、字体、形状和反馈；审计现有 Token 与组件，优先复用并记录新增理由。
-   同时为每个核心页面记录一个紧凑构图契约：`primary_task`、`composition_pattern`、`focal_point`、`reading_path`、`density_zones`、`signature_element`、`card_usages`、`non_card_alternatives`。不得新增第二套全量UI账本。
+   同时为每个核心页面记录紧凑语义构图：`primary_task`、`information_hierarchy`、`focal_point`、`reading_path`、`density_profile`、`navigation_relationships`、`content_regions`、`states`、`interactions`、`presentation_refs` 与 `acceptance`。不得新增第二套全量UI账本。
 5. 完成页面设计后，建立需求到验收证据的追踪关系，执行用户可见信息隔离与编辑态、阅读态、审核态、发布态一致性检查。
 6. 执行反模板与语义自检并记录未解决项；自检只能证明设计者已检查，不能替代 `design-readiness-review` 的独立复审。
 7. 根据独立复审的 P0/P1 定向整改受影响契约，回归相关追踪链后再次独立复审。同一基线最多允许一次“设计→独立复审→定向整改→复审”；仍存在同类 P1 时直接报告阻断和缺证，不新增矩阵、会话或治理轮次。

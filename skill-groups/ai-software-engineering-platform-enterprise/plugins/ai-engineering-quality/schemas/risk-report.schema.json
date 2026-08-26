@@ -18,7 +18,14 @@
         "score",
         "level",
         "confidence"
-      ]
+      ],
+      "properties": {
+        "score": {"type": "number", "minimum": 0},
+        "level": {"enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]},
+        "observed_level": {"enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]},
+        "semantic_level": {"enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL", "UNKNOWN"]},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+      }
     },
     "changes": {
       "type": "array"
@@ -28,6 +35,38 @@
     },
     "evidence_gaps": {
       "type": "array"
+    },
+    "semantic_assessment": {
+      "type": "object",
+      "required": [
+        "status",
+        "risk_level",
+        "control_level",
+        "activation",
+        "model_freedom",
+        "contract",
+        "evidence_policy",
+        "verification_budget",
+        "governance_tax_budget"
+      ],
+      "properties": {
+        "status": {"enum": ["VERIFIED", "NOT_PROVIDED", "INVALID"]},
+        "risk_level": {"enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]},
+        "control_level": {"enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]},
+        "activation": {"enum": ["NONE", "TARGETED", "GOVERNED"]},
+        "scope_mode": {"enum": ["NONE", "AFFECTED_SCOPE", "RELEASE_SCOPE"]},
+        "model_freedom": {"type": "object"},
+        "contract": {
+          "type": "object",
+          "required": ["preconditions", "invariants", "required_evidence", "acceptance", "fixed_steps"]
+        },
+        "evidence_policy": {"type": "object"},
+        "verification_budget": {
+          "type": "object",
+          "required": ["status", "authorized_validators", "runtime_targets", "full_repository_scan", "runtime_reuse_required"]
+        },
+        "governance_tax_budget": {"type": "object"}
+      }
     }
   }
 }

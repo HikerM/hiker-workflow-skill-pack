@@ -15,6 +15,9 @@ python3 <plugin-root>/scripts/web_audit.py --root . --scope auto --mode review -
 
 审核维度：
 
+- 项目采用 5.18 UI IR 时，核验 Design、Component Registry 2.0、Architecture Profile、Presentation/Error Contract 与当前 Runtime Evidence；机器布局检查和独立感知审核分别给出结论，不得使用综合视觉分数替代；
+- 只对当前受影响路径运行 `bs_ui_adapter.py` 和产品验证器；无 UI IR 的旧项目保持原审核路径，不自动全仓迁移；
+
 - 技术栈和现有架构符合度；
 - 设计系统证据、语义色彩、间距尺度、排版层级和交互状态是否真实落地；
 - 组件重复、职责、复用来源、变体边界和依赖方向；

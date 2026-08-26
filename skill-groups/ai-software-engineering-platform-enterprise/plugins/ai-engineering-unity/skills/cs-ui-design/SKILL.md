@@ -5,6 +5,8 @@ description: 为已识别的非Unity C/S技术栈设计界面、Design Token、�
 
 # 通用C/S界面设计
 
+采用 5.18 UI IR 时，与 B/S 共用 Quality 插件的语义 Design Model、Decision Authority、Presentation/Error Contract 和 Component Registry 2.0；C/S 只增加窗口、屏幕、DPI、输入、离线、资源、生命周期、更新与崩溃恢复的项目适用证据。验证范围由目标设备事实选择，不得强制所有输入设备。
+
 ## 输入门禁
 
 读取项目状态、当前任务、`tech-stack.json` 和 `cs-client-router` 收据。只读取命中技术族的路由小节；Unity改用 `unity-ui-design`。确认目标设备、窗口/屏幕模型、输入方式、联网模式、安装更新方式和后端/API版本。

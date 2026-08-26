@@ -16,6 +16,10 @@ sys.path.insert(0, str(REPOSITORY / "scripts"))
 
 from audit_public_content import _scan_text
 from audit_release_facts import audit as audit_release_facts, synchronize
+from benchmark_product_assurance import benchmark as benchmark_product_assurance
+from benchmark_governance_precision import benchmark as benchmark_governance_precision
+from benchmark_delivery_velocity import benchmark as benchmark_delivery_velocity
+from audit_governance_enforcement import audit as audit_governance_enforcement
 from package_facts import audit_packages
 from package_release import build_candidates, release
 from self_governance import STAGE_ORDER, architecture_gate, run_pipeline
@@ -69,6 +73,39 @@ class SelfGovernanceTests(unittest.TestCase):
         self.assertLessEqual(report["facts"]["hikerctl_lines"], 250)
         self.assertLessEqual(report["facts"]["governance_state_lines"], 700)
         self.assertTrue(report["facts"]["single_task_writer"])
+        self.assertTrue(report["facts"]["governance_enforcement"]["ok"])
+
+    def test_machine_enforceable_rules_have_runtime_tests_and_no_default_hook(self):
+        report = audit_governance_enforcement(SUITE)
+        self.assertTrue(report["ok"], report["errors"])
+        self.assertGreater(report["classifications"]["machine_enforceable"], 0)
+        self.assertGreater(report["classifications"]["reasoning_guidance"], 0)
+        self.assertEqual(0, report["default_prompt_bytes_added"])
+
+    def test_product_assurance_performance_is_bounded_by_hot_index(self):
+        report = benchmark_product_assurance(runs=5, cold_records=50, component_count=50, element_count=64)
+        self.assertTrue(report["ok"], report["errors"])
+        self.assertEqual(1, report["legacy_no_ui"]["reads"])
+        self.assertEqual(9, report["active_hot_index"]["reads"])
+        self.assertFalse(report["cold_history"]["scanned"])
+        self.assertEqual(0, report["default_prompt_or_skill_bytes_added"])
+
+    def test_governance_precision_preserves_ai_freedom_and_zero_simple_task_tax(self):
+        report = benchmark_governance_precision(runs=20)
+        self.assertTrue(report["ok"], report["errors"])
+        self.assertEqual([], report["ai_freedom"]["fixed_steps"])
+        self.assertEqual("NONE", report["control_precision"]["low"]["activation"])
+        self.assertEqual("GOVERNED", report["control_precision"]["high"]["activation"])
+        self.assertTrue(report["control_precision"]["monotonic"])
+        self.assertEqual(0, report["default_surfaces"]["default_context_bytes_added"])
+
+    def test_delivery_velocity_uses_real_module_paths_and_marks_missing_baselines(self):
+        report = benchmark_delivery_velocity(runs=2)
+        self.assertTrue(report["ok"], report["errors"])
+        self.assertEqual(1.0, report["first_pass_acceptance"]["rate"])
+        self.assertGreaterEqual(report["runtime_reuse"]["rate"], 0.6)
+        self.assertTrue(all(item["five_17_comparable_baseline"] == "NOT_MEASURED" for item in report["scenarios"]))
+        self.assertEqual(0, report["default_token_impact"]["injected_prompt_bytes"])
 
     def test_package_facts_detect_source_change_after_candidate_build(self):
         with tempfile.TemporaryDirectory() as td:
@@ -113,6 +150,33 @@ class SelfGovernanceTests(unittest.TestCase):
         self.assertFalse(report["published"])
         self.assertEqual([], calls)
         self.assertEqual("package-facts", report["phase"])
+
+    def test_blocked_clean_install_never_publishes_verified_candidates(self):
+        stages = [stage(name) for name in STAGE_ORDER]
+        preflight = {"ok": True, "stages": stages, "release_gate": "PASS_FOR_PACKAGING"}
+        calls: list[str] = []
+        with tempfile.TemporaryDirectory() as td:
+            suite = Path(td) / "suite"
+            plugin = suite / "plugins" / "demo"
+            (plugin / ".codex-plugin").mkdir(parents=True)
+            (plugin / ".codex-plugin" / "plugin.json").write_text(
+                json.dumps({"name": "demo", "version": "1.2.3"}), encoding="utf-8"
+            )
+            (plugin / "README_CN.md").write_text("candidate\n", encoding="utf-8")
+            report = release(
+                REPOSITORY,
+                suite,
+                Path(td) / "dist",
+                preflight_runner=lambda *_: preflight,
+                installer_verifier=lambda *_: {"ok": False, "errors": ["injected install failure"]},
+                publisher=lambda *_: calls.append("publish") or [],
+            )
+        self.assertFalse(report["ok"])
+        self.assertFalse(report["published"])
+        self.assertEqual([], calls)
+        self.assertEqual("clean-install", report["phase"])
+        self.assertEqual("clean_install", report["self_governance"]["blocked_stage"])
+        self.assertEqual("BLOCKED", report["self_governance"]["release_gate"])
 
     def test_single_version_source_repairs_derived_surfaces_without_version_bump(self):
         with tempfile.TemporaryDirectory() as td:

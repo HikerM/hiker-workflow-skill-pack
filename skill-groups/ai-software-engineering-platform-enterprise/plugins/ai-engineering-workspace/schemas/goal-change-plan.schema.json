@@ -80,6 +80,7 @@
         "implementation_route_ids": {"$ref": "#/$defs/boundedStrings"},
         "review_record_ids": {"$ref": "#/$defs/boundedStrings"},
         "test_record_ids": {"$ref": "#/$defs/boundedStrings"},
+        "product_evidence_ids": {"$ref": "#/$defs/boundedStrings"},
         "checkpoint_ids": {"$ref": "#/$defs/boundedStrings"},
         "acceptance_ids": {"$ref": "#/$defs/boundedStrings"}
       }

@@ -5,6 +5,8 @@ description: 为已初始化的Unity客户端、电子教材、虚拟仿真或�
 
 # Unity UI与交互设计
 
+Unity 是 C/S Engineering 的 Technology Adapter：视觉层级、语义构图、Decision Authority、Presentation/Error Contract 与 Component Registry 2.0 复用通用 C/S/Assurance 契约；本 Skill 只补 UGUI/UI Toolkit、Prefab/VisualTree、Canvas/Anchor/CanvasScaler、Scene、Input System 与资源生命周期专项，不削弱既有 Unity 证据要求。
+
 ## 前置
 
 读取：

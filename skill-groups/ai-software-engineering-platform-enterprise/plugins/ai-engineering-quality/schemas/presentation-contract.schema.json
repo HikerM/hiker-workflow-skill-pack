@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hiker.local/schemas/presentation-contract-1.0.0.json",
+  "title": "Hiker user-visible presentation contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "contract_id", "revision", "fields", "fingerprint"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "contract_id": {"type": "string", "minLength": 1},
+    "revision": {"type": "integer", "minimum": 0},
+    "fields": {"type": "array", "maxItems": 1000, "items": {"$ref": "#/$defs/field"}},
+    "fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  },
+  "$defs": {
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field_id", "semantic_role", "presentation_role", "visibility", "priority", "format", "fallback", "overflow_policy", "sensitivity", "identifier_kind", "business_meaning"],
+      "properties": {
+        "field_id": {"type": "string", "minLength": 1},
+        "semantic_role": {"type": "string", "minLength": 1},
+        "presentation_role": {"type": "string", "minLength": 1},
+        "visibility": {"enum": ["USER_VISIBLE", "DEVELOPER_ONLY", "HIDDEN"]},
+        "priority": {"type": "string", "minLength": 1},
+        "format": {"type": "object", "required": ["kind"]},
+        "fallback": {"type": "object", "required": ["kind"]},
+        "overflow_policy": {
+          "type": "object",
+          "required": ["strategy", "runtime_validation_required"],
+          "properties": {
+            "strategy": {"enum": ["wrap", "truncate_with_access", "scroll", "adaptive", "project_native"]},
+            "runtime_validation_required": {"const": true}
+          }
+        },
+        "sensitivity": {"enum": ["PUBLIC", "PERSONAL", "SENSITIVE", "SECRET"]},
+        "identifier_kind": {"enum": ["NONE", "TECHNICAL", "BUSINESS"]},
+        "business_meaning": {"type": ["string", "null"]}
+      }
+    }
+  }
+}

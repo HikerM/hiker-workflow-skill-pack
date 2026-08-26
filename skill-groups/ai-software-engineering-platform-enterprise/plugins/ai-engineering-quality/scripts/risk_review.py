@@ -6,6 +6,7 @@ from architecture_guard import evaluate as architecture_evaluate, safe_id
 from graph_store import impact
 from qualitylib import git_root,head,load_json,matches_any,markdown_table,now,posix,repo_ai,worktree_fingerprint,write_json
 from delivery_hygiene import audit as delivery_hygiene_audit
+from adaptive_governance import assess as assess_governance
 
 PLUGIN=Path(__file__).resolve().parents[1]
 def policy(root:Path,explicit:str|None)->dict:
@@ -21,7 +22,7 @@ def policy(root:Path,explicit:str|None)->dict:
         if custom.get("auto_merge") is not None:base.setdefault("merge_gate",{})["enabled"]=bool(custom["auto_merge"])
     return base
 
-def review(root:Path,mode:str="all-local",base:str|None=None,target:str|None=None,files:list[str]|None=None,policy_path:str|None=None,task_id:str|None=None)->dict:
+def review(root:Path,mode:str="all-local",base:str|None=None,target:str|None=None,files:list[str]|None=None,policy_path:str|None=None,task_id:str|None=None,risk_context:dict|None=None)->dict:
     pol=policy(root,policy_path);changes=collect(root,mode,base,target,files);generated=pol.get("generated_patterns",[])
     kept=[];ignored=[]
     for f in changes["files"]:
@@ -73,6 +74,13 @@ def review(root:Path,mode:str="all-local",base:str|None=None,target:str|None=Non
     severities={item.get("severity") for item in findings}
     if "CRITICAL" in severities:level="CRITICAL"
     elif "HIGH" in severities and level in {"LOW","MEDIUM"}:level="HIGH"
+    observed_level=level
+    governance=assess_governance(risk_context,observed_level=observed_level,observed_tags=sorted(tags))
+    level=str(governance["risk_level"])
+    if governance["status"]=="INVALID":
+        findings.append({"severity":"HIGH","type":"risk-context","evidence":"结构化风险分类无效，禁止脚本猜测语义影响"})
+    elif governance["status"]=="NOT_PROVIDED":
+        findings.append({"severity":"MEDIUM","type":"risk-context","evidence":"未提供九维语义风险分类，当前仅使用可观察工程事实"})
     evidence=0;possible=5
     if kept:evidence+=1
     if (repo_ai(root)/"context"/"project.json").exists():evidence+=1
@@ -86,13 +94,15 @@ def review(root:Path,mode:str="all-local",base:str|None=None,target:str|None=Non
     if not graph_info:gaps.append("没有可用工程图谱，影响范围仅基于路径规则")
     elif graph_info.get("stale"):gaps.append("工程图谱已过期")
     if unknown_lines:gaps.append(f"{unknown_lines} 个二进制或未知行数文件")
+    if governance["status"]=="INVALID":gaps.extend(governance["errors"])
+    elif governance["status"]=="NOT_PROVIDED":gaps.append("未提供结构化语义风险上下文；涉及共享、架构、数据、安全或发布时必须由模型分类后复核")
     task=load_json(repo_ai(root)/"tasks"/f"{safe_id(task_id)}.json",{}) if task_id else {}
-    return {"schema_version":2,"generated_at":now(),"repository":str(root),"project_id":task.get("project_id") if isinstance(task,dict) else None,"task_id":safe_id(task_id) if task_id else None,"head":head(root),"worktree_fingerprint":worktree_fingerprint(root),"change_mode":mode,"risk":{"score":score,"level":level,"confidence":confidence,"tags":sorted(tags)},"summary":{"files":len(kept),"ignored_generated":len(ignored),"changed_lines":line_total,"unknown_line_files":unknown_lines},"changes":kept,"ignored":ignored,"findings":findings,"ownership":{"uncovered":uncovered},"graph":graph_info,"architecture_guard":architecture_guard,"delivery_hygiene":delivery_hygiene,"evidence_gaps":gaps,"controls":{"auto_merge":False,"recommendation":"先执行回归计划并补齐关键证据" if level in {"HIGH","CRITICAL"} else "按风险范围执行验证"}}
+    return {"schema_version":3,"generated_at":now(),"repository":str(root),"project_id":task.get("project_id") if isinstance(task,dict) else None,"task_id":safe_id(task_id) if task_id else None,"head":head(root),"worktree_fingerprint":worktree_fingerprint(root),"change_mode":mode,"risk":{"score":score,"level":level,"observed_level":observed_level,"semantic_level":governance["semantic_level"],"confidence":confidence,"tags":sorted(tags)},"summary":{"files":len(kept),"ignored_generated":len(ignored),"changed_lines":line_total,"unknown_line_files":unknown_lines},"changes":kept,"ignored":ignored,"findings":findings,"ownership":{"uncovered":uncovered},"graph":graph_info,"architecture_guard":architecture_guard,"delivery_hygiene":delivery_hygiene,"semantic_assessment":governance,"evidence_gaps":gaps,"controls":{"auto_merge":False,"activation":governance["activation"],"control_level":governance["control_level"],"scope_mode":governance["scope_mode"],"artifact_status":governance["artifact_status"],"recommendation":"先执行回归计划并补齐关键证据" if level in {"HIGH","CRITICAL"} else "按风险范围执行验证"}}
 
 def to_md(data:dict)->str:
     r=data["risk"];rows=[[f.get("severity"),f.get("type"),f.get("path") or ", ".join(f.get("paths",[])[:3]),f.get("evidence")] for f in data["findings"]]
     return "\n".join(["# 工程变更风险报告","",f"- 风险等级：**{r['level']}**",f"- 风险分数：{r['score']}",f"- 置信度：{r['confidence']}",f"- 有效文件：{data['summary']['files']}",f"- 忽略生成文件：{data['summary']['ignored_generated']}","","## 风险证据",markdown_table(rows,["等级","类型","位置","证据"]) if rows else "未发现规则型风险。","","## 证据缺口",*(f"- {x}" for x in data["evidence_gaps"]),"","## 控制建议",f"- {data['controls']['recommendation']}","- 本报告未执行测试，也不会自动合并代码。"])+"\n"
 def main()->int:
-    ap=argparse.ArgumentParser();ap.add_argument("--root",default=".");ap.add_argument("--mode",choices=["all-local","staged","working-tree","range","files"],default="all-local");ap.add_argument("--base");ap.add_argument("--target");ap.add_argument("--file",action="append",default=[]);ap.add_argument("--policy");ap.add_argument("--task-id")
-    a=ap.parse_args();root=git_root(Path(a.root));data=review(root,a.mode,a.base,a.target,a.file,a.policy,a.task_id);out=repo_ai(root)/"evidence"/"risk";write_json(out/"latest.json",data);(out/"latest.md").write_text(to_md(data),encoding="utf-8");print(json.dumps(data,ensure_ascii=False,indent=2));return 0
+    ap=argparse.ArgumentParser();ap.add_argument("--root",default=".");ap.add_argument("--mode",choices=["all-local","staged","working-tree","range","files"],default="all-local");ap.add_argument("--base");ap.add_argument("--target");ap.add_argument("--file",action="append",default=[]);ap.add_argument("--policy");ap.add_argument("--task-id");ap.add_argument("--risk-context")
+    a=ap.parse_args();root=git_root(Path(a.root));risk_context=load_json(Path(a.risk_context),{}) if a.risk_context else None;data=review(root,a.mode,a.base,a.target,a.file,a.policy,a.task_id,risk_context);out=repo_ai(root)/"evidence"/"risk";write_json(out/"latest.json",data);(out/"latest.md").write_text(to_md(data),encoding="utf-8");print(json.dumps(data,ensure_ascii=False,indent=2));return 2 if data["semantic_assessment"]["status"]=="INVALID" else 0
 if __name__=="__main__":raise SystemExit(main())

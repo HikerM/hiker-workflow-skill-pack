@@ -99,18 +99,18 @@ py -3 -B .\tools\verify_desktop_install.py
 
 安装器复制并注册五个插件、更新个人 Marketplace、写入桌面端启用配置、生成唯一活动版本缓存并合并全局性能内核。已打开任务保存的是启动时能力快照，不能可靠原地热换：旧任务先Checkpoint并停止写入，再由新任务验证五插件版本指纹后接管；若新任务仍指向旧缓存，必须重启桌面端。
 
-### 5.17发布验证
+### 5.18发布验证
 
-当前正式候选为 `5.17.0+codex.20260825194113`。发布流水线已完成以下验证：
+当前正式源码版本为 `5.18.0+codex.20260826161321`。发布流水线已完成以下验证：
 
-- 五插件237项测试全部通过，源码测试指纹为 `ee5dfbea525763e8919a`；
-- 42个Skill发布一致性审核通过；
+- 五插件297项测试全部通过，源码测试指纹为 `23701ec95b60754c38af`；
+- 5个插件、42个Skill的架构、隐私、版本、性能和发布一致性门禁通过；
 - 39项宿主语义路由Eval通过，未调用外部模型API；
-- Long Task、Crash Recovery、Multi Session、Goal Change和Event Pressure E2E通过；
-- Architecture、Privacy、Version Facts、Performance和Package Facts全部通过；
-- 五个5.17 ZIP与源码逐文件一致，并通过隔离HOME安装验证。
+- Long Task、Crash Recovery、Multi Session、Goal Change、Event Pressure以及5.18产品保障E2E通过；
+- AI Freedom、Governance Tax、Incrementality和Control Precision四项性能验收通过；
+- 五个5.18 ZIP与源码逐文件一致，SHA-256校验和隔离Clean Install验证通过。
 
-发行包位于 `skill-groups/ai-software-engineering-platform-enterprise/dist/`，SHA-256以同目录的 `SHA256SUMS.txt` 为准。完整证据见 [5.17验证报告](skill-groups/ai-software-engineering-platform-enterprise/VALIDATION_REPORT_CN.md)。任一发布Gate失败时，打包器不会更新正式发行目录。
+发行包位于 `skill-groups/ai-software-engineering-platform-enterprise/dist/`，SHA-256以同目录的 `SHA256SUMS.txt` 为准。完整证据见 [5.18性能健康报告](skill-groups/ai-software-engineering-platform-enterprise/docs/5.18-performance-health-report.md) 和 [五插件测试结果](skill-groups/ai-software-engineering-platform-enterprise/test-results.json)。任一发布Gate失败时，打包器不会更新正式发行目录。安装不会自动执行；升级前必须停止旧任务，并确保五个插件只有一个活动版本。
 
 ## 桌面软件等价重建 1.3.0
 

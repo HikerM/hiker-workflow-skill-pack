@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 MINIMUM_PRO_VERSION = (5, 19)
+REQUIRED_LIVE_ADOPTION_PROTOCOL = 2
 PROBE_TIMEOUT_SECONDS = 5
 ACTION_TIMEOUT_SECONDS = 30
 
@@ -25,18 +26,28 @@ def _provider_session_available(environment: Mapping[str, str]) -> bool:
     )
 
 
-def _parse_runtime_version(output: str) -> tuple[int, int, int] | None:
-    match = re.search(r"\bruntime/(\d+)\.(\d+)(?:\.(\d+))?", output)
+def _parse_semantic_version(value: Any) -> tuple[int, int, int] | None:
+    if not isinstance(value, str):
+        return None
+    match = re.match(r"^(\d+)\.(\d+)(?:\.(\d+))?", value.strip())
     if match is None:
         return None
     return int(match.group(1)), int(match.group(2)), int(match.group(3) or 0)
 
 
-def _parse_product_version(output: str) -> tuple[int, int, int] | None:
-    match = re.search(r"(?:^|\s)(\d+)\.(\d+)\.(\d+)(?:-[^\s]+)?\s+runtime/", output)
-    if match is None:
+def _protocol_facts(output: str) -> tuple[tuple[int, int, int], tuple[int, int, int], int] | None:
+    try:
+        payload = json.loads(output)
+    except json.JSONDecodeError:
         return None
-    return int(match.group(1)), int(match.group(2)), int(match.group(3))
+    if not isinstance(payload, dict):
+        return None
+    product = _parse_semantic_version(payload.get("product_version"))
+    runtime = _parse_semantic_version(payload.get("runtime_api_version"))
+    protocol = payload.get("live_adoption_protocol")
+    if product is None or runtime is None or not isinstance(protocol, int):
+        return None
+    return product, runtime, protocol
 
 
 def detect_pro_runtime(
@@ -49,7 +60,7 @@ def detect_pro_runtime(
         return _result("COMMUNITY_FALLBACK", reason="PRO_RUNTIME_NOT_FOUND", pro_available=False)
     try:
         completed = runner(
-            [executable, "version"],
+            [executable, "version", "--json"],
             text=True,
             encoding="utf-8",
             errors="replace",
@@ -61,23 +72,30 @@ def detect_pro_runtime(
         )
     except (OSError, subprocess.SubprocessError):
         return _result("COMMUNITY_FALLBACK", reason="PRO_RUNTIME_UNAVAILABLE", pro_available=False)
-    product_version = _parse_product_version(completed.stdout)
-    runtime_version = _parse_runtime_version(completed.stdout)
-    compatible_version = product_version or runtime_version
-    if completed.returncode != 0 or compatible_version is None or compatible_version[:2] < MINIMUM_PRO_VERSION:
+    facts = _protocol_facts(completed.stdout)
+    if completed.returncode != 0 or facts is None:
         return _result(
             "COMMUNITY_FALLBACK",
-            reason="PRO_RUNTIME_INCOMPATIBLE",
+            reason="PRO_LIVE_ADOPTION_PROTOCOL_INCOMPATIBLE",
             pro_available=False,
-            product_version="unknown" if product_version is None else ".".join(str(value) for value in product_version),
-            runtime_api_version="unknown" if runtime_version is None else ".".join(str(value) for value in runtime_version),
+        )
+    product_version, runtime_version, protocol_version = facts
+    if product_version[:2] < MINIMUM_PRO_VERSION or protocol_version != REQUIRED_LIVE_ADOPTION_PROTOCOL:
+        return _result(
+            "COMMUNITY_FALLBACK",
+            reason="PRO_LIVE_ADOPTION_PROTOCOL_INCOMPATIBLE",
+            pro_available=False,
+            product_version=".".join(str(value) for value in product_version),
+            runtime_api_version=".".join(str(value) for value in runtime_version),
+            live_adoption_protocol=protocol_version,
         )
     return _result(
         "PRO_RUNTIME_DETECTED",
         pro_available=True,
         executable=str(Path(executable).resolve()),
-        product_version=".".join(str(value) for value in compatible_version),
-        runtime_api_version="unknown" if runtime_version is None else ".".join(str(value) for value in runtime_version),
+        product_version=".".join(str(value) for value in product_version),
+        runtime_api_version=".".join(str(value) for value in runtime_version),
+        live_adoption_protocol=protocol_version,
         provider_session_available=_provider_session_available(effective_environment),
     )
 

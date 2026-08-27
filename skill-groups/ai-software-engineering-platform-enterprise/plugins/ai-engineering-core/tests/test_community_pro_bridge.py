@@ -17,6 +17,15 @@ from community_pro_bridge import detect_pro_runtime, invoke_bridge, router_bound
 import suite_router
 
 
+def _protocol_version(product: str = "5.19.0-rc.7", protocol: int = 2) -> str:
+    return json.dumps({
+        "product_version": product,
+        "runtime_api_version": "0.1.0",
+        "state_schema_version": "3.0.0",
+        "live_adoption_protocol": protocol,
+    })
+
+
 class CommunityProBridgeTests(unittest.TestCase):
     def test_missing_pro_runtime_falls_back_without_project_scan(self):
         with patch("community_pro_bridge.shutil.which", return_value=None):
@@ -29,12 +38,28 @@ class CommunityProBridgeTests(unittest.TestCase):
 
         def run(command, **_kwargs):
             calls.append(command)
-            return subprocess.CompletedProcess(command, 0, "Hiker runtime/5.18.0 schema/3.0.0\n", "")
+            return subprocess.CompletedProcess(command, 0, _protocol_version("5.18.0"), "")
 
         report = detect_pro_runtime({"HIKER_EXECUTABLE": "C:/fixture/hiker.exe"}, run)
         self.assertEqual("COMMUNITY_FALLBACK", report["status"])
-        self.assertEqual("PRO_RUNTIME_INCOMPATIBLE", report["reason"])
+        self.assertEqual("PRO_LIVE_ADOPTION_PROTOCOL_INCOMPATIBLE", report["reason"])
         self.assertEqual(1, len(calls))
+
+    def test_old_pro_runtime_without_protocol_handshake_falls_back(self):
+        def run(command, **_kwargs):
+            return subprocess.CompletedProcess(command, 0, "5.19.0-rc.7 runtime/0.1.0 schema/3.0.0\n", "")
+
+        report = detect_pro_runtime({"HIKER_EXECUTABLE": "C:/fixture/hiker.exe"}, run)
+        self.assertEqual("COMMUNITY_FALLBACK", report["status"])
+        self.assertEqual("PRO_LIVE_ADOPTION_PROTOCOL_INCOMPATIBLE", report["reason"])
+
+    def test_wrong_live_adoption_protocol_falls_back(self):
+        def run(command, **_kwargs):
+            return subprocess.CompletedProcess(command, 0, _protocol_version(protocol=1), "")
+
+        report = detect_pro_runtime({"HIKER_EXECUTABLE": "C:/fixture/hiker.exe"}, run)
+        self.assertEqual("COMMUNITY_FALLBACK", report["status"])
+        self.assertEqual("PRO_LIVE_ADOPTION_PROTOCOL_INCOMPATIBLE", report["reason"])
 
     def test_safe_boundary_invokes_one_pro_attach_without_forwarding_raw_session_id(self):
         calls: list[list[str]] = []
@@ -42,7 +67,7 @@ class CommunityProBridgeTests(unittest.TestCase):
         def run(command, **_kwargs):
             calls.append(command)
             if command[1] == "version":
-                return subprocess.CompletedProcess(command, 0, "5.19.0-rc.6 runtime/0.1.0 schema/3.0.0\n", "")
+                return subprocess.CompletedProcess(command, 0, _protocol_version(), "")
             payload = {
                 "status": "LIVE_SESSION_ADOPTED",
                 "project_id": "project-1",
@@ -69,6 +94,7 @@ class CommunityProBridgeTests(unittest.TestCase):
         self.assertEqual("LIVE_SESSION_ADOPTED", report["status"])
         self.assertTrue(report["adopted"])
         self.assertEqual(2, len(calls))
+        self.assertEqual(["C:/fixture/hiker.exe", "version", "--json"], calls[0])
         self.assertEqual("attach", calls[1][1])
         self.assertIn("--boundary-proof", calls[1])
         self.assertNotIn("raw-session-secret", " ".join(calls[1]))
@@ -79,7 +105,7 @@ class CommunityProBridgeTests(unittest.TestCase):
 
         def run(command, **_kwargs):
             calls.append(command)
-            return subprocess.CompletedProcess(command, 0, "5.19.0-rc.6 runtime/0.1.0 schema/3.0.0\n", "")
+            return subprocess.CompletedProcess(command, 0, _protocol_version(), "")
 
         with tempfile.TemporaryDirectory() as temporary:
             report = invoke_bridge(
@@ -97,7 +123,7 @@ class CommunityProBridgeTests(unittest.TestCase):
 
         def run(command, **_kwargs):
             calls.append(command)
-            return subprocess.CompletedProcess(command, 0, "5.19.0-rc.6 runtime/0.1.0 schema/3.0.0\n", "")
+            return subprocess.CompletedProcess(command, 0, _protocol_version(), "")
 
         with tempfile.TemporaryDirectory() as temporary:
             report = invoke_bridge(
@@ -117,7 +143,7 @@ class CommunityProBridgeTests(unittest.TestCase):
         def run(command, **_kwargs):
             calls.append(command)
             if command[1] == "version":
-                return subprocess.CompletedProcess(command, 0, "5.19.0-rc.7 runtime/0.1.0 schema/3.0.0\n", "")
+                return subprocess.CompletedProcess(command, 0, _protocol_version(), "")
             return subprocess.CompletedProcess(command, 0, json.dumps({
                 "status": "LIVE_SESSION_ADOPTED",
                 "project_id": "project-1",
@@ -150,7 +176,7 @@ class CommunityProBridgeTests(unittest.TestCase):
         def run(command, **_kwargs):
             calls.append(command)
             if command[1] == "version":
-                return subprocess.CompletedProcess(command, 0, "5.19.0-rc.6 runtime/0.1.0 schema/3.0.0\n", "")
+                return subprocess.CompletedProcess(command, 0, _protocol_version(), "")
             return subprocess.CompletedProcess(command, 0, json.dumps({
                 "status": "TURN_CHECKPOINTED",
                 "project_id": "project-1",

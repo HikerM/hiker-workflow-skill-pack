@@ -1,6 +1,6 @@
 # 智能工程核心
 
-<!-- engineering-current-facts: version=5.18.0; plugins=5; skills=42; tests=297 -->
+<!-- engineering-current-facts: version=5.18.0; plugins=5; skills=42; tests=309 -->
 
 本插件是 Hiker Engineering Capability System（Hiker 工程能力系统）的轻量前置底座；ChatGPT Desktop / Codex 继续提供 Agent Runtime。本插件不启动独立 Runtime、不调用外部模型，也不要求常驻后台服务。首次接管需要正式治理的项目时才运行“项目智能初始化”；无状态快速路径不写 `.ai`。后续领域 Skill 读取有界项目证据，不重复扫描整个仓库。长期任务使用“有界上下文记忆”：关键事实进入Task、决定、文档和Git，当前会话只加载固定大小工作集，checkpoint按近期与里程碑限额保留。
 

@@ -9,6 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from community_pro_bridge import router_boundary_adoption
 from source_identity import context_fresh, identify
 from context_budget import build_context_plan
 from state_consistency import assess as assess_state_consistency, current_snapshot
@@ -594,6 +595,29 @@ def _load_proposal(args: argparse.Namespace) -> dict[str, Any] | None:
     return None
 
 
+def _apply_route_boundary_adoption(root: Path, result: dict[str, Any]) -> None:
+    """Adopt at accepted admission, before any selected Skill can be loaded."""
+    if result.get("guard_decision") != "ACCEPT":
+        return
+    adoption = router_boundary_adoption(root)
+    if not adoption:
+        return
+    result["pro_live_adoption"] = adoption
+    if adoption.get("adopted"):
+        return
+    result["guard_decision"] = "REJECT"
+    result["accepted"] = False
+    result["reselect_required"] = False
+    result["load"] = []
+    result["receipt_required"] = False
+    result.setdefault("diagnostics", []).append(
+        {
+            "code": "PRO_LIVE_ADOPTION_REQUIRED",
+            "message": "检测到 Pro Runtime，但当前会话尚未安全接管；禁止加载 Skill 或开始项目动作",
+        }
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="校验 ChatGPT 的原子 Skill 语义选择；不按关键词代替模型选 Skill")
     parser.add_argument("--root", default=".")
@@ -619,6 +643,7 @@ def main() -> int:
     else:
         proposal = _load_proposal(args)
         result = route(root, proposal if proposal is not None else args.request)
+        _apply_route_boundary_adoption(root, result)
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0 if result.get("guard_decision") != "REJECT" else 2
 

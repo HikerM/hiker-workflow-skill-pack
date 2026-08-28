@@ -1,7 +1,7 @@
 {
   "name": "ai-engineering-core",
-  "version": "5.18.0+codex.20260826161321",
-  "description": "轻量路由、0→1需求融合、架构决策挑战、存量源码对账、项目识别与有界上下文恢复",
+  "version": "5.18.0+codex.20260828021701",
+  "description": "\u8f7b\u91cf\u8def\u7531\u30010\u21921\u9700\u6c42\u878d\u5408\u3001\u67b6\u6784\u51b3\u7b56\u6311\u6218\u3001\u5b58\u91cf\u6e90\u7801\u5bf9\u8d26\u3001\u9879\u76ee\u8bc6\u522b\u4e0e\u6709\u754c\u4e0a\u4e0b\u6587\u6062\u590d",
   "author": {
     "name": "Hiker"
   },
@@ -14,9 +14,9 @@
   ],
   "skills": "./skills/",
   "interface": {
-    "displayName": "01 智能工程核心",
-    "shortDescription": "轻量路由、需求融合、架构反证、源码对账与有界记忆",
-    "longDescription": "以唯一轻量入口按需加载最多两个原子Skill；空项目先用稳定需求ID、冲突账本和技术决策Checkpoint融合自定义需求，部分源码项目先从证据建立CAP能力基线并完成REQ差异对账，已有工程按真实技术和版本执行，并以固定大小工作集恢复长期多会话事实。",
+    "displayName": "01 \u667a\u80fd\u5de5\u7a0b\u6838\u5fc3",
+    "shortDescription": "\u8f7b\u91cf\u8def\u7531\u3001\u9700\u6c42\u878d\u5408\u3001\u67b6\u6784\u53cd\u8bc1\u3001\u6e90\u7801\u5bf9\u8d26\u4e0e\u6709\u754c\u8bb0\u5fc6",
+    "longDescription": "\u4ee5\u552f\u4e00\u8f7b\u91cf\u5165\u53e3\u6309\u9700\u52a0\u8f7d\u6700\u591a\u4e24\u4e2a\u539f\u5b50Skill\uff1b\u7a7a\u9879\u76ee\u5148\u7528\u7a33\u5b9a\u9700\u6c42ID\u3001\u51b2\u7a81\u8d26\u672c\u548c\u6280\u672f\u51b3\u7b56Checkpoint\u878d\u5408\u81ea\u5b9a\u4e49\u9700\u6c42\uff0c\u90e8\u5206\u6e90\u7801\u9879\u76ee\u5148\u4ece\u8bc1\u636e\u5efa\u7acbCAP\u80fd\u529b\u57fa\u7ebf\u5e76\u5b8c\u6210REQ\u5dee\u5f02\u5bf9\u8d26\uff0c\u5df2\u6709\u5de5\u7a0b\u6309\u771f\u5b9e\u6280\u672f\u548c\u7248\u672c\u6267\u884c\uff0c\u5e76\u4ee5\u56fa\u5b9a\u5927\u5c0f\u5de5\u4f5c\u96c6\u6062\u590d\u957f\u671f\u591a\u4f1a\u8bdd\u4e8b\u5b9e\u3002",
     "developerName": "Hiker",
     "category": "Productivity",
     "capabilities": [
@@ -24,9 +24,9 @@
       "Write"
     ],
     "defaultPrompt": [
-      "识别0→1、部分源码或成熟工程，只加载最小原子Skill。",
-      "融合需求、CAP/REQ对账并主动反证架构，禁止无依据重新脚手架。",
-      "恢复当前任务并检查有界记忆；达到长会话阈值时先Checkpoint再切换执行纪元。"
+      "\u8bc6\u522b0\u21921\u3001\u90e8\u5206\u6e90\u7801\u6216\u6210\u719f\u5de5\u7a0b\uff0c\u53ea\u52a0\u8f7d\u6700\u5c0f\u539f\u5b50Skill\u3002",
+      "\u878d\u5408\u9700\u6c42\u3001CAP/REQ\u5bf9\u8d26\u5e76\u4e3b\u52a8\u53cd\u8bc1\u67b6\u6784\uff0c\u7981\u6b62\u65e0\u4f9d\u636e\u91cd\u65b0\u811a\u624b\u67b6\u3002",
+      "\u6062\u590d\u5f53\u524d\u4efb\u52a1\u5e76\u68c0\u67e5\u6709\u754c\u8bb0\u5fc6\uff1b\u8fbe\u5230\u957f\u4f1a\u8bdd\u9608\u503c\u65f6\u5148Checkpoint\u518d\u5207\u6362\u6267\u884c\u7eaa\u5143\u3002"
     ],
     "brandColor": "#1F5EFF",
     "composerIcon": "./assets/icon.png",

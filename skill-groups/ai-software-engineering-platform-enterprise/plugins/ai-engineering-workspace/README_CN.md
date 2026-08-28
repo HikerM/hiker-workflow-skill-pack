@@ -1,6 +1,6 @@
 # 工作区与多会话协作
 
-<!-- engineering-current-facts: version=5.18.0; plugins=5; skills=42; tests=309 -->
+<!-- engineering-current-facts: version=5.18.0; plugins=5; skills=42; tests=311 -->
 
 本插件属于 Hiker Engineering Capability System（Hiker 工程能力系统），为大型软件工程提供多角色协作约束，共 12 个 Skill；它不是独立 Agent Runtime。桌面任务、Agent Runtime 与工具调用由 ChatGPT Desktop / Codex 宿主提供，本插件只提供任务、Git、Worktree、锁、证据与发布状态的能力和确定性门禁。
 

@@ -1,7 +1,7 @@
 {
   "name": "ai-engineering-web",
-  "version": "5.18.0+codex.20260826161321",
-  "description": "非模板化浏览器端设计系统、服务端契约与实现、数据库迁移和全栈质量审核",
+  "version": "5.18.0+codex.20260828021701",
+  "description": "\u975e\u6a21\u677f\u5316\u6d4f\u89c8\u5668\u7aef\u8bbe\u8ba1\u7cfb\u7edf\u3001\u670d\u52a1\u7aef\u5951\u7ea6\u4e0e\u5b9e\u73b0\u3001\u6570\u636e\u5e93\u8fc1\u79fb\u548c\u5168\u6808\u8d28\u91cf\u5ba1\u6838",
   "author": {
     "name": "Hiker"
   },
@@ -14,9 +14,9 @@
   ],
   "skills": "./skills/",
   "interface": {
-    "displayName": "02 浏览器端与服务端工程",
-    "shortDescription": "浏览器端视觉系统与多技术栈服务端工程",
-    "longDescription": "浏览器端从真实需求、品牌语境和工作流建立非模板化设计系统并按现有框架实现；服务端从真实清单识别技术与版本，治理API、事件、数据库迁移、功能实现和独立质量审核，可供B/S、C/S及混合项目共享。",
+    "displayName": "02 \u6d4f\u89c8\u5668\u7aef\u4e0e\u670d\u52a1\u7aef\u5de5\u7a0b",
+    "shortDescription": "\u6d4f\u89c8\u5668\u7aef\u89c6\u89c9\u7cfb\u7edf\u4e0e\u591a\u6280\u672f\u6808\u670d\u52a1\u7aef\u5de5\u7a0b",
+    "longDescription": "\u6d4f\u89c8\u5668\u7aef\u4ece\u771f\u5b9e\u9700\u6c42\u3001\u54c1\u724c\u8bed\u5883\u548c\u5de5\u4f5c\u6d41\u5efa\u7acb\u975e\u6a21\u677f\u5316\u8bbe\u8ba1\u7cfb\u7edf\u5e76\u6309\u73b0\u6709\u6846\u67b6\u5b9e\u73b0\uff1b\u670d\u52a1\u7aef\u4ece\u771f\u5b9e\u6e05\u5355\u8bc6\u522b\u6280\u672f\u4e0e\u7248\u672c\uff0c\u6cbb\u7406API\u3001\u4e8b\u4ef6\u3001\u6570\u636e\u5e93\u8fc1\u79fb\u3001\u529f\u80fd\u5b9e\u73b0\u548c\u72ec\u7acb\u8d28\u91cf\u5ba1\u6838\uff0c\u53ef\u4f9bB/S\u3001C/S\u53ca\u6df7\u5408\u9879\u76ee\u5171\u4eab\u3002",
     "developerName": "Hiker",
     "category": "Productivity",
     "capabilities": [
@@ -24,9 +24,9 @@
       "Write"
     ],
     "defaultPrompt": [
-      "从当前需求和工作流动态识别页面，完成编码前UI设计收敛。",
-      "按已通过设计实现并审核组件复用、交互状态、响应式与视觉证据。",
-      "识别真实服务端技术与版本，按契约和迁移约束实现并审核。"
+      "\u4ece\u5f53\u524d\u9700\u6c42\u548c\u5de5\u4f5c\u6d41\u52a8\u6001\u8bc6\u522b\u9875\u9762\uff0c\u5b8c\u6210\u7f16\u7801\u524dUI\u8bbe\u8ba1\u6536\u655b\u3002",
+      "\u6309\u5df2\u901a\u8fc7\u8bbe\u8ba1\u5b9e\u73b0\u5e76\u5ba1\u6838\u7ec4\u4ef6\u590d\u7528\u3001\u4ea4\u4e92\u72b6\u6001\u3001\u54cd\u5e94\u5f0f\u4e0e\u89c6\u89c9\u8bc1\u636e\u3002",
+      "\u8bc6\u522b\u771f\u5b9e\u670d\u52a1\u7aef\u6280\u672f\u4e0e\u7248\u672c\uff0c\u6309\u5951\u7ea6\u548c\u8fc1\u79fb\u7ea6\u675f\u5b9e\u73b0\u5e76\u5ba1\u6838\u3002"
     ],
     "brandColor": "#0A7C86",
     "composerIcon": "./assets/icon.png",

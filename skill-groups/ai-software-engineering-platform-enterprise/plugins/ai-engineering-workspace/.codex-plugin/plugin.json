@@ -1,7 +1,7 @@
 {
   "name": "ai-engineering-workspace",
-  "version": "5.18.0+codex.20260826161321",
-  "description": "大型B/S与C/S工程的阶段路由、任务防重、候选冻结、长链路诊断、Git与验收闭环治理",
+  "version": "5.18.0+codex.20260828021701",
+  "description": "\u5927\u578bB/S\u4e0eC/S\u5de5\u7a0b\u7684\u9636\u6bb5\u8def\u7531\u3001\u4efb\u52a1\u9632\u91cd\u3001\u5019\u9009\u51bb\u7ed3\u3001\u957f\u94fe\u8def\u8bca\u65ad\u3001Git\u4e0e\u9a8c\u6536\u95ed\u73af\u6cbb\u7406",
   "author": {
     "name": "Hiker"
   },
@@ -14,9 +14,9 @@
   ],
   "skills": "./skills/",
   "interface": {
-    "displayName": "04 工作区与多会话协作",
-    "shortDescription": "多Agent、项目状态、长链路收敛、文件锁与Git门禁",
-    "longDescription": "以轻量路由和七类角色长期管理大型B/S及多技术栈C/S工程；提供有界项目状态、Task ID、Context Snapshot、多仓库隔离、文件锁、分支治理、合并门禁与功能闭环。",
+    "displayName": "04 \u5de5\u4f5c\u533a\u4e0e\u591a\u4f1a\u8bdd\u534f\u4f5c",
+    "shortDescription": "\u591aAgent\u3001\u9879\u76ee\u72b6\u6001\u3001\u957f\u94fe\u8def\u6536\u655b\u3001\u6587\u4ef6\u9501\u4e0eGit\u95e8\u7981",
+    "longDescription": "\u4ee5\u8f7b\u91cf\u8def\u7531\u548c\u4e03\u7c7b\u89d2\u8272\u957f\u671f\u7ba1\u7406\u5927\u578bB/S\u53ca\u591a\u6280\u672f\u6808C/S\u5de5\u7a0b\uff1b\u63d0\u4f9b\u6709\u754c\u9879\u76ee\u72b6\u6001\u3001Task ID\u3001Context Snapshot\u3001\u591a\u4ed3\u5e93\u9694\u79bb\u3001\u6587\u4ef6\u9501\u3001\u5206\u652f\u6cbb\u7406\u3001\u5408\u5e76\u95e8\u7981\u4e0e\u529f\u80fd\u95ed\u73af\u3002",
     "developerName": "Hiker",
     "category": "Productivity",
     "capabilities": [
@@ -24,8 +24,8 @@
       "Write"
     ],
     "defaultPrompt": [
-      "使用多Agent治理系统接管当前大型软件工程。",
-      "展示本次自动应用的插件和Skill并推进任务闭环。"
+      "\u4f7f\u7528\u591aAgent\u6cbb\u7406\u7cfb\u7edf\u63a5\u7ba1\u5f53\u524d\u5927\u578b\u8f6f\u4ef6\u5de5\u7a0b\u3002",
+      "\u5c55\u793a\u672c\u6b21\u81ea\u52a8\u5e94\u7528\u7684\u63d2\u4ef6\u548cSkill\u5e76\u63a8\u8fdb\u4efb\u52a1\u95ed\u73af\u3002"
     ],
     "brandColor": "#6A43B5",
     "composerIcon": "./assets/icon.png",

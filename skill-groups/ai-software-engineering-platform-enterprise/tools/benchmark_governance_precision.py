@@ -18,8 +18,13 @@ sys.path.insert(0, str(QUALITY_SCRIPTS))
 from adaptive_governance import DIMENSIONS, TAX_METRICS, assess, evaluate_tax
 
 
+def _canonical_repository_bytes(path: Path) -> bytes:
+    """Match Git's text normalization so the gate is portable across LF/CRLF worktrees."""
+    return path.read_bytes().replace(b"\r\n", b"\n")
+
+
 def _git_blob(path: Path) -> str:
-    content = path.read_bytes()
+    content = _canonical_repository_bytes(path)
     return hashlib.sha1(b"blob " + str(len(content)).encode("ascii") + b"\0" + content).hexdigest()
 
 
@@ -94,7 +99,7 @@ def benchmark(runs: int = 100) -> dict[str, Any]:
         "adaptive_governance" in path.read_text(encoding="utf-8", errors="ignore") for path in default_scripts
     )
     skills = sorted((SUITE / "plugins").glob("*/skills/*/SKILL.md"))
-    current_skill_bytes = sum(path.stat().st_size for path in skills)
+    current_skill_bytes = sum(len(_canonical_repository_bytes(path)) for path in skills)
     router_fact = baseline["default_surfaces"]["router_skill"]
     catalog_fact = baseline["default_surfaces"]["semantic_catalog"]
     default_surfaces = {

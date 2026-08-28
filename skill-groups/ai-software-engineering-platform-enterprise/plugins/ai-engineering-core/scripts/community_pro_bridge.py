@@ -9,14 +9,25 @@ import subprocess
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+
 MINIMUM_PRO_VERSION = (5, 19)
 REQUIRED_LIVE_ADOPTION_PROTOCOL = 2
+MACHINE_CONTRACT_VERSION = "hiker-cli/v1"
+VALID_PRO_STATES = {"PRO_ACTIVE", "PRO_DEGRADED", "COMMUNITY_FALLBACK", "PRO_REQUIRED_BLOCKED"}
+VALID_MACHINE_EXIT_CODES = {0, 2, 64, 70}
 PROBE_TIMEOUT_SECONDS = 5
 ACTION_TIMEOUT_SECONDS = 30
 
 
 def _result(status: str, **values: Any) -> dict[str, Any]:
-    return {"status": status, **values}
+    pro_state = values.pop("pro_state", None)
+    if pro_state is None:
+        pro_state = (
+            "COMMUNITY_FALLBACK" if status == "COMMUNITY_FALLBACK"
+            else "PRO_REQUIRED_BLOCKED" if status == "BLOCKED"
+            else "PRO_DEGRADED"
+        )
+    return {"status": status, "pro_state": pro_state, **values}
 
 
 def _provider_session_available(environment: Mapping[str, str]) -> bool:
@@ -35,13 +46,43 @@ def _parse_semantic_version(value: Any) -> tuple[int, int, int] | None:
     return int(match.group(1)), int(match.group(2)), int(match.group(3) or 0)
 
 
-def _protocol_facts(output: str) -> tuple[tuple[int, int, int], tuple[int, int, int], int] | None:
+def _single_json_document(output: str) -> dict[str, Any] | None:
+    decoder = json.JSONDecoder()
+    stripped = output.lstrip()
     try:
-        payload = json.loads(output)
-    except json.JSONDecodeError:
+        payload, end = decoder.raw_decode(stripped)
+    except (TypeError, json.JSONDecodeError):
         return None
-    if not isinstance(payload, dict):
+    if stripped[end:].strip() or not isinstance(payload, dict):
         return None
+    return payload
+
+
+def _machine_payload(
+    completed: subprocess.CompletedProcess[str],
+    command: str,
+) -> tuple[dict[str, Any] | None, str | None]:
+    payload = _single_json_document(completed.stdout)
+    if payload is None:
+        return None, "STDOUT_NOT_SINGLE_JSON_DOCUMENT"
+    if completed.stderr.strip() and _single_json_document(completed.stderr) is not None:
+        return None, "PRIMARY_PAYLOAD_ON_STDERR"
+    if payload.get("contract_version") != MACHINE_CONTRACT_VERSION:
+        return None, "MACHINE_CONTRACT_VERSION_MISMATCH"
+    if payload.get("command") != command:
+        return None, "MACHINE_COMMAND_MISMATCH"
+    if payload.get("exit_code") != completed.returncode or completed.returncode not in VALID_MACHINE_EXIT_CODES:
+        return None, "EXIT_CODE_CONTRACT_MISMATCH"
+    if not isinstance(payload.get("ok"), bool) or not isinstance(payload.get("status"), str):
+        return None, "MACHINE_ENVELOPE_INVALID"
+    if payload.get("pro_state") not in VALID_PRO_STATES:
+        return None, "PRO_STATE_INVALID"
+    if (completed.returncode == 0) != bool(payload["ok"]):
+        return None, "SUCCESS_EXIT_STATUS_MISMATCH"
+    return payload, None
+
+
+def _protocol_facts(payload: dict[str, Any]) -> tuple[tuple[int, int, int], tuple[int, int, int], int] | None:
     product = _parse_semantic_version(payload.get("product_version"))
     runtime = _parse_semantic_version(payload.get("runtime_api_version"))
     protocol = payload.get("live_adoption_protocol")
@@ -72,11 +113,13 @@ def detect_pro_runtime(
         )
     except (OSError, subprocess.SubprocessError):
         return _result("COMMUNITY_FALLBACK", reason="PRO_RUNTIME_UNAVAILABLE", pro_available=False)
-    facts = _protocol_facts(completed.stdout)
+    payload, contract_error = _machine_payload(completed, "version")
+    facts = _protocol_facts(payload) if payload is not None else None
     if completed.returncode != 0 or facts is None:
         return _result(
             "COMMUNITY_FALLBACK",
-            reason="PRO_LIVE_ADOPTION_PROTOCOL_INCOMPATIBLE",
+            reason="PRO_MACHINE_CONTRACT_INCOMPATIBLE" if contract_error else "PRO_LIVE_ADOPTION_PROTOCOL_INCOMPATIBLE",
+            diagnostic=contract_error,
             pro_available=False,
         )
     product_version, runtime_version, protocol_version = facts
@@ -91,36 +134,24 @@ def detect_pro_runtime(
         )
     return _result(
         "PRO_RUNTIME_DETECTED",
+        pro_state="PRO_ACTIVE",
         pro_available=True,
         executable=str(Path(executable).resolve()),
         product_version=".".join(str(value) for value in product_version),
         runtime_api_version=".".join(str(value) for value in runtime_version),
         live_adoption_protocol=protocol_version,
         provider_session_available=_provider_session_available(effective_environment),
+        machine_contract=MACHINE_CONTRACT_VERSION,
     )
 
 
-def invoke_bridge(
+def _run_machine_action(
     root: Path,
-    action: str,
-    boundary_proof: str | None,
-    environment: Mapping[str, str] | None = None,
-    runner: Any = subprocess.run,
-) -> dict[str, Any]:
-    effective_environment = os.environ if environment is None else environment
-    if not _provider_session_available(effective_environment):
-        return _result("COMMUNITY_FALLBACK", reason="PROVIDER_SESSION_UNAVAILABLE", pro_available=False)
-    detected = detect_pro_runtime(effective_environment, runner)
-    if not detected.get("pro_available"):
-        return detected
-    if not root.is_dir():
-        return _result("BLOCKED", reason="PROJECT_ROOT_NOT_FOUND", pro_available=True)
-    executable = detected["executable"]
-    command = [executable, action, "--root", str(root.resolve())]
-    if action in {"attach", "resume"}:
-        if boundary_proof not in {"NEW_TASK", "TURN_TERMINAL", "NATURAL_CHECKPOINT", "RECOVERY_CHECKPOINT"}:
-            return _result("WAIT_SAFE_BOUNDARY", reason="SAFE_BOUNDARY_NOT_CONFIRMED", pro_available=True)
-        command.extend(["--boundary-proof", boundary_proof])
+    command: list[str],
+    command_name: str,
+    environment: Mapping[str, str],
+    runner: Any,
+) -> tuple[dict[str, Any] | None, subprocess.CompletedProcess[str] | None, str | None]:
     try:
         completed = runner(
             command,
@@ -132,24 +163,60 @@ def invoke_bridge(
             stderr=subprocess.PIPE,
             timeout=ACTION_TIMEOUT_SECONDS,
             check=False,
-            env=dict(effective_environment),
+            env=dict(environment),
         )
     except subprocess.TimeoutExpired:
-        return _result("BLOCKED", reason="PRO_RUNTIME_TIMEOUT", pro_available=True)
+        return None, None, "PRO_RUNTIME_TIMEOUT"
     except OSError:
-        return _result("COMMUNITY_FALLBACK", reason="PRO_RUNTIME_UNAVAILABLE", pro_available=False)
-    try:
-        payload = json.loads(completed.stdout)
-    except json.JSONDecodeError:
+        return None, None, "PRO_RUNTIME_UNAVAILABLE"
+    payload, error = _machine_payload(completed, command_name)
+    return payload, completed, error
+
+
+def invoke_bridge(
+    root: Path,
+    action: str,
+    boundary_proof: str | None,
+    environment: Mapping[str, str] | None = None,
+    runner: Any = subprocess.run,
+    detected: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    effective_environment = os.environ if environment is None else environment
+    if not _provider_session_available(effective_environment):
+        return _result("COMMUNITY_FALLBACK", reason="PROVIDER_SESSION_UNAVAILABLE", pro_available=False)
+    detected = detected or detect_pro_runtime(effective_environment, runner)
+    if not detected.get("pro_available"):
+        return detected
+    if not root.is_dir():
+        return _result("BLOCKED", pro_state="PRO_REQUIRED_BLOCKED", reason="PROJECT_ROOT_NOT_FOUND", pro_available=True)
+    command = [detected["executable"], action, "--root", str(root.resolve()), "--json"]
+    if action in {"attach", "resume"}:
+        if boundary_proof not in {"NEW_TASK", "TURN_TERMINAL", "NATURAL_CHECKPOINT", "RECOVERY_CHECKPOINT"}:
+            return _result(
+                "WAIT_SAFE_BOUNDARY",
+                pro_state="PRO_DEGRADED",
+                reason="SAFE_BOUNDARY_NOT_CONFIRMED",
+                pro_available=True,
+            )
+        command.extend(["--boundary-proof", boundary_proof])
+    payload, completed, contract_error = _run_machine_action(root, command, action, effective_environment, runner)
+    if completed is None:
+        if contract_error == "PRO_RUNTIME_UNAVAILABLE":
+            return _result("COMMUNITY_FALLBACK", reason=contract_error, pro_available=False)
+        return _result("BLOCKED", pro_state="PRO_REQUIRED_BLOCKED", reason=contract_error, pro_available=True)
+    if payload is None:
         return _result(
             "BLOCKED",
+            pro_state="PRO_REQUIRED_BLOCKED",
             reason="PRO_RUNTIME_RESPONSE_INVALID",
-            pro_available=True,
+            diagnostic=contract_error,
             exit_code=completed.returncode,
+            pro_available=True,
         )
-    status = str(payload.get("status", "BLOCKED"))
+    status = str(payload["status"])
     return _result(
         status,
+        pro_state=str(payload["pro_state"]),
         pro_available=True,
         adopted=status in {"LIVE_SESSION_ADOPTED", "ALREADY_ADOPTED"},
         checkpointed=status in {"TURN_CHECKPOINTED", "ALREADY_CHECKPOINTED"},
@@ -164,6 +231,50 @@ def invoke_bridge(
         state_reads=payload.get("state_reads", 0),
         state_writes=payload.get("state_writes", 0),
         reasons=payload.get("reasons", []),
+        machine_contract=payload.get("contract_version"),
+        stderr_diagnostic=bool(completed.stderr.strip()),
+    )
+
+
+def query_project_facts(
+    root: Path,
+    environment: Mapping[str, str] | None = None,
+    runner: Any = subprocess.run,
+    detected: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    effective_environment = os.environ if environment is None else environment
+    detected = detected or detect_pro_runtime(effective_environment, runner)
+    if not detected.get("pro_available"):
+        return detected
+    if not root.is_dir():
+        return _result("BLOCKED", pro_state="PRO_REQUIRED_BLOCKED", reason="PROJECT_ROOT_NOT_FOUND", pro_available=True)
+    command = [detected["executable"], "project-facts", "--root", str(root.resolve()), "--json"]
+    payload, completed, contract_error = _run_machine_action(root, command, "project-facts", effective_environment, runner)
+    if completed is None:
+        return _result(
+            "PRO_DEGRADED" if contract_error != "PRO_RUNTIME_UNAVAILABLE" else "COMMUNITY_FALLBACK",
+            pro_state="PRO_DEGRADED" if contract_error != "PRO_RUNTIME_UNAVAILABLE" else "COMMUNITY_FALLBACK",
+            reason=contract_error,
+            pro_available=contract_error != "PRO_RUNTIME_UNAVAILABLE",
+        )
+    if payload is None:
+        return _result(
+            "PRO_DEGRADED",
+            pro_state="PRO_DEGRADED",
+            reason="PROJECT_FACTS_RESPONSE_INVALID",
+            diagnostic=contract_error,
+            exit_code=completed.returncode,
+            pro_available=True,
+        )
+    return _result(
+        str(payload["status"]),
+        pro_state=str(payload["pro_state"]),
+        pro_available=True,
+        ok=bool(payload["ok"]),
+        exit_code=completed.returncode,
+        facts=payload.get("facts") if isinstance(payload.get("facts"), dict) else None,
+        machine_contract=payload.get("contract_version"),
+        stderr_diagnostic=bool(completed.stderr.strip()),
     )
 
 
@@ -171,11 +282,10 @@ def router_boundary_adoption(
     root: Path,
     environment: Mapping[str, str] | None = None,
     runner: Any = subprocess.run,
+    detected: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Adopt only at the router's existing pre-write boundary; fallback stays silent."""
-    report = invoke_bridge(root, "attach", "NEW_TASK", environment, runner)
-    if not report.get("pro_available"):
-        return {}
+    """Adopt only at the router's existing pre-write boundary; fallback remains observable."""
+    report = invoke_bridge(root, "attach", "NEW_TASK", environment, runner, detected)
     if report.get("adopted"):
         report["terminal_action"] = "checkpoint"
         report["terminal_boundary"] = "TURN_TERMINAL"
@@ -184,31 +294,23 @@ def router_boundary_adoption(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Thin Community 5.18 to Pro 5.19 bridge")
+    parser = argparse.ArgumentParser(description="Thin Community to Pro 5.19 bridge")
     parser.add_argument("--root", type=Path, required=True)
-    parser.add_argument("--action", choices=("probe", "attach", "resume", "checkpoint"), default="probe")
+    parser.add_argument("--action", choices=("probe", "project-facts", "attach", "resume", "checkpoint"), default="probe")
     parser.add_argument("--boundary-proof", choices=("NEW_TASK", "TURN_TERMINAL", "NATURAL_CHECKPOINT", "RECOVERY_CHECKPOINT"))
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = build_parser().parse_args(argv)
-    report = (
-        detect_pro_runtime()
-        if arguments.action == "probe"
-        else invoke_bridge(arguments.root, arguments.action, arguments.boundary_proof)
-    )
+    if arguments.action == "probe":
+        report = detect_pro_runtime()
+    elif arguments.action == "project-facts":
+        report = query_project_facts(arguments.root)
+    else:
+        report = invoke_bridge(arguments.root, arguments.action, arguments.boundary_proof)
     print(json.dumps(report, ensure_ascii=False, separators=(",", ":")))
-    if report["status"] in {
-        "PRO_RUNTIME_DETECTED",
-        "COMMUNITY_FALLBACK",
-        "LIVE_SESSION_ADOPTED",
-        "ALREADY_ADOPTED",
-        "TURN_CHECKPOINTED",
-        "ALREADY_CHECKPOINTED",
-    }:
-        return 0
-    return 2
+    return 0 if report.get("pro_state") in {"PRO_ACTIVE", "COMMUNITY_FALLBACK"} else 2
 
 
 if __name__ == "__main__":

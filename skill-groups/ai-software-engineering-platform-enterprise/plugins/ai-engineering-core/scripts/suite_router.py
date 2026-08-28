@@ -4,14 +4,15 @@ import argparse
 import hashlib
 import json
 import re
-from collections import deque
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from community_pro_bridge import router_boundary_adoption
-from source_identity import context_fresh, identify
+from community_pro_bridge import detect_pro_runtime, query_project_facts, router_boundary_adoption
+from source_identity import identify
 from context_budget import build_context_plan
+from project_fact_plane import build_project_fact_plane
+from route_contract import normalize_route_contract
 from state_consistency import assess as assess_state_consistency, current_snapshot
 from suite_version import inspect_suite, skill_path
 
@@ -69,15 +70,6 @@ PLUGIN_DISPLAY = {
     "ai-engineering-quality": "05 质量、风险与发布",
 }
 
-PROJECT_MARKERS = (
-    "package.json", "pyproject.toml", "requirements.txt", "Cargo.toml", "go.mod",
-    "pom.xml", "build.gradle", "build.gradle.kts", "composer.json", "Gemfile",
-    "CMakeLists.txt", "Packages/manifest.json",
-)
-IGNORED_DIRS = {
-    ".git", ".ai", "node_modules", "Library", "Temp", "obj", "bin", "dist",
-    "build", ".venv", "venv", "Pods", "DerivedData",
-}
 FRONTEND_TOKENS = ("vue", "react", "next.js", "next", "nuxt", "angular", "svelte", "vite", "web-node")
 BACKEND_TOKENS = (
     "nestjs", "express", "fastify", "koa", "@hapi/hapi", "fastapi", "django",
@@ -138,107 +130,39 @@ def bounded_marker_paths(
     max_dirs: int = 160,
     identity: dict[str, Any] | None = None,
 ) -> list[Path]:
-    """Read only shallow manifests; never scan project source during routing."""
+    """Compatibility view backed by the single bounded Project Fact Plane discovery."""
     identity = identity or identify(root)
-    if identity["is_git"]:
-        return [Path(path) for path in identity["trusted_markers"]]
-    root = root.resolve()
-    found: list[Path] = []
-    queue = deque([(root, 0)])
-    visited = 0
-    while queue and visited < max_dirs:
-        current, depth = queue.popleft()
-        visited += 1
-        for marker in PROJECT_MARKERS:
-            path = current / marker
-            if path.is_file():
-                found.append(path)
-        found.extend(sorted(current.glob("*.sln"))[:4])
-        found.extend(sorted(current.glob("*.csproj"))[:8])
-        if depth >= max_depth:
-            continue
-        try:
-            children = [
-                path for path in current.iterdir()
-                if path.is_dir() and path.name not in IGNORED_DIRS and not (path / ".git").exists()
-            ]
-        except OSError:
-            children = []
-        queue.extend((child, depth + 1) for child in sorted(children)[:64])
-    return list(dict.fromkeys(found))
+    plane = build_project_fact_plane(root, identity=identity)
+    return [root.resolve() / path for path in plane["manifest_discovery"]["sources"]]
 
 
-def project_signals(root: Path) -> dict[str, Any]:
-    """Return bounded, evidence-backed facts. Do not interpret the user's prose."""
-    identity = identify(root)
-    context = root / ".ai" / "context" / "tech-stack.json"
-    sources: list[str] = []
-    evidence_parts: list[str] = []
-    context_evidence = ""
+def project_signals(root: Path, pro_payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Return one bounded Project Fact Plane; never interpret the user's prose."""
+    identity = identify(root, include_untracked_dirty=False)
     consistency = assess_state_consistency(root, current_snapshot(root, identity))
-    state_trusted = bool(consistency.get("execution_policy", {}).get("trusted_ai_state"))
-    context_ready = state_trusted and (
-        context_fresh(context, identity.get("branch") or "", identity.get("head") or "")
-        if identity["is_git"] else context.is_file()
-    )
-    if context_ready:
-        try:
-            context_evidence = json.dumps(json.loads(context.read_text(encoding="utf-8")), ensure_ascii=False).lower()
-            evidence_parts.append(context_evidence)
-            sources.append(str(context))
-        except (OSError, json.JSONDecodeError):
-            pass
-    markers = bounded_marker_paths(root, identity=identity)
-    package_dependencies: set[str] = set()
-    backend = False
-    client = False
-    unity = False
-    for marker in markers:
-        sources.append(str(marker))
-        try:
-            content = marker.read_text(encoding="utf-8", errors="ignore")[:120_000].lower()
-        except OSError:
-            content = ""
-        evidence_parts.extend((marker.as_posix().lower(), content))
-        if marker.name == "package.json":
-            try:
-                package = json.loads(content)
-                package_dependencies.update(
-                    str(name).lower()
-                    for section in ("dependencies", "devDependencies", "peerDependencies")
-                    for name in (package.get(section) or {})
-                )
-            except (TypeError, json.JSONDecodeError):
-                pass
-        if marker.suffix.lower() == ".csproj":
-            backend = backend or any(token in content for token in ("microsoft.net.sdk.web", "microsoft.aspnetcore", "include=\"aspnetcore\""))
-            client = client or any(token in content for token in ("<usewpf>true", "<usewindowsforms>true", "microsoft.windowsappsdk", "avalonia", "maui", "xamarin"))
-        if marker.name.lower() in {"pyproject.toml", "requirements.txt", "go.mod", "cargo.toml", "pom.xml", "build.gradle", "build.gradle.kts", "composer.json", "gemfile"}:
-            backend = backend or marker.name.lower() in {"go.mod", "cargo.toml", "composer.json", "gemfile"} or any(token in content for token in BACKEND_TOKENS)
-        unity = unity or marker.as_posix().lower().endswith("packages/manifest.json") or "com.unity" in content
-    evidence = " ".join(evidence_parts)
-    react_native = "react-native" in package_dependencies or "react-native" in evidence or "react native" in evidence
-    web_packages = {"vue", "next", "nuxt", "@angular/core", "svelte", "vite"}
-    client_packages = {"electron", "electron-builder", "react-native", "@tauri-apps/api", "@tauri-apps/cli", "@capacitor/core", "@ionic/react", "@ionic/vue"}
-    web = bool(package_dependencies & web_packages) or ("react" in package_dependencies and not react_native)
-    backend = backend or any(
-        dependency == token or dependency.startswith(token)
-        for dependency in package_dependencies
-        for token in ("@nestjs/", "express", "fastify", "koa", "@hapi/", "hapi", "fastapi", "django", "flask", "spring-boot", "laravel", "rails")
-    ) or any(token in evidence for token in BACKEND_TOKENS)
-    structured_client = bool(context_evidence) and any(token in context_evidence for token in CLIENT_TOKENS)
-    client = client or react_native or bool(package_dependencies & client_packages) or structured_client
-    unity = unity or (bool(context_evidence) and "unity" in context_evidence)
-    architectures = [name for name, present in (("bs", web), ("cs", client), ("backend", backend)) if present]
+    plane = build_project_fact_plane(root, identity, consistency, pro_payload)
+    topology = (plane.get("project_topology") or {}).get("value") or {}
+    architecture = str((plane.get("project_architecture") or {}).get("value") or "")
+    architectures: list[str] = []
+    if architecture:
+        architectures.append(architecture)
+    if topology.get("backend_roots") and "backend" not in architectures:
+        architectures.append("backend")
+    if topology.get("client_roots") and "cs" not in architectures:
+        architectures.append("cs")
+    frameworks = set((plane.get("framework_facts") or {}).get("value") or [])
+    sources = [str(root.resolve() / path) for path in plane["manifest_discovery"]["sources"]]
     return {
-        "existing": bool(markers or context_ready),
+        "existing": bool(sources or plane.get("current_goal") or plane.get("current_task")),
         "architectures": architectures,
-        "unity": unity,
-        "context_ready": context_ready,
-        "sources": sources[:12],
+        "project_architecture": architecture or None,
+        "unity": "unity" in frameworks,
+        "context_ready": bool(plane.get("context_source_trusted")),
+        "sources": sources[:48],
         "identity": identity,
         "source_conflicts": bool(identity.get("nested_worktrees")),
         "state_consistency": consistency,
+        "project_fact_plane": plane,
     }
 
 
@@ -272,9 +196,9 @@ def skill_display(skill: str) -> str:
     return "未命名工程能力"
 
 
-def inspect_project(root: Path) -> dict[str, Any]:
+def inspect_project(root: Path, pro_payload: dict[str, Any] | None = None) -> dict[str, Any]:
     root = root.resolve()
-    signals = project_signals(root)
+    signals = project_signals(root, pro_payload)
     identity = signals["identity"]
     suite = inspect_suite()
     return {
@@ -284,6 +208,7 @@ def inspect_project(root: Path) -> dict[str, Any]:
         "project_facts": {
             "mode_hint": "existing" if signals["existing"] else "unknown",
             "architectures": signals["architectures"],
+            "project_architecture": signals["project_architecture"],
             "unity": signals["unity"],
             "context_ready": signals["context_ready"],
             "source_conflicts": signals["source_conflicts"],
@@ -295,6 +220,7 @@ def inspect_project(root: Path) -> dict[str, Any]:
             "trusted_manifest_count": len(identity.get("trusted_markers", [])),
             "tracked_file_count": identity.get("tracked_file_count"),
             "nested_worktree_count": len(identity.get("nested_worktrees", [])),
+            "fact_plane": signals["project_fact_plane"],
         },
         "proposal_contract": {
             "required": ["project_mode", "architecture", "stage", "candidates", "current_action"],
@@ -354,26 +280,31 @@ def _validate_stage(skill: str, stage: str) -> str | None:
     return None
 
 
-def _validate_architecture(skill: str, architectures: set[str]) -> str | None:
-    if not architectures:
+def _validate_architecture(skill: str, project_architecture: str) -> str | None:
+    if not project_architecture or project_architecture == "unknown":
         return None
-    if skill in WEB_SKILLS and "bs" not in architectures:
+    if skill in WEB_SKILLS and project_architecture not in {"bs", "hybrid"}:
         return f"{skill} 与项目清单中的架构证据冲突"
-    if skill in BACKEND_SKILLS and "backend" not in architectures:
+    if skill in BACKEND_SKILLS and project_architecture not in {"bs", "backend", "hybrid"}:
         return f"{skill} 与项目清单中的服务端证据冲突"
-    if skill in CLIENT_SKILLS and "cs" not in architectures:
+    if skill in CLIENT_SKILLS and project_architecture not in {"cs", "hybrid"}:
         return f"{skill} 与项目清单中的客户端证据冲突"
     return None
 
 
-def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str, Any]:
+def route(
+    root: Path,
+    proposal: dict[str, Any] | str | None = None,
+    pro_payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Validate a ChatGPT proposal. Never infer a Skill from request keywords."""
     root = root.resolve()
-    signals = project_signals(root)
+    signals = project_signals(root, pro_payload)
     identity = signals["identity"]
     project_facts = {
         "mode_hint": "existing" if signals["existing"] else "unknown",
         "architectures": signals["architectures"],
+        "project_architecture": signals["project_architecture"],
         "unity": signals["unity"],
         "context_ready": signals["context_ready"],
         "source_conflicts": signals["source_conflicts"],
@@ -384,6 +315,7 @@ def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str,
         "head": identity.get("head"),
         "trusted_manifest_count": len(identity.get("trusted_markers", [])),
         "nested_worktree_count": len(identity.get("nested_worktrees", [])),
+        "fact_plane": signals["project_fact_plane"],
     }
     consistency = signals["state_consistency"]
     suite = inspect_suite()
@@ -411,18 +343,25 @@ def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str,
             "diagnostics": [{"code": "MODEL_PROPOSAL_REQUIRED", "message": "由 ChatGPT 先做语义选择，再提交候选给守门器"}],
         }
 
-    stage = str(proposal.get("stage") or "unknown").strip().lower()
-    architecture = str(proposal.get("architecture") or "unknown").strip().lower()
+    normalized = normalize_route_contract(proposal, signals["project_fact_plane"], PLUGIN_FOR)
+    contract = normalized["contract"]
+    stage = contract["stage"]
+    architecture = contract["project_architecture"]
+    task_scope = contract["task_scope"]
     project_mode = str(proposal.get("project_mode") or ("existing" if signals["existing"] else "unknown")).strip().lower()
     confidence = str(proposal.get("confidence") or "medium").strip().lower()
     goal_revision = str(proposal.get("goal_revision") or "current").strip()[:80] or "current"
     current_action = str(proposal.get("current_action") or "").strip()[:240]
     candidates = _candidate_items(proposal.get("candidates"))
     deferred = _candidate_items(proposal.get("deferred"))[:8]
-    diagnostics: list[dict[str, str]] = []
+    diagnostics: list[dict[str, str]] = list(normalized["diagnostics"])
+    warnings: list[dict[str, str]] = []
 
     def error(code: str, message: str) -> None:
         diagnostics.append({"code": code, "message": message})
+
+    def warn(code: str, message: str) -> None:
+        warnings.append({"code": code, "message": message})
 
     if not suite["consistent"]:
         error("PLUGIN_SUITE_VERSION_CONFLICT", "五个插件不是同一完整版本；禁止加载混合版本Skill")
@@ -441,6 +380,10 @@ def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str,
         error("EMPTY_CANDIDATES", "ChatGPT 未选择当前阶段的原子 Skill")
     if len(candidates) > 2:
         error("ATOMIC_SKILL_LIMIT", "当前阶段最多激活两个原子 Skill")
+    if contract["ambiguity_policy"] == "BLOCK":
+        error("AMBIGUITY_BLOCKED", "存在会导致高风险工程动作分歧的正向冲突，必须阻断")
+    elif contract["ambiguity_policy"] == "ASK_REQUIRED":
+        error("AMBIGUITY_REQUIRES_USER", "高风险动作方向无法由证据安全确定，需要用户确认")
 
     all_ids = [item["skill"] for item in candidates + deferred]
     if len(all_ids) != len(set(all_ids)):
@@ -449,12 +392,12 @@ def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str,
         if skill not in PLUGIN_FOR:
             error("UNKNOWN_SKILL", f"候选 Skill 不在已发布目录中：{skill}")
 
-    fact_architectures = set(signals["architectures"])
-    if fact_architectures and architecture not in {"unknown", "tooling"}:
-        if architecture == "hybrid" and len(fact_architectures) < 2:
-            error("ARCHITECTURE_CONFLICT", f"项目证据仅支持 {sorted(fact_architectures)}，不支持 hybrid")
-        elif architecture != "hybrid" and architecture not in fact_architectures:
-            error("ARCHITECTURE_CONFLICT", f"模型提出 {architecture}，项目证据为 {sorted(fact_architectures)}")
+    conflict = contract["conflict_receipt"]
+    if conflict["is_positive_contradiction"]:
+        error(
+            "ARCHITECTURE_CONFLICT",
+            f"项目架构存在正向互斥证据：{conflict['expected_fact']} != {conflict['observed_fact']}",
+        )
 
     for item in candidates:
         skill = item["skill"]
@@ -463,9 +406,9 @@ def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str,
         stage_problem = _validate_stage(skill, stage)
         if stage_problem:
             error("STAGE_SKILL_CONFLICT", stage_problem)
-        architecture_problem = _validate_architecture(skill, fact_architectures)
+        architecture_problem = _validate_architecture(skill, signals["project_architecture"] or architecture)
         if architecture_problem:
-            error("SKILL_PROJECT_EVIDENCE_CONFLICT", architecture_problem)
+            error("ARCHITECTURE_CONFLICT", architecture_problem)
         if signals["source_conflicts"] and skill not in SOURCE_CONFLICT_SAFE:
             error("SOURCE_IDENTITY_CONFLICT", "检测到嵌套工作目录；只能先选择源码身份或工作目录收敛能力")
         state_policy = consistency.get("execution_policy", {})
@@ -482,6 +425,7 @@ def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str,
     basis = {
         "stage": stage,
         "architecture": architecture,
+        "task_scope": task_scope,
         "active": [item["skill"] for item in candidates],
         "deferred": [item["skill"] for item in deferred],
         "current_action": current_action,
@@ -491,6 +435,8 @@ def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str,
         "dirty": consistency.get("current", {}).get("dirty"),
         "manifest_hash": consistency.get("current", {}).get("manifest_hash"),
         "suite_fingerprint": suite["fingerprint"],
+        "project_fact_fingerprint": signals["project_fact_plane"]["source_fingerprint"],
+        "route_contract_fingerprint": contract["route_contract_fingerprint"],
     }
     route_fingerprint = hashlib.sha256(json.dumps(basis, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:16]
     previous_route = {}
@@ -503,7 +449,7 @@ def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str,
     previous_suite = previous_route.get("suite_fingerprint") if previous_route else None
     version_drift = bool(previous_route and previous_suite != suite["fingerprint"])
     if version_drift and not {item["skill"] for item in candidates}.issubset(VERSION_RECOVERY_SKILLS):
-        error("PLUGIN_VERSION_DRIFT", "项目记录来自旧插件版本；先保存Checkpoint并用上下文恢复能力迁移到当前版本")
+        warn("PLUGIN_VERSION_DRIFT_QUARANTINED", "旧插件路由缓存已隔离；当前请求与Git事实继续，Pro在安全边界完成接管")
     accepted = not diagnostics
     selected_output = [
         {
@@ -533,6 +479,8 @@ def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str,
         "reselect_required": not accepted,
         "project_mode": project_mode,
         "architecture": architecture,
+        "project_architecture": architecture,
+        "task_scope": task_scope,
         "stage": stage,
         "current_action": current_action,
         "selected": selected_output,
@@ -548,6 +496,25 @@ def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str,
         "phase_transition_required": bool(deferred or proposal.get("future_terms") or proposal.get("follow_up_actions")),
         "receipt_source": "skill-loader-telemetry",
         "route_fingerprint": route_fingerprint,
+        "route_contract": contract,
+        "intent_dag": {
+            "nodes": contract["intent_atoms"],
+            "edges": contract["dependencies"],
+        },
+        "ambiguity_policy": contract["ambiguity_policy"],
+        "routing_cost": contract["routing_cost"],
+        "capability_prefilter": contract["capability_prefilter"],
+        "conflict_receipt": contract["conflict_receipt"],
+        "route_receipt": {
+            "candidate": contract["candidate_capabilities"],
+            "selected": [item["skill"] for item in candidates] if accepted else [],
+            "loaded": [],
+            "applied": [],
+            "completed": [],
+            "deferred": [item["skill"] for item in deferred] if accepted else [],
+            "rejected": [] if accepted else [item["code"] for item in diagnostics],
+            "fingerprint": route_fingerprint,
+        },
         "admission_cache": {
             "hit": bool(accepted and previous_route.get("route_fingerprint") == route_fingerprint),
             "key_fields": ["goal_revision", "repo_id", "head", "dirty", "manifest_hash", "stage", "current_action", "active", "deferred"],
@@ -558,18 +525,20 @@ def route(root: Path, proposal: dict[str, Any] | str | None = None) -> dict[str,
             "suite_fingerprint": suite["fingerprint"],
             "consistent": suite["consistent"],
             "drift": version_drift,
-            "old_task_policy": "版本漂移时只允许Checkpoint、上下文恢复和新总控接管，不允许继续写源码",
+            "old_task_policy": "隔离旧路由/PASS缓存；当前请求与Git继续，禁止恢复旧Lease/Agent/Writer",
         },
         "next_gate": "完成当前阶段并由 ChatGPT 重新语义选择" if deferred else None,
         "confidence": confidence,
         "context_budget": build_context_plan(root, stage, signals=context_signals, tracked_files=identity.get("tracked_file_count")),
         "project_evidence": signals["sources"],
+        "project_fact_plane": signals["project_fact_plane"],
         "source_identity": project_facts,
         "state_consistency": consistency,
         "plugin_suite": suite,
         "execution_policy": consistency.get("execution_policy", {}),
         "receipt_required": accepted,
         "diagnostics": diagnostics,
+        "warnings": warnings,
     }
 
 
@@ -595,15 +564,18 @@ def _load_proposal(args: argparse.Namespace) -> dict[str, Any] | None:
     return None
 
 
-def _apply_route_boundary_adoption(root: Path, result: dict[str, Any]) -> None:
+def _apply_route_boundary_adoption(
+    root: Path,
+    result: dict[str, Any],
+    detected: dict[str, Any] | None = None,
+) -> None:
     """Adopt at accepted admission, before any selected Skill can be loaded."""
     if result.get("guard_decision") != "ACCEPT":
         return
-    adoption = router_boundary_adoption(root)
-    if not adoption:
-        return
+    adoption = router_boundary_adoption(root, detected=detected)
     result["pro_live_adoption"] = adoption
-    if adoption.get("adopted"):
+    result["pro_state"] = adoption.get("pro_state", "COMMUNITY_FALLBACK")
+    if adoption.get("adopted") or adoption.get("pro_state") == "COMMUNITY_FALLBACK":
         return
     result["guard_decision"] = "REJECT"
     result["accepted"] = False
@@ -613,7 +585,7 @@ def _apply_route_boundary_adoption(root: Path, result: dict[str, Any]) -> None:
     result.setdefault("diagnostics", []).append(
         {
             "code": "PRO_LIVE_ADOPTION_REQUIRED",
-            "message": "检测到 Pro Runtime，但当前会话尚未安全接管；禁止加载 Skill 或开始项目动作",
+            "message": "Pro Runtime存在但未完成安全接管；已明确进入DEGRADED/BLOCKED，禁止伪装为Pro已生效",
         }
     )
 
@@ -642,8 +614,16 @@ def main() -> int:
         result = inspect_project(root)
     else:
         proposal = _load_proposal(args)
-        result = route(root, proposal if proposal is not None else args.request)
-        _apply_route_boundary_adoption(root, result)
+        detected: dict[str, Any] | None = None
+        pro_facts: dict[str, Any] | None = None
+        if (root / ".ai" / "state" / "hiker-state.db").is_file():
+            detected = detect_pro_runtime()
+            if detected.get("pro_available"):
+                facts_report = query_project_facts(root, detected=detected)
+                if isinstance(facts_report.get("facts"), dict):
+                    pro_facts = facts_report
+        result = route(root, proposal if proposal is not None else args.request, pro_facts)
+        _apply_route_boundary_adoption(root, result, detected)
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0 if result.get("guard_decision") != "REJECT" else 2
 

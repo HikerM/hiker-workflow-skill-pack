@@ -12,6 +12,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ROUTER = ROOT / "plugins" / "ai-engineering-core" / "scripts" / "suite_router.py"
+sys.path.insert(0, str(ROUTER.parent))
+
+from suite_router import route
 PROPOSALS = (
     ("backend", "development", "backend-component-implementation"),
     ("hybrid", "governance", "workspace-task-router"),
@@ -29,6 +32,7 @@ def benchmark(runs: int, max_p95_ms: float, max_raw_p95_ms: float = 500.0) -> di
     raw_samples = []
     startup_samples = []
     incremental_samples = []
+    fast_samples = []
     route_environment = os.environ.copy()
     for name in ("HIKER_PROVIDER_SESSION_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
         route_environment.pop(name, None)
@@ -56,10 +60,24 @@ def benchmark(runs: int, max_p95_ms: float, max_raw_p95_ms: float = 500.0) -> di
             startup_samples.append(startup_ms)
             raw_samples.append(raw_ms)
             incremental_samples.append(max(0.0, raw_ms - startup_ms))
+        fast_proposal = {
+            "project_mode": "existing",
+            "architecture": "bs",
+            "task_scope": ["frontend"],
+            "stage": "development",
+            "current_action": "修复当前页面",
+            "confidence": "high",
+            "candidates": ["web-component-implementation"],
+        }
+        warm_result = route(root, fast_proposal)
+        for _ in range(max(30, runs)):
+            started = time.perf_counter()
+            warm_result = route(root, fast_proposal)
+            fast_samples.append((time.perf_counter() - started) * 1000)
     p95 = percentile(incremental_samples, .95)
     raw_p95 = percentile(raw_samples, .95)
     return {
-        "ok": p95 <= max_p95_ms and raw_p95 <= max_raw_p95_ms,
+        "ok": p95 <= max_p95_ms and raw_p95 <= max_raw_p95_ms and percentile(fast_samples, .95) < 100.0,
         "scope": "本地冷进程路由增量开销；以相邻Python冷启动校准宿主调度，不包含桌面端网络与模型首字延迟",
         "runs": runs,
         "median_ms": round(statistics.median(incremental_samples), 2),
@@ -70,6 +88,13 @@ def benchmark(runs: int, max_p95_ms: float, max_raw_p95_ms: float = 500.0) -> di
         "max_raw_p95_ms": max_raw_p95_ms,
         "python_startup_median_ms": round(statistics.median(startup_samples), 2),
         "python_startup_p95_ms": round(percentile(startup_samples, .95), 2),
+        "fast_local_guard": {
+            "p50_ms": round(statistics.median(fast_samples), 2),
+            "p95_ms": round(percentile(fast_samples, .95), 2),
+            "max_p95_ms": 100.0,
+            "full_scan_count": warm_result["project_fact_plane"]["manifest_discovery"]["metrics"]["full_scan_count"],
+            "extra_model_calls": 0,
+        },
     }
 
 

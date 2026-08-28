@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,16 @@ PROJECT_MARKERS = {
     "Gemfile",
     "CMakeLists.txt",
     "Packages/manifest.json",
+    "ProjectVersion.txt",
+    "pnpm-workspace.yaml",
+    "pnpm-workspace.yml",
+    "lerna.json",
+    "turbo.json",
+    "Dockerfile",
+    "docker-compose.yml",
+    "docker-compose.yaml",
+    "compose.yml",
+    "compose.yaml",
 }
 
 STATE_MANIFEST_NAMES = {
@@ -49,21 +60,84 @@ def _resolve_git_path(base: Path, raw: str) -> Path:
     return path.resolve() if path.is_absolute() else (base / path).resolve()
 
 
-def _worktrees(repo: Path) -> list[dict[str, str]]:
-    result = _git(repo, "worktree", "list", "--porcelain")
-    if result.returncode:
-        return []
-    items: list[dict[str, str]] = []
-    current: dict[str, str] = {}
-    for line in result.stdout.splitlines() + [""]:
-        if not line:
-            if current:
-                items.append(current)
-                current = {}
+def _git_layout(scope: Path) -> tuple[Path, Path, Path] | None:
+    for root in (scope, *scope.parents):
+        marker = root / ".git"
+        if marker.is_dir():
+            return root, marker.resolve(), marker.resolve()
+        if marker.is_file():
+            try:
+                prefix, _, raw = marker.read_text(encoding="utf-8", errors="replace").strip().partition(":")
+            except OSError:
+                continue
+            if prefix.lower() != "gitdir" or not raw.strip():
+                continue
+            git_dir = _resolve_git_path(root, raw)
+            common_file = git_dir / "commondir"
+            try:
+                common_raw = common_file.read_text(encoding="utf-8").strip() if common_file.is_file() else ""
+            except OSError:
+                common_raw = ""
+            common = _resolve_git_path(git_dir, common_raw) if common_raw else git_dir
+            return root, git_dir, common
+    return None
+
+
+def _worktrees(repo: Path, common_dir: Path) -> list[dict[str, str]]:
+    items = [{"worktree": str(repo)}]
+    metadata = common_dir / "worktrees"
+    try:
+        candidates = sorted((item for item in metadata.iterdir() if item.is_dir()), key=lambda item: item.name)
+    except OSError:
+        candidates = []
+    for candidate in candidates[:128]:
+        try:
+            git_marker = Path((candidate / "gitdir").read_text(encoding="utf-8").strip())
+        except OSError:
             continue
-        key, _, value = line.partition(" ")
-        current[key] = value
+        worktree = git_marker.parent if git_marker.name == ".git" else git_marker
+        if worktree.is_dir():
+            items.append({"worktree": str(worktree.resolve())})
     return items
+
+
+def _origin_url(common_dir: Path) -> str:
+    try:
+        content = (common_dir / "config").read_text(encoding="utf-8", errors="replace")[:256 * 1024]
+    except OSError:
+        return ""
+    match = re.search(r'^\s*\[remote\s+["\']origin["\']\]\s*$([\s\S]*?)(?=^\s*\[|\Z)', content, re.M | re.I)
+    if not match:
+        return ""
+    url = re.search(r"^\s*url\s*=\s*(.+?)\s*$", match.group(1), re.M | re.I)
+    return url.group(1).strip() if url else ""
+
+
+def _head_facts(git_dir: Path, common_dir: Path) -> tuple[str | None, str | None]:
+    try:
+        raw = (git_dir / "HEAD").read_text(encoding="ascii", errors="replace").strip()
+    except OSError:
+        return None, None
+    if not raw.startswith("ref:"):
+        return (raw if re.fullmatch(r"[0-9a-fA-F]{40,64}", raw) else None), "HEAD"
+    reference = raw.partition(":")[2].strip().replace("\\", "/")
+    branch = reference.removeprefix("refs/heads/") or "HEAD"
+    for base in (git_dir, common_dir):
+        try:
+            value = (base / Path(reference)).read_text(encoding="ascii", errors="replace").strip()
+        except OSError:
+            value = ""
+        if re.fullmatch(r"[0-9a-fA-F]{40,64}", value):
+            return value, branch
+    try:
+        packed = (common_dir / "packed-refs").read_text(encoding="ascii", errors="replace")
+    except OSError:
+        packed = ""
+    for line in packed.splitlines():
+        value, _, name = line.partition(" ")
+        if name == reference and re.fullmatch(r"[0-9a-fA-F]{40,64}", value):
+            return value, branch
+    return None, branch
 
 
 def _tracked_inventory(repo: Path, scope: Path, marker_limit: int = 96, manifest_limit: int = 500) -> dict[str, Any]:
@@ -73,27 +147,36 @@ def _tracked_inventory(repo: Path, scope: Path, marker_limit: int = 96, manifest
     markers: list[Path] = []
     manifests: list[Path] = []
     count = 0
+    try:
+        scope_prefix = scope.resolve().relative_to(repo.resolve()).as_posix().strip("/")
+    except ValueError:
+        scope_prefix = ""
+    marker_names = {name.lower() for name in PROJECT_MARKERS}
+    state_names = {name.lower() for name in STATE_MANIFEST_NAMES}
     for raw in result.stdout.split("\0"):
         if not raw:
             continue
         count += 1
         rel = Path(raw)
         normalized = rel.as_posix()
-        candidate = (repo / rel).resolve()
-        try:
-            candidate.relative_to(scope)
-        except ValueError:
+        in_scope = not scope_prefix or normalized == scope_prefix or normalized.startswith(scope_prefix + "/")
+        if not in_scope:
             continue
+        marker_candidate = rel.name.lower() in marker_names or normalized.lower() in marker_names or rel.suffix.lower() in {".sln", ".csproj"}
+        lower = normalized.lower()
+        state_candidate = rel.name.lower() in state_names or "/migrations/" in f"/{lower}/"
+        if not marker_candidate and not state_candidate:
+            continue
+        candidate = repo / rel
         if (
             len(markers) < marker_limit
-            and (rel.name in PROJECT_MARKERS or normalized in PROJECT_MARKERS or rel.suffix.lower() in {".sln", ".csproj"})
+            and marker_candidate
             and candidate.is_file()
         ):
             markers.append(candidate)
-        lower = normalized.lower()
         if (
             len(manifests) < manifest_limit
-            and (rel.name.lower() in {name.lower() for name in STATE_MANIFEST_NAMES} or "/migrations/" in f"/{lower}/")
+            and state_candidate
             and candidate.is_file()
         ):
             manifests.append(candidate)
@@ -136,7 +219,7 @@ def context_fresh(context: Path, branch: str, head: str) -> bool:
     return True
 
 
-def identify(root: Path) -> dict[str, Any]:
+def identify(root: Path, include_untracked_dirty: bool = True) -> dict[str, Any]:
     scope = root.resolve()
     git_hint = any((candidate / ".git").exists() for candidate in (scope, *scope.parents)) or bool(os.environ.get("GIT_DIR"))
     if not scope.is_dir() or not git_hint:
@@ -154,9 +237,8 @@ def identify(root: Path) -> dict[str, Any]:
             "manifest_hash": hashlib.sha256(b"").hexdigest(),
             "repo_id": hashlib.sha256(str(scope).encode("utf-8", errors="replace")).hexdigest(),
         }
-    revision = _git(scope, "rev-parse", "--show-toplevel", "--git-common-dir", "HEAD", "--abbrev-ref", "HEAD")
-    values = revision.stdout.splitlines()
-    if revision.returncode or len(values) < 4:
+    layout = _git_layout(scope)
+    if layout is None:
         return {
             "is_git": False,
             "scope": str(scope),
@@ -171,16 +253,13 @@ def identify(root: Path) -> dict[str, Any]:
             "manifest_hash": hashlib.sha256(b"").hexdigest(),
             "repo_id": hashlib.sha256(str(scope).encode("utf-8", errors="replace")).hexdigest(),
         }
-    repo = Path(values[0].strip()).resolve()
-    common_raw = values[1].strip()
-    head = values[2].strip()
-    branch = values[3].strip()
-    common_dir = _resolve_git_path(repo, common_raw) if common_raw else None
-    remote = _git(scope, "config", "--get", "remote.origin.url").stdout.strip()
-    repo_seed = remote or str(common_dir or repo)
+    repo, git_dir, common_dir = layout
+    head, branch = _head_facts(git_dir, common_dir)
+    remote = _origin_url(common_dir)
+    repo_seed = remote or str(common_dir)
     repo_id = hashlib.sha256(repo_seed.encode("utf-8", errors="replace")).hexdigest()
     current = scope
-    worktrees = _worktrees(repo)
+    worktrees = _worktrees(repo, common_dir)
     for item in worktrees:
         path = Path(item.get("worktree", "")).resolve() if item.get("worktree") else None
         if path and (scope == path or scope.is_relative_to(path)):
@@ -199,20 +278,23 @@ def identify(root: Path) -> dict[str, Any]:
             continue
         nested.append(str(path))
     inventory = _tracked_inventory(repo, scope)
-    raw_status = _git(scope, "status", "--porcelain=v1", "-z", "--untracked-files=all").stdout
-    dirty = any(
-        not item[3:].replace("\\", "/").startswith(".ai/")
-        for item in raw_status.split("\0")
-        if len(item) >= 4
-    )
+    if include_untracked_dirty:
+        raw_status = _git(scope, "status", "--porcelain=v1", "-z", "--untracked-files=all").stdout
+        dirty = any(
+            not item[3:].replace("\\", "/").startswith(".ai/")
+            for item in raw_status.split("\0")
+            if len(item) >= 4
+        )
+    else:
+        dirty = None
     return {
         "is_git": True,
         "scope": str(scope),
         "repo_root": str(repo),
         "worktree_root": str(current),
-        "branch": branch or None,
-        "head": head or None,
-        "common_dir": str(common_dir) if common_dir else None,
+        "branch": branch,
+        "head": head,
+        "common_dir": str(common_dir),
         "trusted_markers": [str(path) for path in inventory["markers"]],
         "nested_worktrees": nested,
         "tracked_file_count": inventory["count"],

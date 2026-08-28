@@ -8,7 +8,8 @@
     "max_overload_rate": 0.0,
     "max_unnecessary_skill_rate": 0.05,
     "min_reject_unknown_quality": 0.85,
-    "min_deferred_recall": 1.0
+    "min_deferred_recall": 1.0,
+    "min_intent_contract_accuracy": 1.0
   },
   "categories": {
     "explicit-positive": ["E01", "E02", "E03", "E04"],
@@ -21,7 +22,8 @@
     "phase-change": ["P01", "P02", "P03", "P04"],
     "no-skill": ["Z01", "Z02", "Z03"],
     "bounded-selection": ["D01", "D02"],
-    "reject-unknown": ["R01", "R02"]
+    "reject-unknown": ["R01", "R02"],
+    "adversarial-routing": ["Q01", "Q02", "Q03", "Q04", "Q05", "Q06", "Q07", "Q08", "Q09", "Q10", "Q11", "Q12"]
   },
   "labels": [
     {"id":"E01","disposition":"SELECT","acceptable_top1":["web-component-implementation"],"required_top2":["web-component-implementation"],"allowed_skills":["web-component-implementation"],"max_selected":1},
@@ -72,6 +74,19 @@
     {"id":"D02","disposition":"SELECT","acceptable_top1":["web-quality-review"],"required_top2":["web-quality-review","backend-quality-review"],"allowed_skills":["web-quality-review","backend-quality-review"],"required_deferred":["regression-test-planner","release-readiness-review"],"max_selected":2},
 
     {"id":"R01","disposition":"REJECT","allowed_skills":[],"max_selected":0},
-    {"id":"R02","disposition":"REJECT","allowed_skills":[],"max_selected":0}
+    {"id":"R02","disposition":"REJECT","allowed_skills":[],"max_selected":0},
+
+    {"id":"Q01","disposition":"SELECT","acceptable_top1":["web-component-implementation"],"required_top2":["web-component-implementation"],"allowed_skills":["web-component-implementation"],"required_deferred":["backend-component-implementation"],"required_intent_states":{"CURRENT":1,"NEGATED":2,"CONDITIONAL":1},"expected_project_architecture":"bs","required_task_scope":["frontend"],"max_selected":1},
+    {"id":"Q02","disposition":"SELECT","acceptable_top1":["web-component-implementation"],"required_top2":["web-component-implementation"],"allowed_skills":["web-component-implementation"],"required_intent_states":{"CURRENT":1,"RESOLVED":1},"expected_project_architecture":"bs","required_task_scope":["frontend"],"max_selected":1},
+    {"id":"Q03","disposition":"SELECT","acceptable_top1":["project-state-manager"],"required_top2":["project-state-manager"],"allowed_skills":["project-state-manager"],"required_intent_states":{"CURRENT":1,"HISTORICAL":1},"expected_project_architecture":"bs","required_task_scope":["workspace"],"max_selected":1},
+    {"id":"Q04","disposition":"SELECT","acceptable_top1":["backend-component-implementation"],"required_top2":["backend-component-implementation"],"allowed_skills":["backend-component-implementation"],"required_intent_states":{"CURRENT":1},"expected_project_architecture":"bs","required_task_scope":["backend"],"max_selected":1},
+    {"id":"Q05","disposition":"SELECT","acceptable_top1":["web-quality-review"],"required_top2":["web-quality-review"],"allowed_skills":["web-quality-review"],"required_intent_states":{"CURRENT":1},"expected_ambiguity_policy":"EVIDENCE_FIRST","expected_project_architecture":"bs","required_task_scope":["frontend"],"max_selected":1},
+    {"id":"Q06","disposition":"UNKNOWN","allowed_skills":[],"required_intent_states":{"CURRENT":1},"expected_ambiguity_policy":"ASK_REQUIRED","expected_project_architecture":"backend","required_task_scope":["database"],"max_selected":0},
+    {"id":"Q07","disposition":"SELECT","acceptable_top1":["backend-component-implementation"],"required_top2":["backend-component-implementation"],"allowed_skills":["backend-component-implementation"],"required_intent_states":{"CURRENT":1},"expected_project_architecture":"backend","required_task_scope":["backend"],"max_selected":1},
+    {"id":"Q08","disposition":"SELECT","acceptable_top1":["web-component-implementation"],"required_top2":["web-component-implementation"],"allowed_skills":["web-component-implementation"],"required_intent_states":{"CURRENT":1,"HYPOTHETICAL":1,"NEGATED":1},"expected_project_architecture":"bs","required_task_scope":["frontend"],"max_selected":1},
+    {"id":"Q09","disposition":"SELECT","acceptable_top1":["backend-component-implementation"],"required_top2":["backend-component-implementation"],"allowed_skills":["backend-component-implementation"],"required_deferred":["database-migration-governance","regression-test-planner"],"required_intent_states":{"CURRENT":1,"CONDITIONAL":1,"FUTURE":1},"expected_project_architecture":"bs","required_task_scope":["backend"],"max_selected":1},
+    {"id":"Q10","disposition":"SELECT","acceptable_top1":["web-component-implementation"],"required_top2":["web-component-implementation","backend-component-implementation"],"allowed_skills":["web-component-implementation","backend-component-implementation"],"required_deferred":["database-migration-governance","regression-test-planner","release-readiness-review"],"required_intent_states":{"CURRENT":2,"CONDITIONAL":1,"FUTURE":2},"expected_project_architecture":"bs","required_task_scope":["frontend","backend"],"max_selected":2},
+    {"id":"Q11","disposition":"NONE","allowed_skills":[],"required_intent_states":{"HYPOTHETICAL":1},"max_selected":0},
+    {"id":"Q12","disposition":"SELECT","acceptable_top1":["architecture-decision-challenge"],"required_top2":["architecture-decision-challenge"],"allowed_skills":["architecture-decision-challenge"],"required_intent_states":{"CURRENT":1},"expected_project_architecture":"bs","required_task_scope":["architecture"],"max_selected":1}
   ]
 }

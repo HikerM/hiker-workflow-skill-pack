@@ -1,4 +1,4 @@
-# 智能软件工程平台 5.18（B/S与C/S工程能力深化版）
+# 智能软件工程平台 5.19（项目事实与多意图路由版）
 
 这是面向 ChatGPT Work / Codex 桌面端的大型软件工程插件套件。它不再把所有能力堆进一个超长 Skill，而是拆成 5 个可独立启用的中文插件：
 
@@ -10,7 +10,11 @@
 
 当前套件包含 5 个插件、42 个原子能力。只有用户可见的“智能工程轻量路由”可隐式触发，其余41个能力手动可见并按需懒加载；正常回执只显示实际应用的中文插件和中文 Skill 名称。路由先确认唯一 Git Worktree 并只读取当前源码的跟踪 Manifest；历史工作目录由快速库存、只读接管、证据分类、两阶段安全关闭和合并后收敛控制。0→1项目先建立稳定需求ID、冲突/未知账本和自动决策Checkpoint；平台、架构、部署、数据、安全或核心技术栈变化记录候选、证据、风险、回退与选择后非阻塞继续，不弹出审批。用户提供的架构或功能拆分被视为待验证假设，先反证、补全遗漏和比较有真实权衡的替代方案；已有部分源码的项目先建立证据化能力基线并做需求差异对账。大型界面按当前模块治理隐藏表面、状态机、浮层、焦点、快捷键、请求乱序和重复提交，不扫描全仓交互配置。复杂长链路任务额外登记分层验收、唯一实现路径、真实实验预算和部署哈希；只有工程健康状态变化时才向用户显示去重中文告警。
 
-5.18 在5.17控制平面之上增加产品交付深度：B/S与C/S共享语义UI Design IR、Decision Authority、Component Registry 2.0、Design-to-Code、Runtime/Fidelity Evidence、Presentation/Content/Interaction Copy和协议中立Error Contract；Service & Data作为B/S与C/S共同消费的逻辑层，具体技术栈仍由项目事实和按需Adapter决定。机器层使用Schema、Validator、Evidence和有界Adapter，未增加Skill数量，也没有把固定UI风格、页面模板或技术栈写成硬约束。
+5.19 在既有能力上把Project Architecture、Project Topology、Task Scope与Route Target拆成独立事实，并新增有界Project Fact Plane和多意图Route Contract。根Manifest、声明的Workspace根、Git跟踪Manifest和受控未跟踪Manifest可以提供当前工程证据，但路由不扫描源码、冷历史或42个Skill正文。Intent DAG保留当前、否定、条件、历史、已解决、未来、假设和延后语义；候选、加载、应用和完成分别记录，第三个能力必须延后而不是静默丢失。
+
+Community→Pro Bridge使用`hiker-cli/v1`机器Envelope，只接受stdout中的单个JSON document，并校验stderr诊断与退出码。Community继续负责用户语义理解和最多两个Skill的确定性准入，Pro只提供有界Project Facts及持久工程权威；Pro不可用时Community给出明确降级状态并独立工作，两侧不复制对方实现。
+
+5.18 在5.17控制平面之上建立的产品交付深度继续保留：B/S与C/S共享语义UI Design IR、Decision Authority、Component Registry 2.0、Design-to-Code、Runtime/Fidelity Evidence、Presentation/Content/Interaction Copy和协议中立Error Contract；Service & Data作为B/S与C/S共同消费的逻辑层，具体技术栈仍由项目事实和按需Adapter决定。机器层使用Schema、Validator、Evidence和有界Adapter，未增加Skill数量，也没有把固定UI风格、页面模板或技术栈写成硬约束。
 
 5.18 同时采用“最大模型自由度 + 最小必要治理”：模型继续自由选择需求理解、架构、设计、实现顺序、诊断与工具路径；Runtime只约束工程事实、状态一致性、安全边界和不可接受结果。10维风险画像把治理分为LOW、MEDIUM、HIGH、CRITICAL，Verification Budget只授权当前风险与Affected Scope需要的Validator、Runtime目标和Evidence。普通低风险任务不进入完整架构审核、全仓扫描或Visual Matrix；高风险数据、安全和发布变化才主动变慢。
 

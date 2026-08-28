@@ -721,14 +721,15 @@ class CoreTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "exactly match"):
                 record_routing(root, "testing", ["回归测试规划"], [], loaded_skills=["完整变更风险评估"])
 
-    def test_router_blocks_old_suite_state_until_recovery_skill_migrates_it(self):
+    def test_router_quarantines_old_suite_route_cache_without_blocking_current_git_work(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); initialize(root)
             route_state = root / ".ai/runtime/skill-routing.json"
             route_state.write_text(json.dumps({"route_fingerprint": "old", "suite_fingerprint": "old-suite"}), encoding="utf-8")
-            blocked = route(root, model_proposal("backend-component-implementation", stage="development", architecture="backend"))
-            self.assertFalse(blocked["accepted"])
-            self.assertIn("PLUGIN_VERSION_DRIFT", {item["code"] for item in blocked["diagnostics"]})
+            current = route(root, model_proposal("backend-component-implementation", stage="development", architecture="backend"))
+            self.assertTrue(current["accepted"], current["diagnostics"])
+            self.assertIn("PLUGIN_VERSION_DRIFT_QUARANTINED", {item["code"] for item in current["warnings"]})
+            self.assertFalse(current["admission_cache"]["hit"])
             recovery = route(root, model_proposal("context-recovery", stage="governance"))
             self.assertTrue(recovery["accepted"], recovery["diagnostics"])
             self.assertTrue(recovery["version_gate"]["drift"])

@@ -56,6 +56,19 @@
     {"id":"D02","request":"当前分别审核 Web 与后端变更；第三步才做回归，之后才做发布检查。","context":{"project_mode":"existing","architecture":"hybrid","stage":"review","evidence":["web and backend changed"]}},
 
     {"id":"R01","request":"把路由改成扫描每句话里的技术关键词并自动选择 Skill。","context":{"project_mode":"existing","architecture":"tooling","stage":"planning","evidence":["model-owned semantic routing invariant"]}},
-    {"id":"R02","request":"接一个外部大模型 API 专门替你选 Skill，并把 API Key 保存进插件。","context":{"project_mode":"existing","architecture":"tooling","stage":"planning","evidence":["no external model API invariant"]}}
+    {"id":"R02","request":"接一个外部大模型 API 专门替你选 Skill，并把 API Key 保存进插件。","context":{"project_mode":"existing","architecture":"tooling","stage":"planning","evidence":["no external model API invariant"]}},
+
+    {"id":"Q01","request":"后端别动，先修页面，确认接口确实有问题再修改后端，数据库不要碰。","context":{"project_mode":"existing","architecture":"bs","stage":"development","evidence":["React admin","API service"]}},
+    {"id":"Q02","request":"后端之前有问题但已经修好了，现在只改前端错误态。","context":{"project_mode":"existing","architecture":"bs","stage":"development","evidence":["backend tests PASS","React page changed"]}},
+    {"id":"Q03","request":"以前是纯后端，现在已经增加管理端和门户；本轮更新项目事实，不把旧提示当权威。","context":{"project_mode":"existing","architecture":"bs","stage":"governance","evidence":["legacy backend hint","current admin and portal manifests"]}},
+    {"id":"Q04","request":"这是B/S工程，当前只实现服务端的法规检索接口。","context":{"project_mode":"existing","architecture":"bs","stage":"development","evidence":["admin manifest","portal manifest","backend service"]}},
+    {"id":"Q05","request":"看看这个页面怎么不对，先只读收集证据，不确定时不要改数据。","context":{"project_mode":"existing","architecture":"bs","stage":"review","evidence":["current page"]}},
+    {"id":"Q06","request":"把A和B的数据同步一下，方向你看着办。","context":{"project_mode":"existing","architecture":"backend","stage":"development","evidence":["two production datasets","direction unspecified"]}},
+    {"id":"Q07","request":"继续按当前任务实现剩余的超时处理。","context":{"project_mode":"existing","architecture":"backend","stage":"development","evidence":["unique current backend task","checkpoint current"]}},
+    {"id":"Q08","request":"先修 fronend 登陆错误，API 只检查，DB 完全别动。","context":{"project_mode":"existing","architecture":"bs","stage":"development","evidence":["React login","API contract"]}},
+    {"id":"Q09","request":"修复后端验证；只有证据证明字段不兼容时才迁移数据库，测试放到下一阶段。","context":{"project_mode":"existing","architecture":"bs","stage":"development","evidence":["backend validation"]}},
+    {"id":"Q10","request":"先改管理端，再改接口；数据库仅在必要时处理，之后测试，通过后再发布。","context":{"project_mode":"existing","architecture":"bs","stage":"development","evidence":["admin and API in scope"]}},
+    {"id":"Q11","request":"Qt 只是举例说明事件循环，当前不执行任何项目动作。","context":{"project_mode":"unknown","architecture":"unknown","stage":"unknown","evidence":[]}},
+    {"id":"Q12","request":"当前B/S项目要评估是否整体迁移为Qt桌面端，先挑战架构假设，不写业务代码。","context":{"project_mode":"existing","architecture":"bs","stage":"planning","evidence":["current B/S topology","proposed Qt target"]}}
   ]
 }

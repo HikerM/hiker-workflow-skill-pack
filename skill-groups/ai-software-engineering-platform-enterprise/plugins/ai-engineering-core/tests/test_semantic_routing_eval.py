@@ -44,13 +44,14 @@ class SemanticRoutingEvaluationTests(unittest.TestCase):
     def test_current_host_baseline_executes_semantic_cases(self):
         result = self.evaluate()
         self.assertTrue(result["ok"], result)
-        self.assertEqual(39, result["case_count"])
+        self.assertEqual(51, result["case_count"])
         self.assertEqual(1.0, result["metrics"]["top1_accuracy"])
         self.assertEqual(1.0, result["metrics"]["top2_recall"])
         self.assertEqual(0.0, result["metrics"]["wrong_plugin_rate"])
         self.assertEqual(0.0, result["metrics"]["overload_rate"])
         self.assertEqual(1.0, result["metrics"]["reject_unknown_quality"])
         self.assertEqual(1.0, result["metrics"]["guard_conservation_rate"])
+        self.assertEqual(1.0, result["metrics"]["intent_contract_accuracy"])
         self.assertTrue(result["provenance_valid"])
 
     def test_negated_laravel_specialization_is_a_real_failure(self):

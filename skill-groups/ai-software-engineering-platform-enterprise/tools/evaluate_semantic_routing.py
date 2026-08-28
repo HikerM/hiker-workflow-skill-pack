@@ -65,6 +65,12 @@ def _guard_check(case: dict[str, Any], prediction: dict[str, Any]) -> tuple[bool
         "deferred": list(prediction.get("deferred") or []),
         "negated_terms": list(prediction.get("negated_terms") or []),
         "future_terms": list(prediction.get("future_terms") or []),
+        "project_architecture": prediction.get("project_architecture"),
+        "task_scope": list(prediction.get("task_scope") or []),
+        "intent_atoms": list(prediction.get("intent_atoms") or []),
+        "ambiguities": list(prediction.get("ambiguities") or []),
+        "risk": prediction.get("risk"),
+        "candidate_capabilities": list(prediction.get("candidate_capabilities") or []),
     }
     with tempfile.TemporaryDirectory() as td:
         result = route(Path(td), proposal)
@@ -108,6 +114,7 @@ def evaluate(cases_path: Path, gold_path: Path, predictions_path: Path) -> dict[
     specializations_total = unnecessary_specializations = 0
     nonselect_total = nonselect_hits = false_rejections = 0
     deferred_total = deferred_hits = guard_hits = 0
+    intent_contract_total = intent_contract_hits = 0
     failures: list[dict[str, Any]] = []
     categories: dict[str, list[bool]] = defaultdict(list)
 
@@ -127,6 +134,34 @@ def evaluate(cases_path: Path, gold_path: Path, predictions_path: Path) -> dict[
         required_deferred = set(label.get("required_deferred") or [])
         max_selected = int(label.get("max_selected", 0))
 
+        required_intent_states = label.get("required_intent_states") or {}
+        if required_intent_states:
+            intent_contract_total += 1
+            actual_states: dict[str, int] = defaultdict(int)
+            for atom in prediction.get("intent_atoms") or []:
+                if isinstance(atom, dict):
+                    actual_states[str(atom.get("state") or "").upper()] += 1
+            intent_ok = all(actual_states[state] == int(count) for state, count in required_intent_states.items())
+            expected_architecture = label.get("expected_project_architecture")
+            if expected_architecture is not None:
+                intent_ok = intent_ok and prediction.get("project_architecture") == expected_architecture
+            required_scope = set(label.get("required_task_scope") or [])
+            intent_ok = intent_ok and required_scope.issubset(set(prediction.get("task_scope") or []))
+            expected_ambiguity = label.get("expected_ambiguity_policy")
+            if expected_ambiguity is not None:
+                risk = prediction.get("risk") or {}
+                ambiguities = prediction.get("ambiguities") or []
+                level = str(risk.get("level") or "LOW").upper() if isinstance(risk, dict) else str(risk).upper()
+                direction_required = any(
+                    isinstance(item, dict) and bool(item.get("direction_required") or item.get("irreversible") or item.get("data_direction"))
+                    for item in ambiguities
+                )
+                observed_ambiguity = "ASK_REQUIRED" if level in {"HIGH", "CRITICAL"} and direction_required else "EVIDENCE_FIRST" if ambiguities else "SAFE_INFERENCE"
+                intent_ok = intent_ok and observed_ambiguity == expected_ambiguity
+            intent_contract_hits += int(intent_ok)
+        else:
+            intent_ok = True
+
         selected_total += len(selected)
         unnecessary += sum(skill not in allowed for skill in selected)
         forbidden_hits += len(forbidden.intersection(selected))
@@ -138,7 +173,7 @@ def evaluate(cases_path: Path, gold_path: Path, predictions_path: Path) -> dict[
         allowed_plugins = {PLUGIN_FOR[skill] for skill in allowed if skill in PLUGIN_FOR}
         wrong_plugin += sum(PLUGIN_FOR.get(skill) not in allowed_plugins for skill in selected)
 
-        case_ok = actual == expected
+        case_ok = actual == expected and intent_ok
         if expected == "SELECT":
             select_total += 1
             if actual in {"NONE", "UNKNOWN", "REJECT"}:
@@ -189,6 +224,7 @@ def evaluate(cases_path: Path, gold_path: Path, predictions_path: Path) -> dict[
         "false_rejection_rate": _ratio(false_rejections, select_total),
         "deferred_recall": _ratio(deferred_hits, deferred_total),
         "guard_conservation_rate": _ratio(guard_hits, case_total),
+        "intent_contract_accuracy": _ratio(intent_contract_hits, intent_contract_total),
     }
     provenance_valid = (
         predictions_doc.get("selection_authority") == "current-chatgpt-codex-host"
@@ -205,6 +241,7 @@ def evaluate(cases_path: Path, gold_path: Path, predictions_path: Path) -> dict[
         and metrics["reject_unknown_quality"] >= float(thresholds.get("min_reject_unknown_quality", 0.85))
         and metrics["deferred_recall"] >= float(thresholds.get("min_deferred_recall", 1.0))
         and metrics["guard_conservation_rate"] == 1.0
+        and metrics["intent_contract_accuracy"] >= float(thresholds.get("min_intent_contract_accuracy", 1.0))
         and forbidden_hits == 0
         and provenance_valid
         and not failures

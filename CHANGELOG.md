@@ -1,5 +1,14 @@
 # 更新记录
 
+## 0.14.0
+
+- 智能软件工程平台升级到5.19.0：Project Architecture、Task Scope与Route Target分离，B/S项目的后端任务不再把整个项目误判为纯后端或架构冲突。
+- 新增有界Project Fact Plane与Engineering Manifest发现，只读取根Manifest、声明的Workspace根和受控未跟踪Manifest；普通路由不扫描源码、冷历史或42个Skill正文。
+- 路由契约支持多意图分解、Intent DAG、否定/历史/条件/未来语义、风险分级歧义策略及候选到完成的全阶段回执，继续限制每阶段最多两个活跃Skill。
+- Community→Pro Bridge统一消费`hiker-cli/v1`机器Envelope，严格校验stdout单JSON、stderr诊断和退出码；Pro不可用时给出可观察降级状态，不把候选或失败接管误报为已应用。
+- Pro可通过有界Project Facts提供工程事实权威，Community仍负责语义路由；两侧不复制State Plane、CAS、Scheduler、Lease、Ownership或自然语言Router。
+- 语义路由Eval扩展到51个场景，新增12个对抗样本，覆盖B/S子域、否定框架、历史引用、条件迁移、多领域组合、未知与延后能力；不增加外部模型调用或默认Prompt。
+
 ## 0.12.0
 
 - 智能软件工程平台升级到5.17.0：Control Kernel统一Task状态写入口，并以operation journal明确区分PREPARED、DOMAIN_COMMITTED、TRACE_PENDING、COMPLETE和受控恢复。

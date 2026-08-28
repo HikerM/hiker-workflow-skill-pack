@@ -1,10 +1,10 @@
 # Hiker 中文工程能力仓库
 
-<!-- repository-facts: repo=0.13.0; engineering=5.18.0; plugins=5; engineering-skills=42; desktop=1.3.0; desktop-skills=5; total-skills=47 -->
+<!-- repository-facts: repo=0.14.0; engineering=5.19.0; plugins=5; engineering-skills=42; desktop=1.3.0; desktop-skills=5; total-skills=47 -->
 
 这是面向 ChatGPT/Codex 桌面应用的软件工程能力仓库。仓库已经收敛，只保留两套用途明确、安装边界独立的能力包。
 
-> 仓库版本：`0.13.0`
+> 仓库版本：`0.14.0`
 >
 > 当前规模：`2` 套能力包、共 `47` 个 Skill
 >
@@ -14,12 +14,12 @@
 
 | 能力包 | 版本 | 规模 | 适用范围 | 使用方式 |
 |---|---:|---:|---|---|
-| 智能软件工程平台 | 5.18.0 | 5 个插件、42 个原子 Skill | 从零开发、存量接管、B/S、C/S、Service/Data、产品级UI与错误体验、大型工程、多会话、Git、测试、质量与发布 | ChatGPT 语义选择，规则守门，按阶段懒加载 |
+| 智能软件工程平台 | 5.19.0 | 5 个插件、42 个原子 Skill | 从零开发、存量接管、B/S、C/S、Service/Data、产品级UI与错误体验、大型工程、多会话、Git、测试、质量与发布 | ChatGPT 语义选择，规则守门，按阶段懒加载 |
 | 桌面软件等价重建 | 1.3.0 | 5 个 Skill | 已授权桌面软件的发现、规格、技术方案、实现、差分验证与发布 | 用户手动选择，阶段路由每次只加载一个原子 Skill |
 
 两套能力不会在同一消息中自动全部加载。详细说明见 [能力包中文详解](docs/CAPABILITY_PACKS_ZH.md)，完整名称见 [Skill 索引](docs/SKILL_INDEX.md)。
 
-## 智能软件工程平台 5.18.0
+## 智能软件工程平台 5.19.0
 
 平台由一个轻量入口和42个原子 Skill 组成。ChatGPT 根据用户当前目标、否定项、阶段和有界工程证据选择最多两个原子 Skill；确定性脚本只校验候选存在性、阶段、架构证据、权限、源码身份和数量，不按关键词代替模型决策。
 
@@ -33,7 +33,17 @@
 | 工作区与多会话协作 | 12 | 项目状态、任务生命周期、多智能体、文件锁、Worktree、实现收敛、合并和验收闭环 |
 | 质量、风险与发布 | 6 | 独立设计复审、完整变更风险、交互冲突、工程图谱、回归范围和发布审核 |
 
-### 5.18.0 的增强重点
+### 5.19.0 的增强重点
+
+- **项目事实与任务范围分离**：Project Architecture、Project Topology、Task Scope与Route Target是不同事实。B/S项目只做后端任务时仍保持`bs`项目架构，不再产生伪冲突。
+- **有界Project Fact Plane**：路由只读取根Manifest、声明的Workspace根、Git跟踪Manifest和受控未跟踪Manifest；跳过源码、依赖、构建目录、冷历史与完整`.ai`库存，日常读取不随项目年龄线性增长。
+- **多意图Route Contract**：结构化保留当前、否定、条件、历史、已解决、未来、假设和延后语义，并以Intent DAG表达依赖；安全歧义继续，缺证据先检查，高风险歧义才阻断。
+- **候选不等于应用**：回执明确区分candidate、selected、loaded、applied、completed、deferred和rejected，脚本只校验模型给出的语义候选，第三个能力必须延后且不得静默丢失。
+- **Community→Pro机器契约**：Bridge只接受`hiker-cli/v1`单JSON Envelope，校验stdout、stderr和退出码；Pro不可用或协议不兼容时Community可观察降级，Pro接管失败不会伪装成已生效。
+- **权威边界保持单一**：Community负责语义理解和Skill路由，Pro仅提供有界Project Facts与持久工程权威；Community不复制Pro State Plane，Pro不实现第二套自然语言Router。
+- **真实与对抗Eval**：51个路由场景含12个高难样本，覆盖否定技术、历史引用、条件迁移、B/S子域、多领域组合、模糊需求、无需Skill与延后能力；不增加外部模型调用、默认Prompt或Skill数量。
+
+### 保持不变的 5.18 工程深化
 
 - **B/S 与 C/S 工程深化**：顶层按 Engineering Control Core、B/S、C/S、共享 Service & Data、Assurance 分层；Vue、React、Laravel、Unity、Qt 等仍只是按项目事实选择的 Technology Adapter。
 - **语义 UI Design IR**：用业务任务、信息层级、阅读路径、状态、交互与验收表达设计，不把页面锁成 sidebar/cards/columns 模板；视觉输入严格区分 `OBSERVED`、`INFERRED` 与 `UNKNOWN`。
@@ -99,18 +109,18 @@ py -3 -B .\tools\verify_desktop_install.py
 
 安装器复制并注册五个插件、更新个人 Marketplace、写入桌面端启用配置、生成唯一活动版本缓存并合并全局性能内核。已打开任务保存的是启动时能力快照，不能可靠原地热换：旧任务先Checkpoint并停止写入，再由新任务验证五插件版本指纹后接管；若新任务仍指向旧缓存，必须重启桌面端。
 
-### 5.18发布验证
+### 5.19发布验证
 
-当前正式源码版本为 `5.18.0+codex.20260828021701`。发布流水线已完成以下验证：
+当前正式源码版本为 `5.19.0+codex.20260828142913`。发布流水线已完成以下验证：
 
-- 五插件297项测试全部通过，源码测试指纹为 `23701ec95b60754c38af`；
+- 五插件342项测试全部通过，源码测试指纹以 `test-results.json` 为准；
 - 5个插件、42个Skill的架构、隐私、版本、性能和发布一致性门禁通过；
-- 39项宿主语义路由Eval通过，未调用外部模型API；
+- 51项宿主语义路由Eval（含12项对抗语料）通过，未调用外部模型API；
 - Long Task、Crash Recovery、Multi Session、Goal Change、Event Pressure以及5.18产品保障E2E通过；
 - AI Freedom、Governance Tax、Incrementality和Control Precision四项性能验收通过；
-- 五个5.18 ZIP与源码逐文件一致，SHA-256校验和隔离Clean Install验证通过。
+- 五个5.19 ZIP已由当前源码生成，SHA-256校验和、逐文件Package Facts及隔离Clean Install验证全部通过。
 
-发行包位于 `skill-groups/ai-software-engineering-platform-enterprise/dist/`，SHA-256以同目录的 `SHA256SUMS.txt` 为准。完整证据见 [5.18性能健康报告](skill-groups/ai-software-engineering-platform-enterprise/docs/5.18-performance-health-report.md) 和 [五插件测试结果](skill-groups/ai-software-engineering-platform-enterprise/test-results.json)。任一发布Gate失败时，打包器不会更新正式发行目录。安装不会自动执行；升级前必须停止旧任务，并确保五个插件只有一个活动版本。
+发行包位于 `skill-groups/ai-software-engineering-platform-enterprise/dist/`，SHA-256以同目录的 `SHA256SUMS.txt` 为准。性能基线见 [5.18性能健康报告](skill-groups/ai-software-engineering-platform-enterprise/docs/5.18-performance-health-report.md)，当前证据见 [五插件测试结果](skill-groups/ai-software-engineering-platform-enterprise/test-results.json)。任一发布Gate失败时，打包器不会更新正式发行目录。安装不会自动执行；升级前必须停止旧任务，并确保五个插件只有一个活动版本。
 
 ## 桌面软件等价重建 1.3.0
 

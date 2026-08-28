@@ -86,6 +86,55 @@ class CommunityProBridgeTests(unittest.TestCase):
         self.assertEqual("PRO_LIVE_ADOPTION_PROTOCOL_INCOMPATIBLE", report["reason"])
         self.assertEqual(1, len(calls))
 
+    def test_versioned_runtime_locator_wins_over_stale_path_without_directory_scan(self):
+        calls: list[list[str]] = []
+
+        def run(command, **_kwargs):
+            calls.append(command)
+            return subprocess.CompletedProcess(command, 0, _protocol_version(), "")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            local = Path(temporary)
+            home = local / "install"
+            executable = home / "bin" / ("hiker.exe" if sys.platform == "win32" else "hiker")
+            executable.parent.mkdir(parents=True)
+            executable.write_bytes(b"launcher")
+            locator = local / "Hiker" / "pro-runtime.json"
+            locator.parent.mkdir(parents=True)
+            locator.write_text(json.dumps({
+                "contract_version": "hiker-pro-locator/v1",
+                "hiker_home": str(home.resolve()),
+                "executable": str(executable.resolve()),
+                "runtime_identity": "runtime-new",
+                "install_generation": 2,
+                "activation_epoch": "epoch",
+            }), encoding="utf-8")
+            with patch("community_pro_bridge.shutil.which", return_value="C:/stale/hiker.exe"):
+                report = detect_pro_runtime({"LOCALAPPDATA": str(local)}, run)
+
+        self.assertTrue(report["pro_available"])
+        self.assertEqual("PRO_RUNTIME_LOCATOR", report["detection_source"])
+        self.assertEqual(str(executable.resolve()), calls[0][0])
+
+    def test_invalid_locator_is_ignored_and_path_fallback_remains_observable(self):
+        calls: list[list[str]] = []
+
+        def run(command, **_kwargs):
+            calls.append(command)
+            return subprocess.CompletedProcess(command, 0, _protocol_version(), "")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            local = Path(temporary)
+            locator = local / "Hiker" / "pro-runtime.json"
+            locator.parent.mkdir(parents=True)
+            locator.write_text('{"contract_version":"unknown","executable":"C:/untrusted.exe"}', encoding="utf-8")
+            with patch("community_pro_bridge.shutil.which", return_value="C:/path/hiker.exe"):
+                report = detect_pro_runtime({"LOCALAPPDATA": str(local)}, run)
+
+        self.assertTrue(report["pro_available"])
+        self.assertEqual("PATH", report["detection_source"])
+        self.assertEqual("C:/path/hiker.exe", calls[0][0])
+
     def test_old_pro_runtime_without_machine_contract_falls_back_observably(self):
         def run(command, **_kwargs):
             return subprocess.CompletedProcess(command, 0, "5.19.0-rc.7 runtime/0.1.0 schema/3.0.0\n", "")

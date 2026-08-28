@@ -39,7 +39,7 @@
 - **有界Project Fact Plane**：路由只读取根Manifest、声明的Workspace根、Git跟踪Manifest和受控未跟踪Manifest；跳过源码、依赖、构建目录、冷历史与完整`.ai`库存，日常读取不随项目年龄线性增长。
 - **多意图Route Contract**：结构化保留当前、否定、条件、历史、已解决、未来、假设和延后语义，并以Intent DAG表达依赖；安全歧义继续，缺证据先检查，高风险歧义才阻断。
 - **候选不等于应用**：回执明确区分candidate、selected、loaded、applied、completed、deferred和rejected，脚本只校验模型给出的语义候选，第三个能力必须延后且不得静默丢失。
-- **Community→Pro机器契约**：Bridge只接受`hiker-cli/v1`单JSON Envelope，校验stdout、stderr和退出码；Pro不可用或协议不兼容时Community可观察降级，Pro接管失败不会伪装成已生效。
+- **Community→Pro机器契约**：Bridge只接受`hiker-cli/v1`单JSON Envelope，校验stdout、stderr和退出码；Pro不可用或协议不兼容时Community可观察降级，Pro接管失败不会伪装成已生效。Bridge按`HIKER_EXECUTABLE`、`HIKER_HOME/bin`、64KB上限的`%LOCALAPPDATA%/Hiker/pro-runtime.json`、PATH依次解析稳定 Launcher，因此Pro原子升级后不要求重启Codex，也不扫描项目`.ai`或版本目录。
 - **权威边界保持单一**：Community负责语义理解和Skill路由，Pro仅提供有界Project Facts与持久工程权威；Community不复制Pro State Plane，Pro不实现第二套自然语言Router。
 - **真实与对抗Eval**：51个路由场景含12个高难样本，覆盖否定技术、历史引用、条件迁移、B/S子域、多领域组合、模糊需求、无需Skill与延后能力；不增加外部模型调用、默认Prompt或Skill数量。
 

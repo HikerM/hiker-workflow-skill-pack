@@ -17,6 +17,8 @@ VALID_PRO_STATES = {"PRO_ACTIVE", "PRO_DEGRADED", "COMMUNITY_FALLBACK", "PRO_REQ
 VALID_MACHINE_EXIT_CODES = {0, 2, 64, 70}
 PROBE_TIMEOUT_SECONDS = 5
 ACTION_TIMEOUT_SECONDS = 30
+LOCATOR_CONTRACT_VERSION = "hiker-pro-locator/v1"
+MAX_LOCATOR_BYTES = 64 * 1024
 
 
 def _result(status: str, **values: Any) -> dict[str, Any]:
@@ -35,6 +37,45 @@ def _provider_session_available(environment: Mapping[str, str]) -> bool:
         environment.get(name, "").strip()
         for name in ("HIKER_PROVIDER_SESSION_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID")
     )
+
+
+def _read_runtime_locator(environment: Mapping[str, str]) -> str | None:
+    configured = environment.get("HIKER_PRO_LOCATOR", "").strip()
+    local_app_data = environment.get("LOCALAPPDATA", "").strip()
+    locator = Path(configured) if configured else Path(local_app_data) / "Hiker" / "pro-runtime.json" if local_app_data else None
+    if locator is None or not locator.is_absolute() or not locator.is_file() or locator.is_symlink():
+        return None
+    try:
+        if locator.stat().st_size <= 0 or locator.stat().st_size > MAX_LOCATOR_BYTES:
+            return None
+        payload = json.loads(locator.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict) or payload.get("contract_version") != LOCATOR_CONTRACT_VERSION:
+            return None
+        home = Path(str(payload.get("hiker_home", "")))
+        executable = Path(str(payload.get("executable", "")))
+        if not home.is_absolute() or not executable.is_absolute() or executable.is_symlink():
+            return None
+        expected = home / "bin" / ("hiker.exe" if os.name == "nt" else "hiker")
+        if executable.resolve() != expected.resolve() or not executable.is_file():
+            return None
+        return str(executable.resolve())
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+
+
+def _resolve_pro_executable(environment: Mapping[str, str]) -> tuple[str | None, str]:
+    configured = environment.get("HIKER_EXECUTABLE", "").strip()
+    if configured:
+        return configured, "HIKER_EXECUTABLE"
+    configured_home = environment.get("HIKER_HOME", "").strip()
+    if configured_home:
+        home_executable = Path(configured_home) / "bin" / ("hiker.exe" if os.name == "nt" else "hiker")
+        if home_executable.is_file() and not home_executable.is_symlink():
+            return str(home_executable.resolve()), "HIKER_HOME"
+    located = _read_runtime_locator(environment)
+    if located:
+        return located, "PRO_RUNTIME_LOCATOR"
+    return shutil.which("hiker"), "PATH"
 
 
 def _parse_semantic_version(value: Any) -> tuple[int, int, int] | None:
@@ -96,7 +137,7 @@ def detect_pro_runtime(
     runner: Any = subprocess.run,
 ) -> dict[str, Any]:
     effective_environment = os.environ if environment is None else environment
-    executable = effective_environment.get("HIKER_EXECUTABLE", "").strip() or shutil.which("hiker")
+    executable, detection_source = _resolve_pro_executable(effective_environment)
     if not executable:
         return _result("COMMUNITY_FALLBACK", reason="PRO_RUNTIME_NOT_FOUND", pro_available=False)
     try:
@@ -142,6 +183,7 @@ def detect_pro_runtime(
         live_adoption_protocol=protocol_version,
         provider_session_available=_provider_session_available(effective_environment),
         machine_contract=MACHINE_CONTRACT_VERSION,
+        detection_source=detection_source,
     )
 
 

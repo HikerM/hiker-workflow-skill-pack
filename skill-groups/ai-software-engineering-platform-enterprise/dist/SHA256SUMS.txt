@@ -1,5 +1,5 @@
-c6212f04893b3e03021206f5b1c405a5a0d6f46608088690318596771ab368af  ai-engineering-core-5.19.0.zip
+240dd6ebcc23b0cb9740ae879d1a0dcc8af4399f54ccd48a7c77ea98d1fea59b  ai-engineering-core-5.19.0.zip
 1c33a9af4a80822ba981523ff819f2acfde920231ad99d21f5d60cef91a17d93  ai-engineering-quality-5.19.0.zip
 083ccc69d13dbdce1a841f7b84c1ecab5e62c90d096884ac3bb2db8e7f53218b  ai-engineering-unity-5.19.0.zip
 425f6717729899843361c8b97a01584c1b8a7f33fe00b3f87f4f15fb3ab04ea9  ai-engineering-web-5.19.0.zip
-bb9da6a3e09aa425610f7f7e0d34cc5c46f7933217554d700825574982463c83  ai-engineering-workspace-5.19.0.zip
+ce83bdde523c096db5bf837e9608cc4e141df0e99dc4d3e40ce82b6b5f3df4d8  ai-engineering-workspace-5.19.0.zip

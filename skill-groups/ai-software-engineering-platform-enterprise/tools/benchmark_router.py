@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import statistics
 import subprocess
 import sys
@@ -28,6 +29,9 @@ def benchmark(runs: int, max_p95_ms: float, max_raw_p95_ms: float = 500.0) -> di
     raw_samples = []
     startup_samples = []
     incremental_samples = []
+    route_environment = os.environ.copy()
+    for name in ("HIKER_PROVIDER_SESSION_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
+        route_environment.pop(name, None)
     with tempfile.TemporaryDirectory() as td:
         root = Path(td); (root / "package.json").write_text('{"dependencies":{"react":"19","fastify":"5"}}', encoding="utf-8")
         for index in range(runs):
@@ -46,7 +50,7 @@ def benchmark(runs: int, max_p95_ms: float, max_raw_p95_ms: float = 500.0) -> di
                 "--project-mode", "existing", "--architecture", architecture,
                 "--stage", stage, "--current-action", "基准测试当前阶段",
                 "--candidate", skill,
-            ], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=10)
+            ], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=10, env=route_environment)
             if result.returncode: raise RuntimeError(result.stderr.decode("utf-8", errors="replace"))
             raw_ms = (time.perf_counter() - start) * 1000
             startup_samples.append(startup_ms)

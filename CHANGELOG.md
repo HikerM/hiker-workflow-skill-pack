@@ -6,6 +6,7 @@
 - 新增有界Project Fact Plane与Engineering Manifest发现，只读取根Manifest、声明的Workspace根和受控未跟踪Manifest；普通路由不扫描源码、冷历史或42个Skill正文。
 - 路由契约支持多意图分解、Intent DAG、否定/历史/条件/未来语义、风险分级歧义策略及候选到完成的全阶段回执，继续限制每阶段最多两个活跃Skill。
 - Community→Pro Bridge统一消费`hiker-cli/v1`机器Envelope，严格校验stdout单JSON、stderr诊断和退出码；Pro不可用时给出可观察降级状态，不把候选或失败接管误报为已应用。
+- Brownfield已有Project缺少Current Goal/Task Authority时，Bridge只接受Controller、Provider或Runtime正式提供的唯一有界事实，调用Pro原子建立Goal与Task后再执行既有attach；歧义、来源不可信或安全边界缺失时失败关闭。
 - Pro可通过有界Project Facts提供工程事实权威，Community仍负责语义路由；两侧不复制State Plane、CAS、Scheduler、Lease、Ownership或自然语言Router。
 - 语义路由Eval扩展到51个场景，新增12个对抗样本，覆盖B/S子域、否定框架、历史引用、条件迁移、多领域组合、未知与延后能力；不增加外部模型调用或默认Prompt。
 

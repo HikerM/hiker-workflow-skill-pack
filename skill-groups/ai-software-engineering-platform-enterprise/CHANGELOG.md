@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 5.19.0
+
+- Community→Pro Bridge新增Brownfield Current Authority建立流程：仅在已有Project、唯一Current Goal/Task Authority、正式Provider Session和安全边界均可验证时，调用Pro `establish-current-authority`，成功后继续既有`attach`。
+- Current Goal与Task作为一个原子CAS批次建立；重复准入与重复attach保持幂等零写，歧义、来源不可信、旧Checkpoint推断或不完整Authority事实均失败关闭。
+- 普通无Provider Session路由保持Community零探测快速路径，默认路由Skill与5.17固定上下文指纹不变。
+
 ## 5.18.0
 
 - 在5.17控制平面上增加B/S、C/S、共享Service & Data和Assurance逻辑分层；具体框架继续作为按项目事实选择的Technology Adapter，插件仍为5个、Skill仍为42个。

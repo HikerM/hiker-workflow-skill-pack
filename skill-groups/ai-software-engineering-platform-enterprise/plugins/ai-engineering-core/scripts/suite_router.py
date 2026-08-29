@@ -568,11 +568,12 @@ def _apply_route_boundary_adoption(
     root: Path,
     result: dict[str, Any],
     detected: dict[str, Any] | None = None,
+    authority_facts: dict[str, Any] | None = None,
 ) -> None:
     """Adopt at accepted admission, before any selected Skill can be loaded."""
     if result.get("guard_decision") != "ACCEPT":
         return
-    adoption = router_boundary_adoption(root, detected=detected)
+    adoption = router_boundary_adoption(root, detected=detected, authority_facts=authority_facts)
     result["pro_live_adoption"] = adoption
     result["pro_state"] = adoption.get("pro_state", "COMMUNITY_FALLBACK")
     if adoption.get("adopted") or adoption.get("pro_state") == "COMMUNITY_FALLBACK":
@@ -588,6 +589,31 @@ def _apply_route_boundary_adoption(
             "message": "Pro Runtime存在但未完成安全接管；已明确进入DEGRADED/BLOCKED，禁止伪装为Pro已生效",
         }
     )
+
+
+def _current_authority_facts(args: argparse.Namespace) -> dict[str, Any] | None:
+    values = (
+        args.current_goal_statement,
+        args.goal_authority_source,
+        args.current_task_statement,
+        args.task_authority_source,
+    )
+    if not any(values):
+        return None
+    return {
+        "goal": {
+            "statement": args.current_goal_statement,
+            "state": args.current_goal_state,
+            "authority_source": args.goal_authority_source,
+            "authority_generation": args.goal_authority_generation,
+        },
+        "task": {
+            "statement": args.current_task_statement,
+            "state": args.current_task_state,
+            "authority_source": args.task_authority_source,
+            "authority_generation": args.task_authority_generation,
+        },
+    }
 
 
 def main() -> int:
@@ -608,6 +634,14 @@ def main() -> int:
     parser.add_argument("--negated-term", action="append", default=[])
     parser.add_argument("--future-term", action="append", default=[])
     parser.add_argument("--follow-up-action", action="append", default=[])
+    parser.add_argument("--current-goal-statement")
+    parser.add_argument("--current-goal-state", default="ACTIVE")
+    parser.add_argument("--goal-authority-source")
+    parser.add_argument("--goal-authority-generation", type=int, default=0)
+    parser.add_argument("--current-task-statement")
+    parser.add_argument("--current-task-state", default="IN_PROGRESS")
+    parser.add_argument("--task-authority-source")
+    parser.add_argument("--task-authority-generation", type=int, default=0)
     args = parser.parse_args()
     root = Path(args.root).resolve()
     if args.inspect:
@@ -623,7 +657,7 @@ def main() -> int:
                 if isinstance(facts_report.get("facts"), dict):
                     pro_facts = facts_report
         result = route(root, proposal if proposal is not None else args.request, pro_facts)
-        _apply_route_boundary_adoption(root, result, detected)
+        _apply_route_boundary_adoption(root, result, detected, _current_authority_facts(args))
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0 if result.get("guard_decision") != "REJECT" else 2
 

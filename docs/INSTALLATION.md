@@ -2,11 +2,11 @@
 
 仓库只包含“智能软件工程平台”和“桌面软件等价重建”。两者独立安装，不要把插件目录平铺复制，也不要把桌面重建的参考、脚本和模板拆散。
 
-<!-- engineering-current-facts: version=5.19.0; plugins=5; skills=42; tests=344 -->
+<!-- engineering-current-facts: version=5.19.0; plugins=5; skills=42; tests=350 -->
 
 ## 智能软件工程平台 5.19.0
 
-Hiker Engineering Capability System（Hiker 工程能力系统）运行在 ChatGPT Desktop / Codex 提供的 Agent Runtime 之上；它不是独立 Runtime，也不接入第二个模型。当前工程套件包含 5 个插件、42 个 Skill，发布源码对应 344 项源码测试。它是普通软件工程任务唯一允许自动进入的能力包。
+Hiker Engineering Capability System（Hiker 工程能力系统）运行在 ChatGPT Desktop / Codex 提供的 Agent Runtime 之上；它不是独立 Runtime，也不接入第二个模型。当前工程套件包含 5 个插件、42 个 Skill，发布源码对应 350 项源码测试。它是普通软件工程任务唯一允许自动进入的能力包。
 
 ```powershell
 Set-Location .\skill-groups\ai-software-engineering-platform-enterprise

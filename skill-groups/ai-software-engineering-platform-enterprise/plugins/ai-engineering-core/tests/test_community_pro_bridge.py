@@ -14,7 +14,14 @@ from unittest.mock import patch
 PLUGIN = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PLUGIN / "scripts"))
 
-from community_pro_bridge import detect_pro_runtime, invoke_bridge, query_project_facts, router_boundary_adoption
+from community_pro_bridge import (
+    detect_pro_runtime,
+    establish_current_authority,
+    invoke_bridge,
+    normalize_current_authority_facts,
+    query_project_facts,
+    router_boundary_adoption,
+)
 import suite_router
 
 
@@ -66,7 +73,183 @@ def _adoption(command: str = "attach", status: str = "LIVE_SESSION_ADOPTED") -> 
     )
 
 
+def _authority_facts() -> dict:
+    return {
+        "goal": {
+            "statement": "Keep the current business goal active",
+            "state": "ACTIVE",
+            "authority_source": "CONTROLLER_CURRENT_GOAL",
+            "authority_generation": 7,
+        },
+        "task": {
+            "statement": "Continue the unique active execution unit",
+            "state": "IN_PROGRESS",
+            "authority_source": "CONTROLLER_CURRENT_ACTIVE_TASK",
+            "authority_generation": 3,
+        },
+    }
+
+
+def _authority_establishment(status: str = "ESTABLISHED", *, ok: bool = True, exit_code: int = 0) -> str:
+    return _envelope(
+        "establish-current-authority",
+        status,
+        ok=ok,
+        exit_code=exit_code,
+        pro_state="PRO_ACTIVE" if ok else "PRO_REQUIRED_BLOCKED",
+        project_id="project-1",
+        goal_id="goal-1",
+        task_id="task-1",
+        goal_authority_source="CONTROLLER_CURRENT_GOAL",
+        task_authority_source="CONTROLLER_CURRENT_ACTIVE_TASK",
+        provider_session_fingerprint="session-hash",
+        operation_id="current-authority-operation",
+        safe_boundary=True,
+        state_generation_before=10,
+        state_generation_after=11,
+        state_reads=8,
+        state_writes=2 if status == "ESTABLISHED" else 0,
+        idempotent_replay=status == "ALREADY_ESTABLISHED",
+        reasons=[],
+    )
+
+
 class CommunityProBridgeTests(unittest.TestCase):
+    def test_current_authority_facts_are_bounded_and_deterministically_fingerprinted(self):
+        first, error = normalize_current_authority_facts(_authority_facts())
+        second, second_error = normalize_current_authority_facts(_authority_facts())
+        self.assertIsNone(error)
+        self.assertIsNone(second_error)
+        self.assertEqual(first, second)
+        self.assertEqual(64, len(first["goal"]["source_fingerprint"]))
+        self.assertEqual(64, len(first["task"]["source_fingerprint"]))
+
+    def test_untrusted_authority_source_fails_closed(self):
+        facts = _authority_facts()
+        facts["task"]["authority_source"] = "MODEL_FREE_SUMMARY"
+        normalized, error = normalize_current_authority_facts(facts)
+        self.assertIsNone(normalized)
+        self.assertEqual("TASK_AUTHORITY_SOURCE_UNTRUSTED", error)
+
+    def test_missing_authority_facts_blocks_without_guessing_or_establishment(self):
+        calls: list[list[str]] = []
+
+        def run(command, **_kwargs):
+            calls.append(command)
+            if command[1] == "version":
+                return subprocess.CompletedProcess(command, 0, _protocol_version(), "")
+            return subprocess.CompletedProcess(
+                command,
+                2,
+                _envelope(
+                    "attach", "GOAL_ADOPTION_REQUIRED", ok=False, exit_code=2,
+                    pro_state="PRO_DEGRADED", reasons=["NO_PROVABLE_CURRENT_GOAL"],
+                ),
+                "",
+            )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            report = router_boundary_adoption(
+                Path(temporary),
+                {"HIKER_EXECUTABLE": "C:/fixture/hiker.exe", "CODEX_THREAD_ID": "session"},
+                run,
+            )
+        self.assertEqual("AUTHORITY_AMBIGUOUS", report["status"])
+        self.assertEqual("CURRENT_AUTHORITY_FACTS_REQUIRED", report["reason"])
+        self.assertTrue(report["ask_required"])
+        self.assertEqual(2, len(calls))
+
+    def test_brownfield_authority_establishes_then_existing_attach_live_adopts(self):
+        calls: list[list[str]] = []
+
+        def run(command, **_kwargs):
+            calls.append(command)
+            if command[1] == "version":
+                return subprocess.CompletedProcess(command, 0, _protocol_version(), "")
+            if command[1] == "establish-current-authority":
+                return subprocess.CompletedProcess(command, 0, _authority_establishment(), "")
+            if sum(call[1] == "attach" for call in calls) == 1:
+                return subprocess.CompletedProcess(
+                    command,
+                    2,
+                    _envelope(
+                        "attach", "GOAL_ADOPTION_REQUIRED", ok=False, exit_code=2,
+                        pro_state="PRO_DEGRADED", reasons=["NO_PROVABLE_CURRENT_GOAL"],
+                    ),
+                    "",
+                )
+            return subprocess.CompletedProcess(command, 0, _adoption(), "")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            report = router_boundary_adoption(
+                Path(temporary),
+                {"HIKER_EXECUTABLE": "C:/fixture/hiker.exe", "CODEX_THREAD_ID": "raw-session"},
+                run,
+                authority_facts=_authority_facts(),
+            )
+        self.assertEqual("LIVE_SESSION_ADOPTED", report["status"])
+        self.assertEqual("ESTABLISHED", report["authority_establishment"]["status"])
+        self.assertEqual(["version", "attach", "establish-current-authority", "attach"], [call[1] for call in calls])
+        self.assertNotIn("raw-session", json.dumps(report))
+        self.assertNotIn(_authority_facts()["goal"]["statement"], json.dumps(report))
+        self.assertNotIn(_authority_facts()["task"]["statement"], json.dumps(report))
+
+    def test_authority_ambiguity_never_continues_to_attach(self):
+        calls: list[list[str]] = []
+
+        def run(command, **_kwargs):
+            calls.append(command)
+            if command[1] == "version":
+                return subprocess.CompletedProcess(command, 0, _protocol_version(), "")
+            if command[1] == "attach":
+                return subprocess.CompletedProcess(
+                    command,
+                    2,
+                    _envelope(
+                        "attach", "TASK_ADOPTION_REQUIRED", ok=False, exit_code=2,
+                        pro_state="PRO_DEGRADED", reasons=["NO_PROVABLE_CURRENT_TASK"],
+                    ),
+                    "",
+                )
+            return subprocess.CompletedProcess(
+                command,
+                2,
+                _authority_establishment("AUTHORITY_AMBIGUOUS", ok=False, exit_code=2),
+                "",
+            )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            report = router_boundary_adoption(
+                Path(temporary),
+                {"HIKER_EXECUTABLE": "C:/fixture/hiker.exe", "CODEX_THREAD_ID": "session"},
+                run,
+                authority_facts=_authority_facts(),
+            )
+        self.assertEqual("AUTHORITY_AMBIGUOUS", report["status"])
+        self.assertEqual(["version", "attach", "establish-current-authority"], [call[1] for call in calls])
+
+    def test_establishment_invokes_formal_machine_operation_without_manual_ids(self):
+        calls: list[list[str]] = []
+
+        def run(command, **_kwargs):
+            calls.append(command)
+            output = _protocol_version() if command[1] == "version" else _authority_establishment()
+            return subprocess.CompletedProcess(command, 0, output, "")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            report = establish_current_authority(
+                Path(temporary),
+                "NEW_TASK",
+                _authority_facts(),
+                {"HIKER_EXECUTABLE": "C:/fixture/hiker.exe", "CODEX_THREAD_ID": "raw-session"},
+                run,
+            )
+        self.assertTrue(report["authority_established"])
+        self.assertNotIn("--project-id", calls[1])
+        self.assertNotIn("--goal-id", calls[1])
+        self.assertNotIn("--task-id", calls[1])
+        self.assertNotIn("--provider-session-id", calls[1])
+        self.assertNotIn("raw-session", " ".join(calls[1]))
     def test_missing_pro_runtime_falls_back_without_project_scan(self):
         with patch("community_pro_bridge.shutil.which", return_value=None):
             report = detect_pro_runtime({})

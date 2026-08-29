@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -19,6 +20,18 @@ PROBE_TIMEOUT_SECONDS = 5
 ACTION_TIMEOUT_SECONDS = 30
 LOCATOR_CONTRACT_VERSION = "hiker-pro-locator/v1"
 MAX_LOCATOR_BYTES = 64 * 1024
+AUTHORITY_REQUIRED_STATUSES = {"GOAL_ADOPTION_REQUIRED", "TASK_ADOPTION_REQUIRED"}
+AUTHORITY_ESTABLISHED_STATUSES = {"ESTABLISHED", "ALREADY_ESTABLISHED", "ADOPT_EXISTING_AUTHORITY"}
+TRUSTED_GOAL_AUTHORITY_SOURCES = {
+    "CONTROLLER_CURRENT_GOAL",
+    "PROVIDER_CURRENT_GOAL",
+    "RUNTIME_CURRENT_GOAL_CONTRACT",
+}
+TRUSTED_TASK_AUTHORITY_SOURCES = {
+    "CONTROLLER_CURRENT_ACTIVE_TASK",
+    "PROVIDER_CURRENT_ACTIVE_TASK",
+    "RUNTIME_CURRENT_TASK_CONTRACT",
+}
 
 
 def _result(status: str, **values: Any) -> dict[str, Any]:
@@ -215,6 +228,162 @@ def _run_machine_action(
     return payload, completed, error
 
 
+def _authority_fact(
+    value: Any,
+    kind: str,
+) -> tuple[dict[str, Any] | None, str | None]:
+    if not isinstance(value, Mapping):
+        return None, f"{kind.upper()}_AUTHORITY_MISSING"
+    statement = str(value.get("statement", "")).strip()
+    state = str(value.get("state", "")).strip().upper()
+    source = str(value.get("authority_source", "")).strip().upper()
+    generation = value.get("authority_generation", 0)
+    accepted_states = {"ACTIVE", "CURRENT", "IN_PROGRESS"} if kind == "goal" else {"ACTIVE", "CURRENT", "IN_PROGRESS", "RUNNING"}
+    accepted_sources = TRUSTED_GOAL_AUTHORITY_SOURCES if kind == "goal" else TRUSTED_TASK_AUTHORITY_SOURCES
+    if not statement or len(statement) > 4096:
+        return None, f"{kind.upper()}_STATEMENT_INVALID"
+    if state not in accepted_states:
+        return None, f"{kind.upper()}_STATE_NOT_ACTIVE"
+    if source not in accepted_sources:
+        return None, f"{kind.upper()}_AUTHORITY_SOURCE_UNTRUSTED"
+    if not isinstance(generation, int) or isinstance(generation, bool) or generation < 0:
+        return None, f"{kind.upper()}_AUTHORITY_GENERATION_INVALID"
+    supplied_fingerprint = str(value.get("source_fingerprint", "")).strip().lower()
+    canonical = json.dumps(
+        {
+            "contract_version": "hiker-controller-current-authority/v1",
+            "kind": kind.upper(),
+            "statement": statement,
+            "state": state,
+            "authority_source": source,
+            "authority_generation": generation,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    computed_fingerprint = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    if supplied_fingerprint and supplied_fingerprint != computed_fingerprint:
+        return None, f"{kind.upper()}_SOURCE_FINGERPRINT_MISMATCH"
+    return {
+        "statement": statement,
+        "state": state,
+        "authority_source": source,
+        "source_fingerprint": computed_fingerprint,
+        "authority_generation": generation,
+    }, None
+
+
+def normalize_current_authority_facts(
+    authority_facts: Mapping[str, Any] | None,
+) -> tuple[dict[str, dict[str, Any]] | None, str | None]:
+    if not isinstance(authority_facts, Mapping):
+        return None, "CURRENT_AUTHORITY_FACTS_REQUIRED"
+    goal, goal_error = _authority_fact(authority_facts.get("goal"), "goal")
+    if goal_error:
+        return None, goal_error
+    task, task_error = _authority_fact(authority_facts.get("task"), "task")
+    if task_error:
+        return None, task_error
+    return {"goal": goal, "task": task}, None
+
+
+def establish_current_authority(
+    root: Path,
+    boundary_proof: str | None,
+    authority_facts: Mapping[str, Any] | None,
+    environment: Mapping[str, str] | None = None,
+    runner: Any = subprocess.run,
+    detected: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    effective_environment = os.environ if environment is None else environment
+    if not _provider_session_available(effective_environment):
+        return _result("COMMUNITY_FALLBACK", reason="PROVIDER_SESSION_UNAVAILABLE", pro_available=False)
+    detected = detected or detect_pro_runtime(effective_environment, runner)
+    if not detected.get("pro_available"):
+        return detected
+    if not root.is_dir():
+        return _result("BLOCKED", pro_state="PRO_REQUIRED_BLOCKED", reason="PROJECT_ROOT_NOT_FOUND", pro_available=True)
+    if boundary_proof not in {"NEW_TASK", "TURN_TERMINAL", "NATURAL_CHECKPOINT", "RECOVERY_CHECKPOINT"}:
+        return _result(
+            "WAIT_SAFE_BOUNDARY",
+            pro_state="PRO_DEGRADED",
+            reason="SAFE_BOUNDARY_NOT_CONFIRMED",
+            pro_available=True,
+        )
+    normalized, authority_error = normalize_current_authority_facts(authority_facts)
+    if authority_error:
+        return _result(
+            "AUTHORITY_AMBIGUOUS",
+            pro_state="PRO_REQUIRED_BLOCKED",
+            reason=authority_error,
+            ask_required=True,
+            pro_available=True,
+        )
+    goal = normalized["goal"]
+    task = normalized["task"]
+    command = [
+        detected["executable"],
+        "establish-current-authority",
+        "--root", str(root.resolve()),
+        "--json",
+        "--boundary-proof", boundary_proof,
+        "--goal-statement", goal["statement"],
+        "--goal-state", goal["state"],
+        "--goal-authority-source", goal["authority_source"],
+        "--goal-source-fingerprint", goal["source_fingerprint"],
+        "--goal-authority-generation", str(goal["authority_generation"]),
+        "--task-statement", task["statement"],
+        "--task-state", task["state"],
+        "--task-authority-source", task["authority_source"],
+        "--task-source-fingerprint", task["source_fingerprint"],
+        "--task-authority-generation", str(task["authority_generation"]),
+    ]
+    payload, completed, contract_error = _run_machine_action(
+        root, command, "establish-current-authority", effective_environment, runner
+    )
+    if completed is None:
+        return _result(
+            "BLOCKED",
+            pro_state="PRO_REQUIRED_BLOCKED",
+            reason=contract_error,
+            pro_available=True,
+        )
+    if payload is None:
+        return _result(
+            "BLOCKED",
+            pro_state="PRO_REQUIRED_BLOCKED",
+            reason="PRO_RUNTIME_RESPONSE_INVALID",
+            diagnostic=contract_error,
+            exit_code=completed.returncode,
+            pro_available=True,
+        )
+    status = str(payload["status"])
+    return _result(
+        status,
+        pro_state=str(payload["pro_state"]),
+        pro_available=True,
+        authority_established=status in AUTHORITY_ESTABLISHED_STATUSES,
+        exit_code=completed.returncode,
+        project_id=payload.get("project_id"),
+        goal_id=payload.get("goal_id"),
+        task_id=payload.get("task_id"),
+        goal_authority_source=payload.get("goal_authority_source"),
+        task_authority_source=payload.get("task_authority_source"),
+        provider_session_fingerprint=payload.get("provider_session_fingerprint"),
+        operation_id=payload.get("operation_id"),
+        safe_boundary=payload.get("safe_boundary", False),
+        state_generation_before=payload.get("state_generation_before", 0),
+        state_generation_after=payload.get("state_generation_after", 0),
+        state_reads=payload.get("state_reads", 0),
+        state_writes=payload.get("state_writes", 0),
+        idempotent_replay=payload.get("idempotent_replay", False),
+        reasons=payload.get("reasons", []),
+        machine_contract=payload.get("contract_version"),
+        stderr_diagnostic=bool(completed.stderr.strip()),
+    )
+
+
 def invoke_bridge(
     root: Path,
     action: str,
@@ -325,9 +494,28 @@ def router_boundary_adoption(
     environment: Mapping[str, str] | None = None,
     runner: Any = subprocess.run,
     detected: dict[str, Any] | None = None,
+    authority_facts: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Adopt only at the router's existing pre-write boundary; fallback remains observable."""
-    report = invoke_bridge(root, "attach", "NEW_TASK", environment, runner, detected)
+    effective_environment = os.environ if environment is None else environment
+    resolved = detected
+    if resolved is None and _provider_session_available(effective_environment):
+        resolved = detect_pro_runtime(effective_environment, runner)
+    report = invoke_bridge(root, "attach", "NEW_TASK", effective_environment, runner, resolved)
+    if report.get("status") in AUTHORITY_REQUIRED_STATUSES:
+        establishment = establish_current_authority(
+            root,
+            "NEW_TASK",
+            authority_facts,
+            effective_environment,
+            runner,
+            resolved,
+        )
+        if not establishment.get("authority_established"):
+            establishment["initial_attach"] = report
+            return establishment
+        report = invoke_bridge(root, "attach", "NEW_TASK", effective_environment, runner, resolved)
+        report["authority_establishment"] = establishment
     if report.get("adopted"):
         report["terminal_action"] = "checkpoint"
         report["terminal_boundary"] = "TURN_TERMINAL"
@@ -338,8 +526,9 @@ def router_boundary_adoption(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Thin Community to Pro 5.19 bridge")
     parser.add_argument("--root", type=Path, required=True)
-    parser.add_argument("--action", choices=("probe", "project-facts", "attach", "resume", "checkpoint"), default="probe")
+    parser.add_argument("--action", choices=("probe", "project-facts", "establish-current-authority", "attach", "resume", "checkpoint"), default="probe")
     parser.add_argument("--boundary-proof", choices=("NEW_TASK", "TURN_TERMINAL", "NATURAL_CHECKPOINT", "RECOVERY_CHECKPOINT"))
+    parser.add_argument("--authority-json")
     return parser
 
 
@@ -349,6 +538,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         report = detect_pro_runtime()
     elif arguments.action == "project-facts":
         report = query_project_facts(arguments.root)
+    elif arguments.action == "establish-current-authority":
+        facts = json.loads(arguments.authority_json) if arguments.authority_json else None
+        report = establish_current_authority(arguments.root, arguments.boundary_proof, facts)
     else:
         report = invoke_bridge(arguments.root, arguments.action, arguments.boundary_proof)
     print(json.dumps(report, ensure_ascii=False, separators=(",", ":")))

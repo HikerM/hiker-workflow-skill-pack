@@ -1,5 +1,5 @@
 from __future__ import annotations
-import argparse,json
+import argparse,hashlib,json
 from pathlib import Path
 from change_set import collect
 from architecture_guard import evaluate as architecture_evaluate, safe_id
@@ -22,8 +22,11 @@ def policy(root:Path,explicit:str|None)->dict:
         if custom.get("auto_merge") is not None:base.setdefault("merge_gate",{})["enabled"]=bool(custom["auto_merge"])
     return base
 
+def stable_fingerprint(value:object)->str:
+    return hashlib.sha256(json.dumps(value,ensure_ascii=False,sort_keys=True,separators=(",",":"),default=str).encode("utf-8")).hexdigest()
+
 def review(root:Path,mode:str="all-local",base:str|None=None,target:str|None=None,files:list[str]|None=None,policy_path:str|None=None,task_id:str|None=None,risk_context:dict|None=None)->dict:
-    pol=policy(root,policy_path);changes=collect(root,mode,base,target,files);generated=pol.get("generated_patterns",[])
+    pol=policy(root,policy_path);changes=collect(root,mode,base,target,files);generated=pol.get("generated_patterns",[]);current_fingerprint=worktree_fingerprint(root)
     kept=[];ignored=[]
     for f in changes["files"]:
         (ignored if matches_any(f["path"],generated) else kept).append(f)
@@ -48,7 +51,7 @@ def review(root:Path,mode:str="all-local",base:str|None=None,target:str|None=Non
     if uncovered:score+=min(12,len(uncovered));findings.append({"severity":"MEDIUM","type":"ownership-gap","paths":uncovered[:25],"evidence":"变更未匹配代码所有权"})
     graph_info=None;db=repo_ai(root)/"knowledge"/"engineering.db";gp=pol.get("graph",{})
     if db.exists() and kept:
-        graph_info=impact(db,[f["path"] for f in kept],int(gp.get("max_depth",2)),int(gp.get("max_nodes",300)),str(gp.get("direction","both")),head(root),worktree_fingerprint(root))
+        graph_info=impact(db,[f["path"] for f in kept],int(gp.get("max_depth",2)),int(gp.get("max_nodes",300)),str(gp.get("direction","both")),head(root),current_fingerprint)
         extra=max(0,len(graph_info["nodes"])-len(graph_info["seeds"]));score+=min(20,extra//5)
         if graph_info["truncated"]:findings.append({"severity":"MEDIUM","type":"graph-truncated","evidence":"图谱查询达到节点上限，结果不完整"})
         if graph_info["stale"]:findings.append({"severity":"HIGH","type":"graph-stale","evidence":"图谱索引与当前提交或工作区内容不一致"})
@@ -97,7 +100,19 @@ def review(root:Path,mode:str="all-local",base:str|None=None,target:str|None=Non
     if governance["status"]=="INVALID":gaps.extend(governance["errors"])
     elif governance["status"]=="NOT_PROVIDED":gaps.append("未提供结构化语义风险上下文；涉及共享、架构、数据、安全或发布时必须由模型分类后复核")
     task=load_json(repo_ai(root)/"tasks"/f"{safe_id(task_id)}.json",{}) if task_id else {}
-    return {"schema_version":3,"generated_at":now(),"repository":str(root),"project_id":task.get("project_id") if isinstance(task,dict) else None,"task_id":safe_id(task_id) if task_id else None,"head":head(root),"worktree_fingerprint":worktree_fingerprint(root),"change_mode":mode,"risk":{"score":score,"level":level,"observed_level":observed_level,"semantic_level":governance["semantic_level"],"confidence":confidence,"tags":sorted(tags)},"summary":{"files":len(kept),"ignored_generated":len(ignored),"changed_lines":line_total,"unknown_line_files":unknown_lines},"changes":kept,"ignored":ignored,"findings":findings,"ownership":{"uncovered":uncovered},"graph":graph_info,"architecture_guard":architecture_guard,"delivery_hygiene":delivery_hygiene,"semantic_assessment":governance,"evidence_gaps":gaps,"controls":{"auto_merge":False,"activation":governance["activation"],"control_level":governance["control_level"],"scope_mode":governance["scope_mode"],"artifact_status":governance["artifact_status"],"recommendation":"先执行回归计划并补齐关键证据" if level in {"HIGH","CRITICAL"} else "按风险范围执行验证"}}
+    changed_scope=[item["path"] for item in kept]
+    impact_scope=(graph_info or {}).get("nodes",[]) if graph_info and not graph_info.get("stale") and not graph_info.get("truncated") else changed_scope
+    verification_identity={
+        "source_fingerprint":current_fingerprint,
+        "contract_fingerprint":stable_fingerprint((task or {}).get("change_contract",{})),
+        "dependency_fingerprint":stable_fingerprint({
+            "status":"CURRENT" if graph_info and not graph_info.get("stale") else "UNAVAILABLE_OR_STALE",
+            "nodes":impact_scope,
+            "edges":(graph_info or {}).get("edges",[]),
+        }),
+        "affected_scope":list(dict.fromkeys(impact_scope))[:64],
+    }
+    return {"schema_version":3,"generated_at":now(),"repository":str(root),"project_id":task.get("project_id") if isinstance(task,dict) else None,"task_id":safe_id(task_id) if task_id else None,"head":head(root),"worktree_fingerprint":current_fingerprint,"change_mode":mode,"risk":{"score":score,"level":level,"observed_level":observed_level,"semantic_level":governance["semantic_level"],"confidence":confidence,"tags":sorted(tags)},"summary":{"files":len(kept),"ignored_generated":len(ignored),"changed_lines":line_total,"unknown_line_files":unknown_lines},"changes":kept,"ignored":ignored,"findings":findings,"ownership":{"uncovered":uncovered},"graph":graph_info,"architecture_guard":architecture_guard,"delivery_hygiene":delivery_hygiene,"semantic_assessment":governance,"verification_identity":verification_identity,"evidence_gaps":gaps,"controls":{"auto_merge":False,"activation":governance["activation"],"control_level":governance["control_level"],"scope_mode":governance["scope_mode"],"artifact_status":governance["artifact_status"],"recommendation":"先执行回归计划并补齐关键证据" if level in {"HIGH","CRITICAL"} else "按风险范围执行验证"}}
 
 def to_md(data:dict)->str:
     r=data["risk"];rows=[[f.get("severity"),f.get("type"),f.get("path") or ", ".join(f.get("paths",[])[:3]),f.get("evidence")] for f in data["findings"]]

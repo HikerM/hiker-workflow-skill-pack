@@ -24,7 +24,7 @@ from component_registry_v2 import (
 from architecture_product_profile import profile_fingerprint, validate as validate_architecture_profile
 from content_assurance import CONTENT_CASES, evaluate as evaluate_content, plan as content_plan
 from error_experience_guard import audit_sources, contract_fingerprint as error_contract_fingerprint, validate_contract as validate_error_contract, validate_event
-from presentation_guard import audit_bindings, audit_copy, contract_fingerprint, validate_contract
+from presentation_guard import audit_bindings, audit_copy, audit_state_usages, contract_fingerprint, validate_contract
 from product_release_gate import evaluate as evaluate_product_release
 from product_model_common import apply_decision, make_decision, model_fingerprint
 from runtime_ui_evidence import bind_artifact, objective_checks
@@ -123,19 +123,36 @@ def valid_presentation_contract() -> dict:
     return contract
 
 
+def state_mapping(mapping_id: str, semantic_type: str, persistence: str, *, visibility: str = "USER_VISIBLE") -> dict:
+    domain = {"representation": semantic_type}
+    if semantic_type == "FINITE_STATE":
+        domain["values"] = ["PENDING", "APPROVED"]
+    fields = ["deleted_at"] if semantic_type == "SOFT_DELETE" else ["value"]
+    return {
+        "mapping_id": mapping_id,
+        "semantic_type": semantic_type,
+        "persistence": {"representation": persistence, "fields": fields},
+        "domain": domain,
+        "transport": {"representation": "SEMANTIC_CODE"},
+        "presentation": {"visibility": visibility, "strategy": "PRESENTATION_MAPPING", "mapping_ref": f"i18n://{mapping_id}"},
+        "requirements": [],
+    }
+
+
 def valid_error_contract(family: str = "PROBLEM_DETAILS") -> dict:
     contract = {
         "schema_version": "1.0.0", "contract_id": "school-errors", "revision": 1,
         "protocol": {
             "family": family, "serialization": "project-native", "existing_contract_ref": "contracts/errors" if family == "CUSTOM" else None,
             "semantic_mappings": {
-                "classification": "type", "user_message": "detail", "developer_diagnostic": "diagnostic",
-                "error_code": "code", "correlation": "error_id", "retry": "retry",
+                "classification": "type", "user_action": "next_step", "diagnostic_reference": "diagnostic_ref",
+                "visibility": "audience", "error_code": "code", "correlation": "error_id",
+                "retry_semantics": "retry", "recovery_semantics": "recovery",
             },
         },
         "classifications": [
-            {"code": "ENROLMENT_CONFLICT", "kind": "EXPECTED_BUSINESS", "retry_semantics": "AFTER_CHANGE", "user_message_policy": "explain conflict and next step", "diagnostic_requirements": ["operation", "entity-version"]},
-            {"code": "UNEXPECTED", "kind": "UNEXPECTED_SYSTEM", "retry_semantics": "UNKNOWN", "user_message_policy": "safe message and error id", "diagnostic_requirements": ["exception", "stack", "cause", "source-version"]},
+            {"code": "ENROLMENT_CONFLICT", "kind": "EXPECTED_BUSINESS", "retry_semantics": "AFTER_CHANGE", "recovery_semantics": "USER_ACTION", "user_message_policy": "explain conflict and next step", "user_action_policy": "change input or stop", "diagnostic_requirements": ["operation", "entity-version"]},
+            {"code": "UNEXPECTED", "kind": "UNEXPECTED_SYSTEM", "retry_semantics": "UNKNOWN", "recovery_semantics": "OPERATOR_ACTION", "user_message_policy": "safe message and error id", "user_action_policy": "provide error id to support", "diagnostic_requirements": ["exception", "stack", "cause", "source-version"]},
         ],
     }
     contract["fingerprint"] = error_contract_fingerprint(contract)
@@ -149,11 +166,16 @@ def valid_error_event(kind: str = "UNEXPECTED_SYSTEM") -> dict:
         "timestamp": "2026-08-26T12:00:00Z", "operation": "enrol", "version": "1.4.0", "source_fingerprint": "source",
         "classification": "UNEXPECTED" if unexpected else "ENROLMENT_CONFLICT", "kind": kind,
         "retry_semantics": "UNKNOWN" if unexpected else "AFTER_CHANGE",
-        "user": {"message": "暂时无法完成，请稍后重试。", "next_step": "联系支持并提供错误编号", "error_id": "ERR-20260826-0001"},
+        "recovery_semantics": "OPERATOR_ACTION" if unexpected else "USER_ACTION",
+        "user": {"visibility": "USER", "message": "暂时无法完成，请稍后重试。", "next_step": "联系支持并提供错误编号", "error_id": "ERR-20260826-0001"},
         "developer": {
-            "error_id": "ERR-20260826-0001", "trace_id": "trace-1", "exception_type": "DatabaseUnavailable" if unexpected else None,
+            "visibility": "DEVELOPER", "error_id": "ERR-20260826-0001", "trace_id": "trace-1", "exception_type": "DatabaseUnavailable" if unexpected else None,
             "cause": "dependency unavailable" if unexpected else None, "stack_ref": "evidence://errors/stack-1" if unexpected else None,
             "diagnostic_evidence_refs": ["evidence://errors/event-1"], "redaction_status": "PASS",
+        },
+        "operations": {
+            "visibility": "OPERATIONS", "error_id": "ERR-20260826-0001", "trace_id": "trace-1",
+            "diagnostic_evidence_refs": ["evidence://operations/health-1"], "redaction_status": "PASS",
         },
     }
 
@@ -368,6 +390,49 @@ class ProductAssuranceTests(unittest.TestCase):
         self.assertIn("RAW_ENUM_LEAKAGE", codes)
         self.assertNotIn("RECORD_V2", json.dumps(result))
 
+    def test_state_contract_separates_persistence_domain_transport_and_presentation(self) -> None:
+        contract = valid_presentation_contract()
+        contract["state_mappings"] = [
+            state_mapping("record-active", "BOOLEAN", "NATIVE_BOOLEAN"),
+            state_mapping("record-status", "FINITE_STATE", "COMPACT_ENUM"),
+            state_mapping("record-category", "EXTENSIBLE_CATEGORY", "REFERENCE"),
+            state_mapping("record-deletion", "SOFT_DELETE", "DELETED_AT", visibility="HIDDEN"),
+        ]
+        contract["fingerprint"] = contract_fingerprint(contract)
+        self.assertEqual("PASS", validate_contract(contract)["status"])
+        usage = audit_state_usages(contract, {"usages": [{
+            "state_topic": "record.status", "source_field": "status", "source_layer": "DOMAIN",
+            "literal": 20, "mapping_id": "record-status", "mapping": "presentation", "user_visible": True,
+        }]})
+        self.assertEqual("PASS", usage["status"])
+
+    def test_magic_number_raw_status_and_layer_bypass_are_blocked(self) -> None:
+        contract = valid_presentation_contract(); contract["state_mappings"] = [state_mapping("record-status", "FINITE_STATE", "SEMANTIC_CODE")]; contract["fingerprint"] = contract_fingerprint(contract)
+        result = audit_state_usages(contract, {"usages": [
+            {"state_topic": "record.status", "source_field": "status", "source_layer": "DOMAIN", "literal": 20, "mapping": "direct", "user_visible": False},
+            {"state_topic": "record.status", "source_field": "status", "source_layer": "PERSISTENCE", "literal": "PENDING", "mapping": "direct", "user_visible": True},
+        ]})
+        codes = {item["code"] for item in result["findings"]}
+        self.assertTrue({"MAGIC_NUMBER_STATE", "RAW_INTERNAL_STATUS_TO_USER", "STATE_LAYER_BYPASS"}.issubset(codes))
+
+    def test_soft_delete_does_not_add_actor_or_reason_without_requirement(self) -> None:
+        contract = valid_presentation_contract(); mapping = state_mapping("record-deletion", "SOFT_DELETE", "DELETED_AT", visibility="HIDDEN")
+        mapping["persistence"]["fields"] = ["deleted_at", "deleted_by", "deleted_reason"]
+        contract["state_mappings"] = [mapping]; contract["fingerprint"] = contract_fingerprint(contract)
+        codes = {item["code"] for item in validate_contract(contract)["errors"]}
+        self.assertEqual({"UNJUSTIFIED_DELETED_BY", "UNJUSTIFIED_DELETED_REASON"}, codes)
+        mapping["requirements"] = ["audit_actor", "deletion_reason"]; contract["fingerprint"] = contract_fingerprint(contract)
+        self.assertEqual("PASS", validate_contract(contract)["status"])
+
+    def test_developer_diagnostic_status_may_remain_raw(self) -> None:
+        contract = valid_presentation_contract(); contract["state_mappings"] = [state_mapping("runtime-status", "FINITE_STATE", "PROJECT_NATIVE", visibility="DEVELOPER_ONLY")]; contract["state_mappings"][0]["presentation"] = {"visibility": "DEVELOPER_ONLY", "strategy": "DEVELOPER_RAW"}; contract["fingerprint"] = contract_fingerprint(contract)
+        result = audit_state_usages(contract, {"usages": [{
+            "state_topic": "runtime.status", "source_field": "status", "source_layer": "TRANSPORT",
+            "literal": "PENDING", "mapping": "direct", "user_visible": True, "developer_only": True,
+        }]})
+        self.assertEqual("PASS", validate_contract(contract)["status"])
+        self.assertEqual("PASS", result["status"])
+
     def test_content_stress_is_runtime_measured_without_character_limits(self) -> None:
         cases = sorted(CONTENT_CASES)
         test_plan = content_plan(cases, ["record-dialog"])
@@ -396,6 +461,16 @@ class ProductAssuranceTests(unittest.TestCase):
                 result = validate_error_contract(valid_error_contract(family))
                 self.assertEqual(result["status"], "PASS")
 
+    def test_client_error_contract_requires_white_screen_failure_coverage(self) -> None:
+        contract = valid_error_contract(); contract["client_surface"] = True
+        contract["client_failure_coverage"] = ["UNHANDLED_PROMISE", "RENDER_CRASH"]
+        contract["fingerprint"] = error_contract_fingerprint(contract)
+        result = validate_error_contract(contract)
+        self.assertIn("INCOMPLETE_CLIENT_FAILURE_COVERAGE", {item["code"] for item in result["errors"]})
+        contract["client_failure_coverage"] = ["UNHANDLED_PROMISE", "RENDER_CRASH", "ROUTER_FAILURE", "CHUNK_RESOURCE_FAILURE"]
+        contract["fingerprint"] = error_contract_fingerprint(contract)
+        self.assertEqual("PASS", validate_error_contract(contract)["status"])
+
     def test_error_channels_and_correlation_are_traceable(self) -> None:
         contract = valid_error_contract(); event = valid_error_event()
         correlations = {"correlations": {"ERR-20260826-0001": {"trace_id": "trace-1", "diagnostic_ref": "evidence://errors/event-1"}}}
@@ -410,14 +485,21 @@ class ProductAssuranceTests(unittest.TestCase):
         result = validate_event(contract, event, {"correlations": {}})
         codes = {item["code"] for item in result["findings"]}
         self.assertTrue({"UNSAFE_USER_ERROR_MESSAGE", "ERROR_ID_CORRELATION_MISMATCH", "ERROR_ID_NOT_TRACEABLE"}.issubset(codes))
+        nested = valid_error_event(); nested["user"]["details"] = {"stack": "internal frame 42"}
+        result = validate_event(contract, nested)
+        self.assertIn("UNSAFE_USER_ERROR_MESSAGE", {item["code"] for item in result["findings"]})
 
     def test_catch_and_hide_requires_diagnostic_path_and_retains_no_source(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); (root / "bad.ts").write_text("try { work(); } catch (error) { return toast('操作失败'); }", encoding="utf-8")
             (root / "good.ts").write_text("try { work(); } catch (error) { logger.error(error); throw error; }", encoding="utf-8")
-            result = audit_sources(root, ["bad.ts", "good.ts"])
+            (root / "silent.ts").write_text("try { work(); } catch {}", encoding="utf-8")
+            (root / "silent.py").write_text("try:\n    work()\nexcept Exception:\n    pass\n", encoding="utf-8")
+            result = audit_sources(root, ["bad.ts", "good.ts", "silent.ts", "silent.py"])
             self.assertEqual(result["status"], "BLOCKED")
-            self.assertEqual(result["findings"][0]["code"], "CATCH_AND_HIDE")
+            codes = {item["code"] for item in result["findings"]}
+            self.assertIn("CATCH_AND_HIDE", codes)
+            self.assertIn("UNKNOWN_EXCEPTION_SILENTLY_SWALLOWED", codes)
             self.assertFalse(result["source_content_retained"])
             self.assertNotIn("操作失败", json.dumps(result, ensure_ascii=False))
 
@@ -441,6 +523,23 @@ class ProductAssuranceTests(unittest.TestCase):
             ):
                 path.write_text(json.dumps(value), encoding="utf-8")
             self.assertEqual(evaluate_product_release(root)["status"], "PASS")
+            design["handoffs"] = [{
+                "id": "HND-RECORD-SYNC",
+                "participants": [{"id": "origin"}, {"id": "consumer"}],
+                "trigger": {"event_ref": "event://record-ready"},
+                "state_transition": {"from": "queued", "to": "visible"},
+                "authority_transfer": {"applicable": False, "reason": "data-only transfer"},
+                "data_transfer": {"contract_ref": "contract://record"},
+                "downstream_visibility": {"surface_ref": "surface://record-list"},
+                "evidence_refs": ["fact://record-sync"],
+            }]
+            design["fingerprint"] = model_fingerprint(design)
+            (ui / "project-ui.json").write_text(json.dumps(design), encoding="utf-8")
+            handoff_blocked = evaluate_product_release(root)
+            self.assertTrue(any(item["code"] == "HANDOFF_CONTINUITY_NOT_RELEASE_READY" for item in handoff_blocked["blockers"]))
+            del design["handoffs"]
+            design["fingerprint"] = model_fingerprint(design)
+            (ui / "project-ui.json").write_text(json.dumps(design), encoding="utf-8")
             incomplete_registry = valid_registry(); incomplete_registry["components"] = incomplete_registry["components"][:1]; incomplete_registry["fingerprint"] = registry_fingerprint(incomplete_registry)
             (ui / "component-registry.json").write_text(json.dumps(incomplete_registry), encoding="utf-8")
             registry_blocked = evaluate_product_release(root)

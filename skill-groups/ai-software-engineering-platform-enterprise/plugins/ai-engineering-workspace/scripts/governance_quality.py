@@ -59,8 +59,20 @@ def verify_quality_lineage(
     if evidence.get("status") != "PASS":
         mismatches["status"] = {"expected": "PASS", "actual": evidence.get("status")}
     if require_live_candidate and not mismatches:
-        try:
-            quality_lineage(root, task)
-        except RuntimeError as exc:
-            mismatches["live_candidate"] = {"expected": "PASS", "actual": str(exc)}
+        from candidate_guard import verify as verify_candidate
+
+        candidate_report = verify_candidate(root, str(candidate.get("candidate_id") or ""))
+        if candidate_report.get("result") != "PASS":
+            mismatches["live_candidate"] = {
+                "expected": "PASS",
+                "actual": candidate_report.get("result"),
+                "details": candidate_report.get("mismatches") or {},
+            }
+        else:
+            goal = verify_binding(root, task.get("goal_binding"))
+            if not goal.get("ok"):
+                mismatches["live_goal"] = {
+                    "expected": "CURRENT",
+                    "actual": goal.get("status"),
+                }
     return {"ok": not mismatches, "kind": kind, "binding": binding, "mismatches": mismatches}

@@ -5,9 +5,15 @@ import hashlib
 import json
 import os
 import re
+import sys
 import xml.etree.ElementTree as ET
 from collections import deque
 from pathlib import Path
+
+CORE_SCRIPTS = Path(__file__).resolve().parents[2] / "ai-engineering-core" / "scripts"
+if str(CORE_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(CORE_SCRIPTS))
+from resource_budget import effective_budget  # noqa: E402
 
 
 SKIP = {".git", ".ai", "node_modules", "dist", "build", "obj", "bin", ".venv", "venv", "vendor", "target", "coverage"}
@@ -31,6 +37,8 @@ def sibling_package_manager(path: Path, declared: object) -> str:
 
 
 def bounded_files(root: Path, max_depth: int = 4, max_dirs: int = 240) -> list[Path]:
+    limits = effective_budget("source_scan", {"max_depth": max_depth, "max_dirs": max_dirs})
+    max_depth, max_dirs = limits["max_depth"], limits["max_dirs"]
     root = root.resolve(); queue = deque([(root, 0)]); out: list[Path] = []; visited = 0
     while queue and visited < max_dirs:
         current, depth = queue.popleft(); visited += 1

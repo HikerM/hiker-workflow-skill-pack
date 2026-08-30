@@ -73,7 +73,7 @@ def evaluate(root: Path, source: str, target: str, task_id: str | None = None) -
     critical = [x for x in items if re.search(r"(?:migration|schema|auth|permission|package-lock|pnpm-lock|ProjectSettings|Packages/manifest|\.asmdef$|api[-_/]?contract)", x["path"], re.I)]
     unowned = [x for x in ownership if x["status"] == "UNOWNED"]
     result = "FAIL" if failures else ("PASS_WITH_WARNINGS" if critical or unowned else "PASS")
-    return {"ok": not failures, "result": result, "source": source, "target": target, "task_id": task_id, "failures": failures, "commits": messages, "changes": items, "ownership": ownership, "critical_changes": critical, "conflict_probe": probe, "merge_executed": False, "requirements": ["Review Agent PASS", "Test Agent PASS", "architecture guard PASS", "feature closure PASS", "CHANGELOG evidence", "clean locks"]}
+    return {"ok": not failures, "result": result, "source": source, "target": target, "task_id": task_id, "failures": failures, "commits": messages, "changes": items, "ownership": ownership, "critical_changes": critical, "conflict_probe": probe, "merge_executed": False, "requirements": ["applicable review evidence PASS", "applicable test evidence PASS", "architecture guard PASS", "feature closure PASS", "CHANGELOG evidence", "clean locks"]}
 
 
 def main() -> int:

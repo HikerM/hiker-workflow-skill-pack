@@ -1,6 +1,6 @@
 {
   "name": "ai-engineering-quality",
-  "version": "5.19.0+codex.20260830021714",
+  "version": "5.19.0+codex.20260831013125",
   "description": "独立设计与视觉就绪、完整变更、不可变候选审核、回归工具预检、脱敏交接和发布门禁",
   "author": {
     "name": "Hiker"

@@ -35,7 +35,7 @@ from convergence_guard import (
 )
 from file_lock import acquire, check, release
 from git_workspace import cmd_adopt, cmd_close, cmd_create, cmd_inventory, cmd_list, cmd_pause, cmd_plan_close, validate_branch_policy
-from governance_state import bind_review_candidate, checkpoint, control, create_task, init_project, load_task, record, save_task, set_change_contract, transition, validate
+from governance_state import bind_review_candidate, checkpoint, control, create_task, init_project, load_task, record, save_task, set_change_contract, transition, validate, verify_quality_lineage
 from merge_guard import conflict_probe, evaluate as merge_evaluate, flow_ok
 from task_router import route
 from task_reconciler import reconcile
@@ -192,6 +192,8 @@ class WorkspaceTests(unittest.TestCase):
         data = route("局部调整前后端现有实现", proposal={"architecture": "bs", "client_families": [], "risk_class": "local", "contract_change": False})
         names = {item["lane"] for item in data["lanes"]}
         self.assertNotIn("contract-data", names)
+        self.assertIn("implementation", names)
+        self.assertFalse({"bs-frontend", "backend-service"} & names)
         self.assertEqual("auto-safe", data["policy"]["parallel_mode"])
         self.assertEqual("project_id plus repository root plus task_id plus ownership_lane", data["policy"]["context_isolation"])
 
@@ -254,6 +256,42 @@ class WorkspaceTests(unittest.TestCase):
             self.assertFalse(result["create_allowed"])
             slots = session_status(root, "PROJECT-A")["slots"]
             self.assertFalse(any(slot.get("ownership_lane") == "orders-read" for slot in slots))
+
+    def test_dispatch_blocks_shared_authority_across_disjoint_files(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.repo(root)
+            init_project(root, ns(project_id="PROJECT-A", architecture="unknown", version="1.0.0", database_version="001", api_version="v1"))
+            task_map = route("独立文件共享订单契约", proposal={
+                "architecture": "unknown", "client_families": [], "contract_change": True,
+                "implementation_lanes": [
+                    {"id": "consumer-a", "surface": "ui-consumer", "write_scope": ["apps/a"], "authority_ids": ["API:ORDERS"]},
+                    {"id": "consumer-b", "surface": "worker-consumer", "write_scope": ["apps/b"], "authority_ids": ["API:ORDERS"]},
+                ],
+            })
+            lanes = {item["lane"]: item for item in task_map["lanes"]}
+            self.assertEqual([], lanes["consumer-b"]["scope_conflicts"])
+            self.assertEqual([{"lane": "consumer-a", "shared_authority_ids": ["API:ORDERS"]}], lanes["consumer-b"]["authority_conflicts"])
+            atomic_json(root / ".ai/workspace/task-map.json", task_map)
+            session_bind(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "base-a", "thread-a", None, "RUNNING", ownership_lane="consumer-a")
+            result = dispatch_observe(root, ns(task_id="KG-002", role="Developer Agent", repository=str(root), base_sha="base-a", api_result="EMPTY", project_id="PROJECT-A", thread_id=None, client_thread_id=None, runtime_status=None, detail="", ownership_lane="consumer-b", require_isolated_runtime=False))
+            self.assertEqual("BLOCK_AUTHORITY_CONFLICT", result["session"]["action"])
+            self.assertEqual([], result["scope_conflicts"])
+            self.assertEqual(1, len(result["authority_conflicts"]))
+            self.assertFalse(result["create_allowed"])
+
+    def test_truly_independent_surfaces_remain_parallel_eligible(self):
+        data = route("两个独立实现范围", proposal={
+            "architecture": "unknown", "client_families": [], "contract_change": False,
+            "implementation_lanes": [
+                {"id": "surface-a", "surface": "custom-a", "write_scope": ["apps/a"], "authority_ids": ["MODULE:A"]},
+                {"id": "surface-b", "surface": "custom-b", "write_scope": ["apps/b"], "authority_ids": ["MODULE:B"]},
+            ],
+        })
+        lanes = {item["lane"]: item for item in data["lanes"]}
+        self.assertEqual([], lanes["surface-a"]["serial_with"])
+        self.assertEqual([], lanes["surface-b"]["serial_with"])
+        self.assertTrue(lanes["surface-a"]["parallel_eligible"])
+        self.assertTrue(lanes["surface-b"]["parallel_eligible"])
 
     def test_dispatch_stale_goal_block_does_not_reserve_a_session(self):
         with tempfile.TemporaryDirectory() as td:
@@ -362,19 +400,59 @@ class WorkspaceTests(unittest.TestCase):
         set_change_contract(root, ns(task_id=task_id, agent_role="Planning Agent", allowed_files=["src/AuthService.ts", "evidence.log", "CHANGELOG.md", "ARCHITECTURE.md"], allowed_modules=None, protected_modules=None, public_contract_changes=None, behavior_invariants=["原有认证行为保持不变"], characterization_tests=[], consumer_tests=[], required_tests=["认证单测", "登录回归"], consumers=[], max_blast_radius=80, warn_lines=None, block_lines=None, warn_growth=None, block_growth=None))
         transition(root, ns(task_id=task_id, to="Development", agent_role="Developer Agent", commit_id=None))
 
-    def test_router_forces_frontend_and_backend_for_bs_and_cs(self):
+    def test_architecture_label_does_not_force_frontend_backend_or_client_lanes(self):
         data = route("设计 B/S 管理端和 C/S Unity 客户端，共享 NodeTS 后端", proposal={"architecture":"hybrid", "client_families":["unity"]})
         names = {item["lane"] for item in data["lanes"]}
         self.assertEqual("hybrid", data["architecture"])
-        self.assertTrue({"bs-frontend", "cs-client", "backend-service", "contract-data", "review", "testing", "documentation", "merge"}.issubset(names))
+        self.assertIn("implementation", names)
+        self.assertFalse({"bs-frontend", "cs-client", "backend-service", "contract-data"} & names)
+        self.assertIn("coarse classification only", data["policy"]["architecture_label"])
         self.assertTrue(all(item.get("agent_role") for item in data["lanes"]))
 
-    def test_router_recognizes_general_cs_families_and_keeps_backend_lane(self):
+    def test_client_family_is_evidence_metadata_not_execution_topology(self):
         for prompt, expected in [("实现Qt QML客户端", "qt"), ("开发WPF桌面程序", "dotnet-desktop"), ("Flutter移动端", "flutter"), ("Tauri客户端", "electron-tauri")]:
             with self.subTest(prompt=prompt):
                 data=route(prompt, proposal={"architecture":"cs", "client_families":[expected]}); names={item["lane"] for item in data["lanes"]}
                 self.assertEqual("cs",data["architecture"]);self.assertIn(expected,data["client_families"])
-                self.assertTrue({"cs-client","backend-service","contract-data"}.issubset(names))
+                self.assertIn("implementation", names)
+                self.assertFalse({"cs-client","backend-service","contract-data"} & names)
+
+    def test_unknown_architecture_accepts_model_proposed_real_surface(self):
+        data = route("修改已识别的后台工作进程", proposal={
+            "architecture": "unknown", "client_families": [], "contract_change": False,
+            "implementation_lanes": [{
+                "id": "worker-runtime", "surface": "async-worker", "write_scope": ["apps/worker"],
+            }],
+        })
+        self.assertEqual("ACCEPTED", data["status"])
+        lanes = {item["lane"]: item for item in data["lanes"]}
+        self.assertEqual("async-worker", lanes["worker-runtime"]["surface"])
+        self.assertNotIn("backend-service", lanes)
+
+    def test_execution_topology_can_bind_to_existing_project_fact_plane(self):
+        fingerprint = "a" * 64
+        facts = {
+            "schema_version": "1.0.0", "source_fingerprint": fingerprint, "authority": "CURRENT_PROJECT_FACTS",
+            "generation": 4,
+            "project_topology": {"value": {"application_roots": ["apps/worker"], "service_roots": ["apps/worker"], "frontend_roots": [], "backend_roots": [], "client_roots": []}},
+            "current_changed_scope": ["apps/worker/jobs"],
+        }
+        data = route("修改当前真实工作进程", tech_stack=facts, proposal={
+            "architecture": "unknown", "client_families": [], "contract_change": False,
+            "project_fact_fingerprint": fingerprint,
+            "implementation_lanes": [{"id": "worker", "surface": "async-worker", "write_scope": ["apps/worker/jobs"]}],
+        })
+        self.assertEqual("ACCEPTED", data["status"])
+        self.assertEqual({
+            "status": "BOUND", "source_fingerprint": fingerprint, "project_fact_plane_bound": True,
+            "authority": "CURRENT_PROJECT_FACTS", "generation": 4, "topology_root_count": 2, "changed_scope_count": 1,
+        }, data["evidence_snapshot"])
+        stale = route("修改当前真实工作进程", tech_stack=facts, proposal={
+            "architecture": "unknown", "client_families": [], "contract_change": False,
+            "project_fact_fingerprint": "b" * 64,
+        })
+        self.assertEqual("REJECTED", stale["status"])
+        self.assertIn("PROJECT_FACT_FINGERPRINT_MISMATCH", stale["diagnostics"])
 
     def test_router_requires_model_proposal_and_does_not_classify_keywords(self):
         rejected = route("实现Qt QML客户端和NodeTS服务端")
@@ -436,12 +514,24 @@ class WorkspaceTests(unittest.TestCase):
             root=Path(td);self.repo(root);self.governance(root)
             with self.assertRaises(RuntimeError):record(root,ns(task_id="KG-001",kind="review",value="self review",status="PASS",command=None,reason=None,agent_role="Developer Agent"))
 
+    def test_governance_authorizes_responsibility_without_requiring_agent_role(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.repo(root)
+            init_project(root, ns(project_id="PROJECT-A", architecture="hybrid", version="1.0.0", database_version="001", api_version="v1"))
+            create_task(root, ns(task_id="KG-001", goal="局部修改", owner_agent="current-provider", branch="feature/KG-001-local", base_branch="develop", affected_files=["a.txt"]))
+            transition(root, ns(task_id="KG-001", to="Planning", agent_role="CONTROL", commit_id=None))
+            set_change_contract(root, ns(task_id="KG-001", agent_role="CONTROL", allowed_files=["a.txt"], allowed_modules=None, protected_modules=None, public_contract_changes=None, behavior_invariants=["原行为不变"], characterization_tests=[], consumer_tests=[], required_tests=["局部验证"], consumers=[], max_blast_radius=5, warn_lines=None, block_lines=None, warn_growth=None, block_growth=None))
+            task = transition(root, ns(task_id="KG-001", to="Development", agent_role="WRITE", commit_id=None))
+            self.assertEqual("WRITE", task["history"][-1]["execution_class"])
+            self.assertEqual("current-provider", task["owner_agent"])
+
     def test_worktree_policy_and_lifecycle(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td) / "repo"; root.mkdir(); self.repo(root); self.governance(root)
             with self.assertRaises(RuntimeError): validate_branch_policy(root, "main", "main", "Developer Agent")
             args = ns(task_id="KG-001", base="develop", branch="feature/KG-001-login", path=str(Path(td) / "wt"), agent_role="Developer Agent")
             created = cmd_create(root, args); self.assertTrue(Path(created["path"]).exists()); self.assertTrue(cmd_list(root)["worktrees"])
+            self.assertTrue(created["worktree_id"].startswith("WT-")); self.assertNotEqual(created["task_id"], created["worktree_id"])
             cmd_pause(root, ns(task_id="KG-001"), "PAUSED")
             plan = cmd_plan_close(root, ns(path=created["path"], target="develop")); self.assertTrue(plan["plan"]["ready"])
             closed = cmd_close(root, ns(token=plan["plan"]["token"])); self.assertTrue(closed["ok"]); self.assertFalse(Path(created["path"]).exists())
@@ -510,7 +600,7 @@ class WorkspaceTests(unittest.TestCase):
 
     def test_feature_closed_loop_and_merge_gate(self):
         with tempfile.TemporaryDirectory() as td:
-            root = Path(td); self.repo(root); self.governance(root)
+            root = Path(td); self.repo(root); initialize_core(root); self.governance(root)
             git(root, "checkout", "-b", "feature/KG-001-login", "develop")
             (root / "src").mkdir(); (root / "src/AuthService.ts").write_text("export const ok = true;\n", encoding="utf-8")
             (root / "evidence.log").write_text("login e2e passed\n", encoding="utf-8")
@@ -533,10 +623,23 @@ class WorkspaceTests(unittest.TestCase):
             record(root, ns(task_id="KG-001", kind="artifact", value="evidence.log", status="PASS", command=None, reason=None, agent_role="Test Agent"))
             run_guard = subprocess.run([sys.executable, str(quality_scripts / "architecture_guard.py"), "--root", str(root), "check", "--task-id", "KG-001"], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             self.assertEqual(0, run_guard.returncode, run_guard.stdout + run_guard.stderr)
-            task = load_task(root, "KG-001"); closure = closure_evaluate(root, task, "merge"); self.assertTrue(closure["ok"], closure["failures"])
-            task["closure"]["merge"] = "PASS"
-            task.setdefault("closure_bindings", {})["merge"] = closure["binding"]
-            save_task(root, task)
+            control_workflow.write_context(root, "KG-001")
+            for kind in ("review", "test"):
+                lineage = verify_quality_lineage(root, load_task(root, "KG-001"), kind, require_live_candidate=True)
+                self.assertTrue(lineage["ok"], lineage)
+            closure = control_workflow.record_closure(root, "KG-001", "merge", "OP-CLOSURE-KG-001")
+            self.assertTrue(
+                closure["closure_ok"],
+                json.dumps({
+                    "closure": json.loads((root / ".ai" / "evidence" / "KG-001-merge-closure.json").read_text(encoding="utf-8")),
+                    "candidate": candidate_verify(root, "CAND-KG-001-001"),
+                }, ensure_ascii=False, indent=2),
+            )
+            history_count = len(load_task(root, "KG-001")["history"])
+            replay = control_workflow.record_closure(root, "KG-001", "merge", "OP-CLOSURE-KG-001")
+            self.assertTrue(replay["idempotent_replay"])
+            self.assertEqual(history_count, len(load_task(root, "KG-001")["history"]))
+            self.assertEqual("COMPLETE", json.loads(operation_file(root).read_text(encoding="utf-8"))["operations"]["OP-CLOSURE-KG-001"]["status"])
             gate = merge_evaluate(root, "feature/KG-001-login", "develop", "KG-001")
             self.assertTrue(gate["ok"], gate.get("failures"))
 
@@ -883,6 +986,29 @@ class WorkspaceTests(unittest.TestCase):
             }]})
             self.assertFalse(invalid["ok"])
             self.assertTrue({"DEPRECATED_WRITER", "DEPRECATED_ACCEPTS_NEW_WORK"} <= {item["code"] for item in invalid["errors"]})
+
+    def test_task_progression_blocks_an_evidence_backed_competing_implementation_path(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); self.repo(root); self.governance(root)
+            registry = {
+                "capabilities": [
+                    {"id": "CAP-CURRENT", "responsibility": "authentication", "implementations": [{
+                        "id": "auth-current", "path": "src/AuthService.ts", "status": "active",
+                        "authoritative": True, "writes_canonical_state": True,
+                        "contracts": ["contract://authentication"], "active_usage": True,
+                    }]},
+                    {"id": "CAP-PARALLEL", "responsibility": "authentication", "implementations": [{
+                        "id": "auth-parallel", "path": "src/NewAuthService.ts", "status": "active",
+                        "authoritative": True, "writes_canonical_state": False,
+                        "contracts": ["contract://authentication"], "active_usage": True,
+                    }]},
+                ]
+            }
+            (root / ".ai" / "governance" / "implementation-registry.json").write_text(
+                json.dumps(registry), encoding="utf-8"
+            )
+            with self.assertRaisesRegex(RuntimeError, "COMPETING_IMPLEMENTATION_PATH"):
+                transition(root, ns(task_id="KG-001", to="Review", agent_role="Review Agent", commit_id=None))
 
 
 if __name__ == "__main__": unittest.main()

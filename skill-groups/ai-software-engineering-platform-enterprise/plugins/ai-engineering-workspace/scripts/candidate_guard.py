@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -46,6 +47,15 @@ def manifest_path(root: Path, candidate_id: str) -> Path:
     return root / ".ai" / "evidence" / "candidates" / f"{safe_id(candidate_id)}.json"
 
 
+def same_repository_path(expected: str | None, actual: str | None) -> bool:
+    if not expected or not actual:
+        return expected == actual
+    try:
+        return Path(expected).samefile(Path(actual))
+    except OSError:
+        return os.path.normcase(os.path.realpath(expected)) == os.path.normcase(os.path.realpath(actual))
+
+
 def freeze(root: Path, candidate_id: str, task_id: str, review_source: str) -> dict[str, Any]:
     path = manifest_path(root, candidate_id)
     if path.exists():
@@ -65,8 +75,10 @@ def verify(root: Path, candidate_id: str) -> dict[str, Any]:
     if not expected:
         raise RuntimeError(f"unknown candidate: {candidate_id}")
     current = snapshot(root)
-    fields = ("repo_root", "branch", "candidate_commit", "index_hash", "dirty_diff_hash", "file_set_hash", "worktree_fingerprint")
+    fields = ("branch", "candidate_commit", "index_hash", "dirty_diff_hash", "file_set_hash", "worktree_fingerprint")
     mismatches = {field: {"expected": expected.get(field), "actual": current.get(field)} for field in fields if expected.get(field) != current.get(field)}
+    if not same_repository_path(expected.get("repo_root"), current.get("repo_root")):
+        mismatches["repo_root"] = {"expected": expected.get("repo_root"), "actual": current.get("repo_root")}
     return {
         "candidate_id": expected["candidate_id"], "task_id": expected["task_id"],
         "result": "STALE" if mismatches else "PASS", "writable": False,

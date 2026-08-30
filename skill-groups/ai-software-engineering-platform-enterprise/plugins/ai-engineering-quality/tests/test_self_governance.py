@@ -20,6 +20,8 @@ from benchmark_product_assurance import benchmark as benchmark_product_assurance
 from benchmark_governance_precision import benchmark as benchmark_governance_precision
 from benchmark_delivery_velocity import benchmark as benchmark_delivery_velocity
 from audit_governance_enforcement import audit as audit_governance_enforcement
+from audit_resource_budgets import audit as audit_resource_budgets
+from audit_static_drift import audit as audit_static_drift
 from package_facts import audit_packages
 from package_release import build_candidates, release
 from self_governance import STAGE_ORDER, architecture_gate, run_pipeline
@@ -81,6 +83,43 @@ class SelfGovernanceTests(unittest.TestCase):
         self.assertGreater(report["classifications"]["machine_enforceable"], 0)
         self.assertGreater(report["classifications"]["reasoning_guidance"], 0)
         self.assertEqual(0, report["default_prompt_bytes_added"])
+
+    def test_resource_budget_authority_is_release_blocking_and_bounded(self):
+        report = audit_resource_budgets(SUITE)
+        self.assertTrue(report["ok"], report["errors"])
+        self.assertGreater(report["checked_files"], 10)
+        self.assertFalse(report["full_repository_scan"])
+        self.assertEqual(0, report["default_prompt_bytes_added"])
+        with tempfile.TemporaryDirectory() as td:
+            copied = Path(td) / "suite"
+            shutil.copytree(SUITE, copied, ignore=shutil.ignore_patterns("dist", "__pycache__", "*.pyc"))
+            bounded_run = copied / "plugins" / "ai-engineering-core" / "scripts" / "bounded_run.py"
+            bounded_run.write_text(
+                bounded_run.read_text(encoding="utf-8").replace("effective_value", "detached_value"),
+                encoding="utf-8",
+            )
+            blocked = audit_resource_budgets(copied)
+        self.assertFalse(blocked["ok"])
+        self.assertTrue(any("enforcement disconnected" in item for item in blocked["errors"]))
+
+    def test_static_drift_audit_is_release_only_and_blocks_parallel_authorities(self):
+        report = audit_static_drift(SUITE)
+        self.assertTrue(report["ok"], report["errors"])
+        self.assertEqual(0, report["runtime_cost_delta"])
+        self.assertEqual(0, report["runtime_imports_added"])
+        self.assertFalse(report["full_repository_scan"])
+        self.assertEqual("CI_RELEASE_OR_EXPLICIT_AUDIT_ONLY", report["execution_scope"])
+        with tempfile.TemporaryDirectory() as td:
+            copied = Path(td) / "suite"
+            shutil.copytree(SUITE, copied, ignore=shutil.ignore_patterns("dist", "__pycache__", "*.pyc"))
+            convergence = copied / "plugins" / "ai-engineering-workspace" / "scripts" / "convergence_guard.py"
+            convergence.write_text(convergence.read_text(encoding="utf-8") + "\ndef save_task(root, task):\n    pass\n", encoding="utf-8")
+            task_router = copied / "plugins" / "ai-engineering-workspace" / "scripts" / "task_router.py"
+            task_router.write_text(task_router.read_text(encoding="utf-8") + '\nif project_id == "FIELD-CUSTOMER-A":\n    pass\n', encoding="utf-8")
+            blocked = audit_static_drift(copied)
+        self.assertFalse(blocked["ok"])
+        self.assertTrue(any("parallel governed Task writer" in item for item in blocked["errors"]))
+        self.assertTrue(any("field-specific business branch" in item for item in blocked["errors"]))
 
     def test_product_assurance_performance_is_bounded_by_hot_index(self):
         report = benchmark_product_assurance(runs=5, cold_records=50, component_count=50, element_count=64)

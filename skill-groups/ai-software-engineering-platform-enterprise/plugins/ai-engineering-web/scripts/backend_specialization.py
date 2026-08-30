@@ -5,10 +5,17 @@ import hashlib
 import json
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Any, Iterable
 
 from backend_guard import detect as detect_backend
+from query_index_evidence import evaluate as evaluate_index_evidence
+
+CORE_SCRIPTS = Path(__file__).resolve().parents[2] / "ai-engineering-core" / "scripts"
+if str(CORE_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(CORE_SCRIPTS))
+from resource_budget import effective_budget  # noqa: E402
 
 
 SKIP = {".git", ".ai", "node_modules", "vendor", "dist", "build", "coverage", ".venv", "venv", "tmp", "storage"}
@@ -16,6 +23,8 @@ SOURCE_SUFFIXES = {".php", ".ts", ".mts", ".cts", ".js", ".mjs", ".cjs", ".json"
 
 
 def bounded_files(root: Path, max_depth: int = 7, max_files: int = 4000) -> tuple[list[Path], bool]:
+    limits = effective_budget("source_scan", {"max_depth": max_depth, "max_files": max_files})
+    max_depth, max_files = limits["max_depth"], limits["max_files"]
     root = root.resolve(); found: list[Path] = []; truncated = False
     for dirpath, dirnames, filenames in os.walk(root):
         current = Path(dirpath); rel = current.relative_to(root)
@@ -88,7 +97,22 @@ def result(profile: str, root: Path, files: list[Path], truncated: bool, identit
     }
 
 
-def laravel_audit(root: Path) -> dict[str, Any]:
+def index_dimension(query_evidence: dict[str, Any] | None) -> dict[str, Any]:
+    report = evaluate_index_evidence(query_evidence)
+    return {
+        "status": report["status"],
+        "evidence": [],
+        "findings": [
+            {"severity": "HIGH", "rule": item.get("code"), "path": item.get("location", "query-evidence")}
+            for item in report.get("findings", [])
+        ],
+        "note": report["rule"],
+        "evaluated_indexes": report.get("evaluated_indexes", 0),
+        "recommendations": report.get("recommendations", []),
+    }
+
+
+def laravel_audit(root: Path, query_evidence: dict[str, Any] | None = None) -> dict[str, Any]:
     root = root.resolve(); files, truncated = bounded_files(root)
     composer = root / "composer.json"; lock = root / "composer.lock"
     declared = json_file(composer); locked = json_file(lock)
@@ -122,7 +146,8 @@ def laravel_audit(root: Path) -> dict[str, Any]:
     dimensions = {
         "identity": dimension(identity_files if "laravel/framework" in require else [], required=True, note="composer.lock supplies the resolved framework version", root=root),
         "route_controller_service_boundary": dimension(routes + controllers + services, boundary_findings, required=True, root=root),
-        "migration_and_index": dimension(migrations + indexes, note=f"migrations={len(migrations)}, index_evidence={len(indexes)}", root=root),
+        "migration": dimension(migrations, note=f"migrations={len(migrations)}, observed_index_declarations={len(indexes)}; index validity requires query evidence", root=root),
+        "query_driven_index": index_dimension(query_evidence),
         "transaction": dimension(transactions, note="required for multi-write paths; absence remains an evidence gap", root=root),
         "validation_and_dto": dimension(validation + dto, root=root),
         "queue": dimension(queue, note="absence means queue behavior is not evidenced, not that a queue is required", root=root),
@@ -132,8 +157,6 @@ def laravel_audit(root: Path) -> dict[str, Any]:
     if not routes or not controllers or not services:
         dimensions["route_controller_service_boundary"]["status"] = "GAP" if dimensions["route_controller_service_boundary"]["status"] != "FAIL" else "FAIL"
         dimensions["route_controller_service_boundary"]["note"] = f"routes={len(routes)}, controllers={len(controllers)}, services={len(services)}"
-    if not migrations or not indexes:
-        dimensions["migration_and_index"]["status"] = "GAP"
     if not validation or not dto:
         dimensions["validation_and_dto"]["status"] = "GAP"
         dimensions["validation_and_dto"]["note"] = f"validation={len(validation)}, dto={len(dto)}"
@@ -145,7 +168,7 @@ def laravel_audit(root: Path) -> dict[str, Any]:
     return result("laravel-php", root, files, truncated, identity, dimensions)
 
 
-def node_audit(root: Path) -> dict[str, Any]:
+def node_audit(root: Path, query_evidence: dict[str, Any] | None = None) -> dict[str, Any]:
     root = root.resolve(); files, truncated = bounded_files(root)
     package = root / "package.json"; data = json_file(package); stacks = detect_backend(root).get("stacks", [])
     stack = next((item for item in stacks if item.get("family") == "node-typescript"), {})
@@ -178,6 +201,7 @@ def node_audit(root: Path) -> dict[str, Any]:
         "async_and_error_handling": dimension(async_files + error_boundaries, async_findings, required=True, root=root),
         "api_contract": dimension(contracts, root=root),
         "database": dimension(db_files, note=f"database_dependency_detected={db_dependency}", root=root),
+        "query_driven_index": index_dimension(query_evidence),
         "build_and_test": dimension(tests, required=True, note=f"build_scripts={build_scripts}; test_scripts={test_scripts}", root=root),
     }
     controller_files = [path for path in modules if "controller" in path.name.lower() or "route" in path.name.lower()]
@@ -198,11 +222,11 @@ def node_audit(root: Path) -> dict[str, Any]:
     return result("node-typescript", root, files, truncated, identity, dimensions)
 
 
-def audit(root: Path, family: str) -> dict[str, Any]:
+def audit(root: Path, family: str, query_evidence: dict[str, Any] | None = None) -> dict[str, Any]:
     if family == "laravel":
-        return laravel_audit(root)
+        return laravel_audit(root, query_evidence)
     if family == "node-ts":
-        return node_audit(root)
+        return node_audit(root, query_evidence)
     raise ValueError(f"unsupported family: {family}")
 
 
@@ -210,8 +234,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="On-demand backend specialization evidence audit")
     parser.add_argument("--root", default=".")
     parser.add_argument("--family", required=True, choices=["laravel", "node-ts"])
+    parser.add_argument("--query-evidence")
     parser.add_argument("--output")
-    args = parser.parse_args(); data = audit(Path(args.root), args.family)
+    args = parser.parse_args(); data = audit(Path(args.root), args.family, json_file(Path(args.query_evidence)) if args.query_evidence else None)
     text = json.dumps(data, ensure_ascii=False, indent=2)
     if args.output:
         target = Path(args.output); target.parent.mkdir(parents=True, exist_ok=True); target.write_text(text + "\n", encoding="utf-8")

@@ -6,6 +6,7 @@ from typing import Any,Iterator
 CORE_SCRIPTS=Path(__file__).resolve().parents[2]/"ai-engineering-core"/"scripts"
 if str(CORE_SCRIPTS) not in sys.path:sys.path.insert(0,str(CORE_SCRIPTS))
 from process_identity import owner_status,process_identity
+from resource_budget import DEFAULT_BUDGETS as RESOURCE_DEFAULT_BUDGETS,HARD_MAX as RESOURCE_HARD_MAX,effective_budget,effective_value
 
 def run(cmd:list[str],cwd:Path,check:bool=True)->subprocess.CompletedProcess[str]:return subprocess.run(cmd,cwd=str(cwd),text=True,encoding="utf-8",errors="replace",stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=check)
 def _repository_marker(path:Path)->str:

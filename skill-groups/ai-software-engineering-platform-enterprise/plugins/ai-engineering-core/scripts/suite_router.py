@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from community_pro_bridge import detect_pro_runtime, query_project_facts, router_boundary_adoption
+from capability_metadata import policy_enabled, routable_plugin_map, supports_stage, supports_surface
 from source_identity import identify
 from context_budget import build_context_plan
 from project_fact_plane import build_project_fact_plane
@@ -17,50 +18,7 @@ from state_consistency import assess as assess_state_consistency, current_snapsh
 from suite_version import inspect_suite, skill_path
 
 
-# Keep this literal mapping: the release audit uses it as the single coverage map.
-PLUGIN_FOR = {
-    "greenfield-project-planning": "ai-engineering-core",
-    "architecture-decision-challenge": "ai-engineering-core",
-    "brownfield-requirement-reconciliation": "ai-engineering-core",
-    "project-bootstrap": "ai-engineering-core",
-    "bounded-context-memory": "ai-engineering-core",
-    "interruptible-task-control": "ai-engineering-core",
-    "context-recovery": "ai-engineering-core",
-    "official-standards-resolver": "ai-engineering-core",
-    "web-ui-design": "ai-engineering-web",
-    "web-component-implementation": "ai-engineering-web",
-    "web-quality-review": "ai-engineering-web",
-    "backend-technology-router": "ai-engineering-web",
-    "api-event-contract-design": "ai-engineering-web",
-    "backend-component-implementation": "ai-engineering-web",
-    "database-migration-governance": "ai-engineering-web",
-    "backend-quality-review": "ai-engineering-web",
-    "cs-client-router": "ai-engineering-unity",
-    "cs-ui-design": "ai-engineering-unity",
-    "cs-component-implementation": "ai-engineering-unity",
-    "cs-quality-review": "ai-engineering-unity",
-    "unity-ui-design": "ai-engineering-unity",
-    "unity-component-implementation": "ai-engineering-unity",
-    "unity-quality-review": "ai-engineering-unity",
-    "workspace-task-router": "ai-engineering-workspace",
-    "multi-agent-project-governance": "ai-engineering-workspace",
-    "change-ownership-merge": "ai-engineering-workspace",
-    "regression-test-planner": "ai-engineering-quality",
-    "full-change-risk-review": "ai-engineering-quality",
-    "release-readiness-review": "ai-engineering-quality",
-    "design-readiness-review": "ai-engineering-quality",
-    "knowledge-graph-maintenance": "ai-engineering-quality",
-    "interaction-conflict-governance": "ai-engineering-quality",
-    "feature-acceptance-closure": "ai-engineering-workspace",
-    "file-lock-manager": "ai-engineering-workspace",
-    "multi-project-portfolio-manager": "ai-engineering-workspace",
-    "plugin-application-receipt": "ai-engineering-workspace",
-    "project-state-manager": "ai-engineering-workspace",
-    "task-lifecycle-manager": "ai-engineering-workspace",
-    "long-chain-change-convergence": "ai-engineering-workspace",
-    "worktree-task-manager": "ai-engineering-workspace",
-    "worktree-safe-convergence": "ai-engineering-workspace",
-}
+PLUGIN_FOR = routable_plugin_map()
 
 PLUGIN_DISPLAY = {
     "ai-engineering-core": "01 智能工程核心",
@@ -86,43 +44,6 @@ VALID_STAGES = {"planning", "design", "development", "review", "testing", "merge
 VALID_ARCHITECTURES = {"bs", "cs", "backend", "hybrid", "tooling", "unknown"}
 VALID_MODES = {"greenfield", "brownfield", "existing", "unknown"}
 VALID_CONFIDENCE = {"high", "medium", "low"}
-
-DESIGN_SKILLS = {"web-ui-design", "cs-ui-design", "unity-ui-design"}
-IMPLEMENTATION_SKILLS = {
-    "web-component-implementation", "backend-component-implementation",
-    "cs-component-implementation", "unity-component-implementation",
-}
-QUALITY_REVIEW_SKILLS = {
-    "design-readiness-review", "full-change-risk-review", "interaction-conflict-governance",
-    "web-quality-review", "backend-quality-review", "cs-quality-review", "unity-quality-review",
-}
-PLANNING_SKILLS = {
-    "greenfield-project-planning", "architecture-decision-challenge",
-    "brownfield-requirement-reconciliation", "api-event-contract-design", "project-bootstrap",
-}
-WEB_SKILLS = {"web-ui-design", "web-component-implementation", "web-quality-review"}
-BACKEND_SKILLS = {
-    "backend-technology-router", "api-event-contract-design", "backend-component-implementation",
-    "database-migration-governance", "backend-quality-review",
-}
-CLIENT_SKILLS = {
-    "cs-client-router", "cs-ui-design", "cs-component-implementation", "cs-quality-review",
-    "unity-ui-design", "unity-component-implementation", "unity-quality-review",
-}
-SOURCE_CONFLICT_SAFE = {
-    "worktree-task-manager", "worktree-safe-convergence", "project-bootstrap",
-    "full-change-risk-review", "project-state-manager",
-}
-AI_STATE_DEPENDENT_SKILLS = {
-    "bounded-context-memory", "interruptible-task-control", "workspace-task-router",
-    "multi-agent-project-governance", "change-ownership-merge", "feature-acceptance-closure",
-    "file-lock-manager", "multi-project-portfolio-manager", "plugin-application-receipt",
-    "project-state-manager", "task-lifecycle-manager", "long-chain-change-convergence",
-    "worktree-task-manager", "knowledge-graph-maintenance",
-    "release-readiness-review",
-}
-VERSION_RECOVERY_SKILLS = {"context-recovery", "bounded-context-memory", "interruptible-task-control"}
-
 
 def bounded_marker_paths(
     root: Path,
@@ -234,7 +155,7 @@ def inspect_project(root: Path, pro_payload: dict[str, Any] | None = None) -> di
             "project": "证据充分时直接一次守门；证据不足时最多一次检查加一次守门",
             "governed": "仅多会话、合并、发布或长链路任务启用完整治理",
         },
-        "context_budget": build_context_plan(root, "unknown"),
+        "context_budget": _context_plan(root, "unknown", signals),
         "state_consistency": signals["state_consistency"],
         "plugin_suite": suite,
         "catalog": str((Path(__file__).resolve().parents[1] / "references" / "semantic-routing-catalog.md").resolve()),
@@ -262,34 +183,34 @@ def _candidate_items(raw: Any) -> list[dict[str, str]]:
     return [item for item in result if item["skill"]]
 
 
+def _context_plan(root: Path, stage: str, signals: dict[str, Any], risk_signals: set[str] | None = None) -> dict[str, Any]:
+    identity = signals["identity"]
+    plane = signals["project_fact_plane"]
+    changed_scope = plane.get("current_changed_scope") if isinstance(plane.get("current_changed_scope"), list) else []
+    return build_context_plan(
+        root,
+        stage,
+        changed_paths=changed_scope,
+        signals=risk_signals,
+        tracked_files=identity.get("tracked_file_count"),
+        active_facts={
+            "current_goal": plane.get("current_goal"),
+            "current_task": plane.get("current_task"),
+            "direct_dependencies": plane.get("current_direct_dependencies"),
+            "relevant_contracts": plane.get("current_contracts"),
+            "relevant_evidence": plane.get("current_evidence_refs"),
+        },
+    )
+
+
 def _validate_stage(skill: str, stage: str) -> str | None:
-    if skill in DESIGN_SKILLS and stage != "design":
-        return f"{skill} 只能在 design 阶段激活"
-    if skill in IMPLEMENTATION_SKILLS and stage != "development":
-        return f"{skill} 只能在 development 阶段激活"
-    if skill in PLANNING_SKILLS and stage not in {"planning", "design", "review"}:
-        return f"{skill} 与 {stage} 阶段不兼容"
-    if skill in QUALITY_REVIEW_SKILLS and stage not in {"review", "testing", "release"}:
-        return f"{skill} 属于独立审核能力，不能替代当前 {stage} 阶段"
-    if skill == "regression-test-planner" and stage not in {"testing", "review", "release"}:
-        return "regression-test-planner 只能用于测试或审核阶段"
-    if skill == "release-readiness-review" and stage != "release":
-        return "release-readiness-review 只能用于 release 阶段"
-    if skill == "change-ownership-merge" and stage != "merge":
-        return "change-ownership-merge 只能用于 merge 阶段"
-    return None
+    return None if supports_stage(skill, stage) else f"{skill} 与 {stage} 阶段不兼容"
 
 
 def _validate_architecture(skill: str, project_architecture: str) -> str | None:
     if not project_architecture or project_architecture == "unknown":
         return None
-    if skill in WEB_SKILLS and project_architecture not in {"bs", "hybrid"}:
-        return f"{skill} 与项目清单中的架构证据冲突"
-    if skill in BACKEND_SKILLS and project_architecture not in {"bs", "backend", "hybrid"}:
-        return f"{skill} 与项目清单中的服务端证据冲突"
-    if skill in CLIENT_SKILLS and project_architecture not in {"cs", "hybrid"}:
-        return f"{skill} 与项目清单中的客户端证据冲突"
-    return None
+    return None if supports_surface(skill, project_architecture) else f"{skill} 与项目清单中的架构证据冲突"
 
 
 def route(
@@ -326,7 +247,7 @@ def route(
             "routing_authority": "chatgpt-semantic-selection",
             "guard_role": "constraints-and-evidence-only",
             "project_facts": project_facts,
-            "context_budget": build_context_plan(root, "unknown"),
+            "context_budget": _context_plan(root, "unknown", signals),
             "state_consistency": consistency,
             "plugin_suite": suite,
             "catalog": str((Path(__file__).resolve().parents[1] / "references" / "semantic-routing-catalog.md").resolve()),
@@ -384,6 +305,9 @@ def route(
         error("AMBIGUITY_BLOCKED", "存在会导致高风险工程动作分歧的正向冲突，必须阻断")
     elif contract["ambiguity_policy"] == "ASK_REQUIRED":
         error("AMBIGUITY_REQUIRES_USER", "高风险动作方向无法由证据安全确定，需要用户确认")
+    for fact_conflict in signals["project_fact_plane"].get("authority_conflicts") or []:
+        if fact_conflict.get("severity") == "BLOCK":
+            error("FACT_AUTHORITY_CONFLICT", f"{fact_conflict.get('fact')} 存在当前权威冲突，必须先完成确定性对账")
 
     all_ids = [item["skill"] for item in candidates + deferred]
     if len(all_ids) != len(set(all_ids)):
@@ -409,13 +333,13 @@ def route(
         architecture_problem = _validate_architecture(skill, signals["project_architecture"] or architecture)
         if architecture_problem:
             error("ARCHITECTURE_CONFLICT", architecture_problem)
-        if signals["source_conflicts"] and skill not in SOURCE_CONFLICT_SAFE:
+        if signals["source_conflicts"] and not policy_enabled(skill, "source_conflict_safe"):
             error("SOURCE_IDENTITY_CONFLICT", "检测到嵌套工作目录；只能先选择源码身份或工作目录收敛能力")
         state_policy = consistency.get("execution_policy", {})
         if (
             consistency.get("status") != "STATELESS_UNMANAGED"
             and not state_policy.get("trusted_ai_state")
-            and skill in AI_STATE_DEPENDENT_SKILLS
+            and policy_enabled(skill, "requires_trusted_ai_state")
         ):
             error(
                 "STALE_AI_STATE_DEPENDENCY",
@@ -448,7 +372,7 @@ def route(
             previous_route = {}
     previous_suite = previous_route.get("suite_fingerprint") if previous_route else None
     version_drift = bool(previous_route and previous_suite != suite["fingerprint"])
-    if version_drift and not {item["skill"] for item in candidates}.issubset(VERSION_RECOVERY_SKILLS):
+    if version_drift and not all(policy_enabled(item["skill"], "version_recovery") for item in candidates):
         warn("PLUGIN_VERSION_DRIFT_QUARANTINED", "旧插件路由缓存已隔离；当前请求与Git事实继续，Pro在安全边界完成接管")
     accepted = not diagnostics
     selected_output = [
@@ -529,7 +453,7 @@ def route(
         },
         "next_gate": "完成当前阶段并由 ChatGPT 重新语义选择" if deferred else None,
         "confidence": confidence,
-        "context_budget": build_context_plan(root, stage, signals=context_signals, tracked_files=identity.get("tracked_file_count")),
+        "context_budget": _context_plan(root, stage, signals, context_signals),
         "project_evidence": signals["sources"],
         "project_fact_plane": signals["project_fact_plane"],
         "source_identity": project_facts,

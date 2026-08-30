@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from event_budget import DRAINING_ACTIONS, observe_budget
+from workspacelib import RESOURCE_HARD_MAX
 
 ACTIVE_LEASES = {"RESERVED", "STARTED", "ACTIVE", "COMPLETING"}
 INTERRUPTED_LEASE = "INTERRUPTED_UNKNOWN"
@@ -18,7 +19,7 @@ def current_pressure(state: dict[str, Any]) -> dict[str, Any]:
                 **current,
                 "state": migrated,
                 "level": migrated,
-                "max_active_turns": 2 if migrated == "GREEN" else 1 if migrated == "YELLOW" else 0,
+                "max_active_turns": RESOURCE_HARD_MAX["execution"]["max_active_turns"] if migrated == "GREEN" else 1 if migrated == "YELLOW" else 0,
             }
         return current
     return {
@@ -26,7 +27,7 @@ def current_pressure(state: dict[str, Any]) -> dict[str, Any]:
         "level": "GREEN",
         "action": "ALLOW_BOUNDED_GOVERNED_TURNS",
         "blocks_new_dispatch": False,
-        "max_active_turns": 2,
+        "max_active_turns": RESOURCE_HARD_MAX["execution"]["max_active_turns"],
         "allowed_actions": ["all"],
         "observed_at": None,
     }

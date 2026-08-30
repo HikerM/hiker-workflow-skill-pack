@@ -55,7 +55,7 @@ def initialize(root: Path, force: bool = False) -> dict:
     if force or not (ai / "runtime" / "active-context.md").exists():
         atomic_write_text(ai / "runtime" / "active-context.md", "# 当前有效上下文\n\n当前没有活动任务。\n")
     if force or not (ai / "governance" / "locked-decisions.json").exists():
-        atomic_write_json(ai / "governance" / "locked-decisions.json", {"schema_version": SCHEMA_VERSION, "decisions": []})
+        atomic_write_json(ai / "governance" / "locked-decisions.json", {"schema_version": "2.0.0", "decisions": []})
     if force or not (ai / "governance" / "ownership.json").exists():
         atomic_write_json(ai / "governance" / "ownership.json", {"schema_version": SCHEMA_VERSION, "rules": []})
     if force or not (ai / "quality" / "policy.json").exists():

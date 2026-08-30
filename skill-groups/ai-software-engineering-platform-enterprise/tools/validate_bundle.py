@@ -88,7 +88,7 @@ def main()->int:
             pollution_pattern="|".join(("学"+"员", "学"+"生", r"\bStu"+"dent\b"))
             if re.search(pollution_pattern,text,re.I):errors.append(f"业务域样例污染 {text_file.relative_to(ROOT)}")
     if len(suite_versions)!=1:errors.append(f"五个插件必须具有同一完整版本: {sorted(suite_versions)}")
-    registry=json.loads((ROOT/"SKILL_REGISTRY.json").read_text(encoding="utf-8"));registry_names=set((registry.get("skills") or {}).keys())
+    registry=json.loads((ROOT/"plugins/ai-engineering-core/references/SKILL_REGISTRY.json").read_text(encoding="utf-8"));registry_names=set((registry.get("skills") or {}).keys())
     if registry_names!=set(skill_names):errors.append(f"Skill登记与目录不一致: 缺少{sorted(set(skill_names)-registry_names)} 多余{sorted(registry_names-set(skill_names))}")
     market=json.loads((ROOT/".agents/plugins/marketplace.json").read_text(encoding="utf-8"));names={x.get("name") for x in market.get("plugins",[])}
     if names!={p.name for p in plugins}:errors.append("Marketplace插件清单与plugins目录不一致")

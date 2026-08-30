@@ -33,7 +33,10 @@ class BackendSpecializationTests(unittest.TestCase):
             write(root, "database/migrations/2026_01_create_orders.php", "$table->uuid('id')->primary(); $table->index('status');")
             write(root, "tests/Feature/OrderTest.php", "class OrderTest extends TestCase {}")
             write(root, "phpunit.xml", "<phpunit/>")
-            data = audit(root, "laravel")
+            data = audit(root, "laravel", {"queries": [{
+                "query_id": "orders-by-status", "entity": "orders", "filters": [{"field": "status", "operator": "EQ"}],
+                "sort": [], "joins": [], "read_write_ratio": {"reads_per_write": 8}, "evidence_refs": ["trace://orders-query"],
+            }], "proposed_indexes": [{"index_id": "orders-status", "entity": "orders", "columns": ["status"], "query_ids": ["orders-by-status"]}]})
             self.assertEqual("PASS", data["result"], data)
             self.assertEqual("v11.2.1", data["identity"]["framework_resolved"])
             self.assertTrue(all(item["status"] == "PASS" for item in data["dimensions"].values()))
@@ -54,6 +57,30 @@ class BackendSpecializationTests(unittest.TestCase):
             rules = {item["rule"] for item in data["dimensions"]["route_controller_service_boundary"]["findings"]}
             self.assertIn("controller-persistence-leak", rules)
 
+    def test_laravel_migration_without_query_evidence_does_not_invent_index_gap(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            write(root, "composer.json", json.dumps({"require":{"php":"^8.3","laravel/framework":"^11.0"},"scripts":{"test":"php artisan test"}}))
+            write(root, "composer.lock", json.dumps({"packages":[{"name":"laravel/framework","version":"v11.2.1"}]}))
+            write(root, "routes/web.php", "Route::post('/orders', [OrderController::class, 'store']);")
+            write(root, "app/Http/Controllers/OrderController.php", "class OrderController { function store(StoreOrderRequest $r, OrderService $s){ return $s->run(); } }")
+            write(root, "app/Services/OrderService.php", "class OrderService { function run(){ return DB::transaction(fn()=>1); } }")
+            write(root, "app/Http/Requests/StoreOrderRequest.php", "class StoreOrderRequest extends FormRequest { function rules(){ return []; } }")
+            write(root, "app/Data/OrderData.php", "class OrderData {}")
+            write(root, "app/Jobs/OrderJob.php", "class OrderJob implements ShouldQueue {}")
+            write(root, "app/Policies/OrderPolicy.php", "class OrderPolicy { function create(){ return true; } }")
+            write(root, "database/migrations/2026_01_create_orders.php", "$table->uuid('id'); $table->string('status');")
+            write(root, "tests/Feature/OrderTest.php", "class OrderTest extends TestCase {}")
+            write(root, "phpunit.xml", "<phpunit/>")
+
+            data = audit(root, "laravel")
+
+            self.assertEqual("PASS", data["result"], data)
+            self.assertEqual("PASS", data["dimensions"]["migration"]["status"])
+            self.assertEqual("NOT_APPLICABLE", data["dimensions"]["query_driven_index"]["status"])
+            self.assertIn("observed_index_declarations=0", data["dimensions"]["migration"]["note"])
+            self.assertEqual([], data["dimensions"]["query_driven_index"]["findings"])
+
     def test_node_typescript_positive_evidence_covers_build_contract_and_db(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -72,7 +99,10 @@ class BackendSpecializationTests(unittest.TestCase):
             write(root, "openapi.yaml", "openapi: 3.1.0\n")
             write(root, "prisma/migrations/001/migration.sql", "CREATE TABLE orders(id uuid primary key);\n")
             write(root, "src/orders/orders.service.spec.ts", "describe('orders',()=>{});\n")
-            data = audit(root, "node-ts")
+            data = audit(root, "node-ts", {"queries": [{
+                "query_id": "orders-by-id", "entity": "orders", "filters": [{"field": "id", "operator": "EQ"}],
+                "sort": [], "joins": [], "read_write_ratio": {"reads_per_write": 4}, "evidence_refs": ["trace://orders-id"],
+            }], "proposed_indexes": [{"index_id": "orders-id", "entity": "orders", "columns": ["id"], "query_ids": ["orders-by-id"]}]})
             self.assertEqual("PASS", data["result"], data)
             self.assertEqual("NestJS", data["identity"]["framework"])
             self.assertTrue(all(item["status"] == "PASS" for item in data["dimensions"].values()))

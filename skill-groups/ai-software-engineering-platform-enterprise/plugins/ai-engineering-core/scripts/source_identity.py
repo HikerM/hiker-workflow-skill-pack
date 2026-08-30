@@ -8,38 +8,10 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from technology_markers import PROJECT_MARKER_PATHS, STATE_FINGERPRINT_NAMES
 
-PROJECT_MARKERS = {
-    "package.json",
-    "pyproject.toml",
-    "requirements.txt",
-    "Cargo.toml",
-    "go.mod",
-    "pom.xml",
-    "build.gradle",
-    "build.gradle.kts",
-    "composer.json",
-    "Gemfile",
-    "CMakeLists.txt",
-    "Packages/manifest.json",
-    "ProjectVersion.txt",
-    "pnpm-workspace.yaml",
-    "pnpm-workspace.yml",
-    "lerna.json",
-    "turbo.json",
-    "Dockerfile",
-    "docker-compose.yml",
-    "docker-compose.yaml",
-    "compose.yml",
-    "compose.yaml",
-}
-
-STATE_MANIFEST_NAMES = {
-    "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock",
-    "pyproject.toml", "poetry.lock", "requirements.txt", "pom.xml",
-    "build.gradle", "build.gradle.kts", "Cargo.toml", "Cargo.lock",
-    "go.mod", "go.sum", "manifest.json", "ProjectVersion.txt",
-}
+PROJECT_MARKERS = PROJECT_MARKER_PATHS
+STATE_MANIFEST_NAMES = STATE_FINGERPRINT_NAMES
 
 
 def _git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:

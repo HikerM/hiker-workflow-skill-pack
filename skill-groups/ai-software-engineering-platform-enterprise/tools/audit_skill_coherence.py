@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import ast
 import csv
 import itertools
 import json
@@ -14,31 +13,6 @@ from audit_specialization_maturity import audit as audit_specialization_maturity
 
 ROOT = Path(__file__).resolve().parents[1]
 ALLOWED_MODES = {"router", "planning", "design", "implementation", "review", "workflow", "control-plane", "report"}
-REVIEW_SKILLS = {
-    "design-readiness-review",
-    "full-change-risk-review",
-    "interaction-conflict-governance",
-    "release-readiness-review",
-    "web-quality-review",
-    "backend-quality-review",
-    "cs-quality-review",
-    "unity-quality-review",
-    "feature-acceptance-closure",
-}
-DESIGN_SKILLS = {"web-ui-design", "cs-ui-design", "unity-ui-design"}
-IMPLEMENTATION_SKILLS = {
-    "web-component-implementation",
-    "backend-component-implementation",
-    "cs-component-implementation",
-    "unity-component-implementation",
-}
-ROUTER_SKILLS = {"ai-engineering-router", "backend-technology-router", "cs-client-router"}
-PLANNING_SKILLS = {
-    "architecture-decision-challenge",
-    "greenfield-project-planning",
-    "brownfield-requirement-reconciliation",
-    "api-event-contract-design",
-}
 NEGATION_WORDS = ("不得", "禁止", "不自动", "不直接", "不能", "不允许", "只生成", "仅生成")
 DESTRUCTIVE_PATTERN = re.compile(r"(?:自动|直接).{0,10}(?:push|merge|deploy|release|推送|合并|部署|发布|删除|清理)", re.I)
 LINK_PATTERN = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
@@ -59,15 +33,6 @@ def _frontmatter(text: str) -> dict[str, str]:
 def _yaml_value(text: str, key: str) -> str:
     match = re.search(rf'^\s*{re.escape(key)}:\s*["\']?([^"\'\r\n]+)', text, re.M)
     return match.group(1).strip() if match else ""
-
-
-def _router_mapping(path: Path) -> dict[str, str]:
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    for node in tree.body:
-        if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == "PLUGIN_FOR" for target in node.targets):
-            value = ast.literal_eval(node.value)
-            return {str(key): str(plugin) for key, plugin in value.items()}
-    raise RuntimeError("suite_router.py does not define a literal PLUGIN_FOR mapping")
 
 
 def _trigrams(value: str) -> set[str]:
@@ -159,8 +124,18 @@ def audit(root: Path = ROOT) -> dict[str, Any]:
     if len(versions) != 1:
         errors.append(_finding("PLUGIN_VERSION_DRIFT", "suite", f"插件版本不一致：{sorted(versions)}"))
 
-    registry_path = root / "SKILL_REGISTRY.json"
-    registry = json.loads(registry_path.read_text(encoding="utf-8")).get("skills", {})
+    registry_path = root / "plugins" / "ai-engineering-core" / "references" / "SKILL_REGISTRY.json"
+    registry_document = json.loads(registry_path.read_text(encoding="utf-8"))
+    registry = registry_document.get("skills", {})
+    registry_files = sorted(root.rglob("SKILL_REGISTRY.json"))
+    if registry_document.get("authority") != "SINGLE_CAPABILITY_METADATA_AUTHORITY" or registry_files != [registry_path]:
+        errors.append(_finding(
+            "CAPABILITY_AUTHORITY_CONFLICT", "suite",
+            f"Capability Metadata Authority必须唯一，实际{[path.relative_to(root).as_posix() for path in registry_files]}",
+            registry_path,
+        ))
+    if (root / "plugins" / "ai-engineering-core" / "references" / "capability-registry.json").exists():
+        errors.append(_finding("DUPLICATE_CAPABILITY_CATALOG", "suite", "旧Capability Catalog仍然存在", registry_path))
     if set(registry) != set(records):
         errors.append(_finding("REGISTRY_DRIFT", "suite", f"目录缺失{sorted(set(registry)-set(records))}，登记缺失{sorted(set(records)-set(registry))}", registry_path))
     for name, record in records.items():
@@ -170,15 +145,18 @@ def audit(root: Path = ROOT) -> dict[str, Any]:
         mode = str(contract.get("mode") or "")
         if mode not in ALLOWED_MODES:
             errors.append(_finding("INVALID_SKILL_MODE", name, f"未知职责类型：{mode}", registry_path))
-        expected = "review" if name in REVIEW_SKILLS else "design" if name in DESIGN_SKILLS else "implementation" if name in IMPLEMENTATION_SKILLS else "router" if name in ROUTER_SKILLS else "planning" if name in PLANNING_SKILLS else ""
-        if expected and mode != expected:
-            errors.append(_finding("MISINTERPRETED_SKILL_MODE", name, f"职责应为 {expected}，注册表却是 {mode}", registry_path))
+        for field in ("capability", "domain"):
+            if field not in contract:
+                errors.append(_finding("INCOMPLETE_CAPABILITY_METADATA", name, f"缺少唯一注册表字段：{field}", registry_path))
+        for field in ("families", "stages", "surfaces", "specializations"):
+            if field in contract and not isinstance(contract.get(field), list):
+                errors.append(_finding("INVALID_CAPABILITY_METADATA", name, f"唯一注册表字段必须是数组：{field}", registry_path))
         may_modify = bool(contract.get("may_modify_source"))
         if mode == "implementation" and not may_modify:
             errors.append(_finding("IMPLEMENTATION_PERMISSION_CONFLICT", name, "实现 Skill 未声明源码修改权限", registry_path))
         if mode in {"router", "planning", "design", "review"} and may_modify:
             errors.append(_finding("READ_ONLY_PERMISSION_CONFLICT", name, f"{mode} Skill 不应拥有源码修改权限", registry_path))
-        if name in REVIEW_SKILLS and name != "feature-acceptance-closure" and "只读" not in record["text"]:
+        if contract.get("independence_requirement") == "INDEPENDENT_REVIEW" and "只读" not in record["text"]:
             errors.append(_finding("REVIEW_NOT_INDEPENDENT", name, "独立审核 Skill 未明确只读边界", record["path"]))
 
     architecture_challenge = records.get("architecture-decision-challenge")
@@ -246,8 +224,19 @@ def audit(root: Path = ROOT) -> dict[str, Any]:
         for forbidden in ("explicit_bs =", "explicit_cs =", "explicit_backend =", "request_families ="):
             if forbidden in workspace_router_text:
                 errors.append(_finding("WORKSPACE_KEYWORD_ROUTING_AUTHORITY", "workspace-task-router", f"工作区守门器仍在按关键词替代模型选择：{forbidden}", workspace_router_path))
-        mapping = _router_mapping(router_path)
-        expected_routable = set(records) - {"ai-engineering-router"}
+        for forbidden in (
+            "PLUGIN_FOR = {", "DESIGN_SKILLS =", "IMPLEMENTATION_SKILLS =", "WEB_SKILLS =",
+            "BACKEND_SKILLS =", "CLIENT_SKILLS =", "SOURCE_CONFLICT_SAFE =",
+            "AI_STATE_DEPENDENT_SKILLS =", "VERSION_RECOVERY_SKILLS =",
+        ):
+            if forbidden in router_text:
+                errors.append(_finding("DUPLICATE_STATIC_MAPPING", "ai-engineering-router", f"Router仍包含重复映射：{forbidden}", router_path))
+        mapping = {
+            name: str(contract.get("plugin") or "")
+            for name, contract in registry.items()
+            if bool(contract.get("routable", True))
+        }
+        expected_routable = {name for name, contract in registry.items() if bool(contract.get("routable", True))}
         if set(mapping) != expected_routable:
             errors.append(_finding("ROUTER_COVERAGE_DRIFT", "suite", f"缺少{sorted(expected_routable-set(mapping))}，多余{sorted(set(mapping)-expected_routable)}"))
         for name, plugin in mapping.items():

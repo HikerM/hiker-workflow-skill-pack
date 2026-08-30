@@ -8,66 +8,37 @@ from typing import Any, Iterable
 
 from engineering_manifests import DiscoveryBudget, discover_engineering_manifests
 from source_identity import context_fresh, identify
+from technology_markers import manifest_signals
+
+FACT_CLASSIFICATIONS = {"FACT", "INFERENCE", "PROPOSAL", "DECISION"}
+CURRENT_AUTHORITIES = {"AUTHORITATIVE_CURRENT", "PRO_STATE_PLANE", "CURRENT_PROJECT_STATE"}
+HISTORICAL_AUTHORITIES = {"IMPORTED_LEGACY", "HISTORICAL", "ARCHIVED"}
 
 
-FRONTEND_DEPENDENCIES = {
-    "@angular/core": "angular",
-    "next": "next",
-    "nuxt": "nuxt",
-    "react": "react",
-    "svelte": "svelte",
-    "vite": "vite",
-    "vue": "vue",
-}
-BACKEND_DEPENDENCIES = {
-    "@hapi/hapi": "hapi",
-    "@nestjs/core": "nestjs",
-    "express": "express",
-    "fastify": "fastify",
-    "hapi": "hapi",
-    "koa": "koa",
-}
-CLIENT_DEPENDENCIES = {
-    "@tauri-apps/api": "tauri",
-    "@tauri-apps/cli": "tauri",
-    "electron": "electron",
-    "electron-builder": "electron",
-    "react-native": "react-native",
-}
-DATABASE_DEPENDENCIES = {
-    "@prisma/client": "prisma",
-    "drizzle-orm": "drizzle",
-    "knex": "knex",
-    "mongoose": "mongodb",
-    "mysql": "mysql",
-    "mysql2": "mysql",
-    "pg": "postgresql",
-    "prisma": "prisma",
-    "sequelize": "sequelize",
-    "sqlite3": "sqlite",
-    "typeorm": "typeorm",
-}
-
-
-def _fact(value: Any, authority: str, fingerprint: str, generation: int = 0, freshness: str = "CURRENT") -> dict[str, Any]:
+def _fact(
+    value: Any,
+    authority: str,
+    fingerprint: str,
+    generation: int = 0,
+    freshness: str = "CURRENT",
+    *,
+    classification: str = "FACT",
+    source: str = "CURRENT_PROJECT",
+    scope: str = "PROJECT",
+    confidence: str = "HIGH",
+    lifecycle: str = "CURRENT",
+) -> dict[str, Any]:
     return {
         "value": value,
+        "classification": classification if classification in FACT_CLASSIFICATIONS else "INFERENCE",
         "authority": authority,
+        "source": source,
         "source_fingerprint": fingerprint,
         "generation": generation,
         "freshness": freshness,
-        "lifecycle": "CURRENT",
-    }
-
-
-def _package_dependencies(payload: Any) -> set[str]:
-    if not isinstance(payload, dict):
-        return set()
-    return {
-        str(name).strip().lower()
-        for section in ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies")
-        for name in (payload.get(section) or {})
-        if isinstance(payload.get(section), dict)
+        "scope": scope,
+        "confidence": confidence,
+        "lifecycle": lifecycle,
     }
 
 
@@ -129,9 +100,42 @@ def _pro_fact(payload: dict[str, Any] | None, name: str) -> dict[str, Any] | Non
         return None
     facts = payload.get("facts") if isinstance(payload.get("facts"), dict) else payload
     value = facts.get(name) if isinstance(facts, dict) else None
-    if not isinstance(value, dict) or not value.get("value"):
+    if not isinstance(value, dict) or value.get("value") in (None, ""):
         return None
-    return value
+    authority = str(value.get("authority") or "UNKNOWN").strip().upper()
+    historical = authority in HISTORICAL_AUTHORITIES
+    classification = str(value.get("classification") or ("DECISION" if name == "project_architecture" else "FACT")).strip().upper()
+    if classification not in FACT_CLASSIFICATIONS:
+        classification = "INFERENCE"
+    generation = value.get("generation", 0)
+    generation = generation if isinstance(generation, int) and not isinstance(generation, bool) and generation >= 0 else 0
+    freshness = str(value.get("freshness") or ("HISTORICAL" if historical else "CURRENT")).strip().upper()
+    lifecycle = str(value.get("lifecycle") or ("ARCHIVED" if historical else "CURRENT")).strip().upper()
+    fingerprint = str(value.get("source_fingerprint") or "").strip().lower()
+    if not re.fullmatch(r"[a-f0-9]{64}", fingerprint):
+        fingerprint = hashlib.sha256(json.dumps({"name": name, "value": value.get("value"), "authority": authority, "generation": generation}, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+    return _fact(
+        value.get("value"), authority, fingerprint, generation, freshness,
+        classification=classification,
+        source=str(value.get("source") or "PRO_STATE_PLANE")[:80],
+        scope=str(value.get("scope") or "PROJECT")[:80],
+        confidence=str(value.get("confidence") or ("LOW" if historical else "HIGH")).strip().upper(),
+        lifecycle=lifecycle,
+    )
+
+
+def _is_current(fact: dict[str, Any]) -> bool:
+    return fact.get("freshness") == "CURRENT" and fact.get("lifecycle") in {"CURRENT", "ACTIVE"}
+
+
+def _public_fact(fact: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in fact.items() if key not in {"classification", "source", "scope", "confidence"}}
+
+
+def _architectures_compatible(first: str | None, second: str | None) -> bool:
+    if not first or not second or first == second:
+        return True
+    return {first, second} == {"bs", "backend"}
 
 
 def _pro_scalar(payload: dict[str, Any] | None, name: str) -> Any:
@@ -142,9 +146,6 @@ def _pro_scalar(payload: dict[str, Any] | None, name: str) -> Any:
 
 
 def _architecture(frontend: list[str], backend: list[str], client: list[str], context: dict[str, Any]) -> str | None:
-    context_architecture = str(context.get("project_architecture") or context.get("architecture") or "").strip().lower()
-    if context_architecture in {"bs", "cs", "backend", "hybrid"}:
-        return context_architecture
     if client and (frontend or backend):
         return "hybrid"
     if client:
@@ -153,7 +154,8 @@ def _architecture(frontend: list[str], backend: list[str], client: list[str], co
         return "bs"
     if backend:
         return "backend"
-    return None
+    context_architecture = str(context.get("project_architecture") or context.get("architecture") or "").strip().lower()
+    return context_architecture if context_architecture in {"bs", "cs", "backend", "hybrid"} else None
 
 
 def build_project_fact_plane(
@@ -188,67 +190,16 @@ def build_project_fact_plane(
     for manifest in discovery["manifests"]:
         path = str(manifest["path"])
         content = str(manifest["content"])
-        lower = content.lower()
-        name = Path(path).name
         root_name = _root_for_manifest(path)
         authorities.add(str(manifest["authority"]))
-        frontend = backend = client = False
-        if name == "package.json":
-            try:
-                package = json.loads(content)
-            except (TypeError, json.JSONDecodeError):
-                package = {}
-            dependencies = _package_dependencies(package)
-            react_native = "react-native" in dependencies
-            for dependency, framework in FRONTEND_DEPENDENCIES.items():
-                if dependency in dependencies and not (dependency == "react" and react_native):
-                    frontend = True
-                    _append_unique(frameworks, [framework])
-            for dependency, framework in BACKEND_DEPENDENCIES.items():
-                if dependency in dependencies:
-                    backend = True
-                    _append_unique(frameworks, [framework])
-            for dependency, framework in CLIENT_DEPENDENCIES.items():
-                if dependency in dependencies:
-                    client = True
-                    _append_unique(frameworks, [framework])
-            _append_unique(databases, (value for key, value in DATABASE_DEPENDENCIES.items() if key in dependencies))
-            engines = package.get("engines") if isinstance(package, dict) else None
-            if isinstance(engines, dict):
-                _append_unique(runtimes, (f"{key}:{value}" for key, value in engines.items()))
-        elif name in {"pyproject.toml", "requirements.txt"}:
-            backend = any(token in lower for token in ("fastapi", "django", "flask", "litestar", "sanic"))
-            _append_unique(frameworks, (token for token in ("fastapi", "django", "flask", "litestar", "sanic") if token in lower))
-            _append_unique(databases, (token for token in ("sqlalchemy", "alembic", "psycopg", "pymysql") if token in lower))
-            _append_unique(runtimes, ["python"])
-        elif name == "composer.json":
-            backend = True
-            _append_unique(frameworks, ["laravel" if "laravel/framework" in lower else "php"])
-            _append_unique(runtimes, ["php"])
-        elif name == "Gemfile":
-            backend = True
-            _append_unique(frameworks, ["rails" if "rails" in lower else "ruby"])
-            _append_unique(runtimes, ["ruby"])
-        elif name in {"go.mod", "Cargo.toml", "pom.xml", "build.gradle", "build.gradle.kts"}:
-            backend = True
-            _append_unique(runtimes, [{"go.mod": "go", "Cargo.toml": "rust", "pom.xml": "jvm"}.get(name, "jvm")])
-        elif name == "ProjectVersion.txt" or path.endswith("Packages/manifest.json"):
-            client = True
-            _append_unique(frameworks, ["unity"])
-            match = re.search(r"m_EditorVersion:\s*([^\r\n]+)", content)
-            _append_unique(runtimes, [f"unity:{match.group(1).strip()}" if match else "unity"])
-        elif name == "CMakeLists.txt" or Path(path).suffix.lower() in {".sln", ".csproj"}:
-            qt = bool(re.search(r"\bqt[56]?\b|find_package\s*\(\s*qt", lower))
-            dotnet_client = any(token in lower for token in ("<usewpf>true", "<usewindowsforms>true", "avalonia", "windowsappsdk"))
-            dotnet_backend = any(token in lower for token in ("microsoft.net.sdk.web", "aspnetcore"))
-            client = qt or dotnet_client
-            backend = dotnet_backend
-            if qt:
-                _append_unique(frameworks, ["qt"])
-            if dotnet_client or dotnet_backend:
-                _append_unique(runtimes, ["dotnet"])
-        elif name in {"Dockerfile", "docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"}:
-            _append_unique(runtimes, ["container"])
+        signals = manifest_signals(path, content)
+        roles = set(signals["roles"])
+        frontend = "frontend" in roles
+        backend = "backend" in roles
+        client = "client" in roles
+        _append_unique(frameworks, signals["frameworks"])
+        _append_unique(databases, signals["databases"])
+        _append_unique(runtimes, signals["runtimes"])
 
         if frontend or backend or client:
             _append_unique(application_roots, [root_name])
@@ -278,7 +229,22 @@ def build_project_fact_plane(
     if context_client and not client_roots:
         _append_unique(client_roots, ["."])
 
-    local_architecture = _architecture(frontend_roots, backend_roots, client_roots, context)
+    observed_architecture = _architecture(frontend_roots, backend_roots, client_roots, {})
+    context_architecture = str(context.get("project_architecture") or context.get("architecture") or "").strip().lower()
+    context_architecture = context_architecture if context_architecture in {"bs", "cs", "backend", "hybrid"} else None
+    authority_conflicts: list[dict[str, Any]] = []
+    authority_resolutions: list[dict[str, Any]] = []
+    local_architecture = observed_architecture or context_architecture
+    if observed_architecture and context_architecture:
+        if not _architectures_compatible(observed_architecture, context_architecture):
+            authority_conflicts.append({
+                "fact": "project_architecture", "code": "CURRENT_AUTHORITY_CONFLICT", "severity": "BLOCK",
+                "current_value": observed_architecture, "competing_value": context_architecture,
+                "current_authority": "CURRENT_WORKSPACE_MANIFEST", "competing_authority": "CURRENT_PROJECT_DECISION",
+                "scope": "PROJECT", "resolution": "RECONCILE_BEFORE_EXECUTION",
+            })
+        elif observed_architecture == "backend" and context_architecture == "bs":
+            local_architecture = "bs"
     local_authority = (
         "CURRENT_WORKSPACE_MANIFEST"
         if "CURRENT_WORKSPACE_MANIFEST" in authorities
@@ -289,20 +255,39 @@ def build_project_fact_plane(
     local_fingerprint = discovery["fingerprint"]
     pro_architecture = _pro_fact(pro_payload, "project_architecture")
     selected_architecture = local_architecture
-    architecture_fact = _fact(local_architecture, local_authority, local_fingerprint) if local_architecture else None
+    architecture_fact = _fact(
+        local_architecture, local_authority, local_fingerprint,
+        classification="INFERENCE", source="CURRENT_MANIFEST_AND_TRUSTED_CONTEXT",
+        confidence="HIGH" if discovery["manifests"] else "MEDIUM",
+    ) if local_architecture else _fact(
+        None, "UNKNOWN", local_fingerprint, freshness="UNKNOWN",
+        classification="INFERENCE", source="BOUNDED_DISCOVERY", confidence="NONE", lifecycle="UNKNOWN",
+    )
     if pro_architecture:
         pro_value = str(pro_architecture.get("value") or "").lower()
-        if not local_architecture or pro_value == local_architecture or (pro_value == "bs" and local_architecture == "backend"):
+        pro_current = _is_current(pro_architecture)
+        pro_authoritative = pro_architecture.get("authority") in CURRENT_AUTHORITIES and pro_architecture.get("classification") in {"FACT", "DECISION"}
+        compatible = _architectures_compatible(pro_value, local_architecture)
+        if not pro_current:
+            authority_resolutions.append({"fact": "project_architecture", "resolution": "HISTORICAL_IGNORED"})
+        elif pro_architecture.get("classification") in {"PROPOSAL", "INFERENCE"} and local_architecture:
+            authority_resolutions.append({"fact": "project_architecture", "resolution": "LOWER_AUTHORITY_INFERENCE_IGNORED"})
+        elif not pro_authoritative:
+            authority_resolutions.append({"fact": "project_architecture", "resolution": "UNKNOWN_AUTHORITY_IGNORED"})
+        elif local_architecture and not compatible:
+            authority_conflicts.append({
+                "fact": "project_architecture", "code": "CURRENT_AUTHORITY_CONFLICT", "severity": "BLOCK",
+                "current_value": local_architecture, "competing_value": pro_value,
+                "current_authority": local_authority, "competing_authority": pro_architecture.get("authority"),
+                "scope": "PROJECT", "resolution": "RECONCILE_BEFORE_EXECUTION",
+            })
+        elif not local_architecture or compatible:
             selected_architecture = pro_value
-            architecture_fact = pro_architecture
-        elif pro_value == "backend" and local_architecture == "bs":
-            selected_architecture = "bs"
-        elif pro_value == "hybrid":
-            selected_architecture = "hybrid"
             architecture_fact = pro_architecture
 
     pro_facts = pro_payload.get("facts") if isinstance(pro_payload, dict) and isinstance(pro_payload.get("facts"), dict) else {}
-    project_id = pro_facts.get("project_id") or identity.get("repo_id")
+    pro_project_id = pro_facts.get("project_id")
+    project_id = pro_project_id or identity.get("repo_id")
     generation = int(pro_facts.get("project_generation") or 0)
     plane_basis = {
         "project_id": project_id,
@@ -317,45 +302,64 @@ def build_project_fact_plane(
         "pro_generation": generation,
     }
     plane_fingerprint = hashlib.sha256(json.dumps(plane_basis, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
-    return {
-        "schema_version": "1.0.0",
-        "project_identity": _fact(project_id, "PRO_STATE_PLANE" if pro_facts else "CURRENT_RUNTIME_OBSERVATION", plane_fingerprint, generation),
-        "project_topology": _fact(
-            {
-                "application_roots": application_roots,
-                "service_roots": service_roots,
-                "frontend_roots": frontend_roots,
-                "backend_roots": backend_roots,
-                "client_roots": client_roots,
+    identity_fact = _fact(project_id, "PRO_STATE_PLANE" if pro_project_id else "CURRENT_RUNTIME_OBSERVATION", plane_fingerprint, generation if pro_project_id else 0, source="PRO_STATE_PLANE" if pro_project_id else "SOURCE_IDENTITY")
+    topology_fact = _fact(
+        {
+            "application_roots": application_roots,
+            "service_roots": service_roots,
+            "frontend_roots": frontend_roots,
+            "backend_roots": backend_roots,
+            "client_roots": client_roots,
+        },
+        local_authority,
+        local_fingerprint,
+        generation,
+        classification="INFERENCE",
+        source="BOUNDED_MANIFEST_DISCOVERY",
+    )
+
+    def activity_scalar(name: str) -> str | None:
+        value = pro_facts.get(name)
+        return str(value).strip()[:160] if isinstance(value, (str, int)) and str(value).strip() else None
+
+    def activity_list(name: str, limit: int) -> list[str]:
+        value = pro_facts.get(name)
+        if not isinstance(value, list):
+            return []
+        return [str(item).strip().replace("\\", "/")[:240] for item in value if str(item).strip()][:limit]
+
+    result = {
+        "schema_version": "1.1.0",
+        "fact_contract": {
+            "defaults": {"classification": "FACT", "scope": "PROJECT", "confidence": "HIGH", "source": ["authority", "source_fingerprint"]},
+            "overrides": {
+                "project_topology": {"classification": "INFERENCE"},
+                "project_architecture": {
+                    "classification": architecture_fact.get("classification"),
+                    "confidence": architecture_fact.get("confidence"),
+                },
             },
-            local_authority,
-            local_fingerprint,
-            generation,
-        ),
-        "project_architecture": architecture_fact,
-        "framework_facts": _fact(frameworks, local_authority, local_fingerprint, generation),
-        "database_facts": _fact(databases, local_authority, local_fingerprint, generation),
-        "runtime_facts": _fact(runtimes, local_authority, local_fingerprint, generation),
-        "current_goal": pro_facts.get("current_goal"),
-        "current_task": pro_facts.get("current_task"),
+        },
+        "project_identity": _public_fact(identity_fact),
+        "project_topology": _public_fact(topology_fact),
+        "project_architecture": _public_fact(architecture_fact),
+        "framework_facts": _public_fact(_fact(frameworks, local_authority, local_fingerprint, generation, source="BOUNDED_MANIFEST_DISCOVERY")),
+        "database_facts": _public_fact(_fact(databases, local_authority, local_fingerprint, generation, source="BOUNDED_MANIFEST_DISCOVERY")),
+        "runtime_facts": _public_fact(_fact(runtimes, local_authority, local_fingerprint, generation, source="BOUNDED_MANIFEST_DISCOVERY")),
+        "current_goal": activity_scalar("current_goal"),
+        "current_task": activity_scalar("current_task"),
         "current_goal_revision": pro_facts.get("current_goal_revision", 0),
         "current_stage": pro_facts.get("current_stage"),
-        "current_changed_scope": pro_facts.get("current_changed_scope", []),
+        "current_changed_scope": activity_list("current_changed_scope", 80),
         "environment_profile": pro_facts.get("environment_profile"),
-        "authority": "PRO_STATE_PLANE" if pro_facts else local_authority,
         "source_fingerprint": plane_fingerprint,
-        "generation": generation,
         "context_source_trusted": bool(context),
         "manifest_discovery": {
             "sources": [item["path"] for item in discovery["manifests"]],
-            "authorities": [item["authority"] for item in discovery["manifests"]],
-            "declared_roots": discovery["declared_roots"],
             "budget": discovery["budget"],
             "metrics": discovery["metrics"],
         },
         "source_identity": {
-            "repo_root": identity.get("repo_root"),
-            "worktree_root": identity.get("worktree_root"),
             "branch": identity.get("branch"),
             "head": identity.get("head"),
             "repo_id": identity.get("repo_id"),
@@ -364,3 +368,15 @@ def build_project_fact_plane(
             "tracked_file_count": identity.get("tracked_file_count"),
         },
     }
+    for name in ("current_direct_dependencies", "current_contracts", "current_evidence_refs"):
+        normalized = activity_list(name, 16)
+        if normalized:
+            result[name] = normalized
+    authority_status = "CONFLICT" if authority_conflicts else "CURRENT" if selected_architecture else "UNKNOWN"
+    if authority_status != "CURRENT":
+        result["authority_status"] = authority_status
+    if authority_conflicts:
+        result["authority_conflicts"] = authority_conflicts
+    if authority_resolutions:
+        result["authority_resolutions"] = authority_resolutions
+    return result

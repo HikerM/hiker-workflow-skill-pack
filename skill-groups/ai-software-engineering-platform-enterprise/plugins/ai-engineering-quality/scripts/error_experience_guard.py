@@ -15,6 +15,17 @@ from qualitylib import load_json, write_json
 PROTOCOL_FAMILIES = {"REST", "PROBLEM_DETAILS", "GRAPHQL", "GRPC", "CS_LOCAL", "CUSTOM"}
 ERROR_KINDS = {"EXPECTED_BUSINESS", "UNEXPECTED_SYSTEM"}
 RETRY_SEMANTICS = {"NEVER", "SAFE", "AFTER_CHANGE", "UNKNOWN"}
+RECOVERY_SEMANTICS = {"NONE", "USER_ACTION", "AUTOMATIC", "OPERATOR_ACTION", "UNKNOWN"}
+CHANNEL_VISIBILITY = {"user": "USER", "developer": "DEVELOPER", "operations": "OPERATIONS"}
+SHARED_SEMANTICS = {
+    "classification", "user_action", "diagnostic_reference", "visibility",
+    "retry_semantics", "recovery_semantics", "correlation",
+}
+CLIENT_FAILURES = {"UNHANDLED_PROMISE", "RENDER_CRASH", "ROUTER_FAILURE", "CHUNK_RESOURCE_FAILURE"}
+USER_INTERNAL_FIELDS = {
+    "stack", "stack_trace", "stack_ref", "path", "database", "db_details",
+    "raw_exception", "exception", "exception_type", "secret", "token",
+}
 MAX_CLASSIFICATIONS = 256
 MAX_SOURCE_FILES = 500
 MAX_FINDINGS = 256
@@ -25,6 +36,24 @@ SECRET_TEXT = re.compile(r"(?i)(?:api[_-]?key|access[_-]?token|secret|password)\
 
 def contract_fingerprint(contract: dict[str, Any]) -> str:
     return fingerprint({key: value for key, value in contract.items() if key not in {"fingerprint", "updated_at"}})
+
+
+def _internal_user_fields(value: object, *, max_nodes: int = 256) -> set[str]:
+    found: set[str] = set()
+    queue: list[object] = [value]
+    visited = 0
+    while queue and visited < max_nodes:
+        current = queue.pop()
+        visited += 1
+        if isinstance(current, dict):
+            for key, child in current.items():
+                normalized = str(key).lower()
+                if normalized in USER_INTERNAL_FIELDS:
+                    found.add(normalized)
+                queue.append(child)
+        elif isinstance(current, list):
+            queue.extend(current[:max_nodes - visited])
+    return found
 
 
 def validate_contract(contract: Any) -> dict[str, Any]:
@@ -38,7 +67,7 @@ def validate_contract(contract: Any) -> dict[str, Any]:
         errors.append({"code": "INVALID_PROTOCOL_FAMILY", "field": "protocol"})
     else:
         mappings = protocol.get("semantic_mappings")
-        required = {"classification", "user_message", "developer_diagnostic", "error_code", "correlation", "retry"}
+        required = SHARED_SEMANTICS | {"error_code"}
         if not isinstance(mappings, dict) or not required.issubset({key for key, value in mappings.items() if isinstance(value, str) and value.strip()}):
             errors.append({"code": "INCOMPLETE_SEMANTIC_MAPPINGS", "field": "protocol.semantic_mappings"})
         if protocol.get("family") == "CUSTOM" and not protocol.get("existing_contract_ref"):
@@ -65,11 +94,27 @@ def validate_contract(contract: Any) -> dict[str, Any]:
             errors.append({"code": "INVALID_ERROR_KIND", "field": field})
         if row.get("retry_semantics") not in RETRY_SEMANTICS:
             errors.append({"code": "INVALID_RETRY_SEMANTICS", "field": field})
-        if not row.get("user_message_policy") or not isinstance(row.get("diagnostic_requirements"), list):
+        if row.get("recovery_semantics") not in RECOVERY_SEMANTICS:
+            errors.append({"code": "INVALID_RECOVERY_SEMANTICS", "field": field})
+        if not row.get("user_message_policy") or not row.get("user_action_policy") or not isinstance(row.get("diagnostic_requirements"), list):
             errors.append({"code": "INCOMPLETE_CLASSIFICATION_POLICY", "field": field})
+    client_coverage = contract.get("client_failure_coverage", [])
+    if contract.get("client_surface") is True:
+        covered = set(client_coverage) if isinstance(client_coverage, list) else set()
+        missing = sorted(CLIENT_FAILURES - covered)
+        if missing:
+            errors.append({"code": "INCOMPLETE_CLIENT_FAILURE_COVERAGE", "field": "client_failure_coverage", "detail": ",".join(missing)})
     if contract.get("fingerprint") != contract_fingerprint(contract):
         errors.append({"code": "CONTRACT_FINGERPRINT_MISMATCH", "field": "fingerprint"})
-    return {"status": "BLOCKED" if errors else "PASS", "errors": errors, "summary": {"classifications": len(rows), "protocol": protocol.get("family") if isinstance(protocol, dict) else None}}
+    return {
+        "status": "BLOCKED" if errors else "PASS", "errors": errors,
+        "shared_semantics": sorted(SHARED_SEMANTICS),
+        "summary": {
+            "classifications": len(rows),
+            "protocol": protocol.get("family") if isinstance(protocol, dict) else None,
+            "client_failure_coverage": len(client_coverage) if isinstance(client_coverage, list) else 0,
+        },
+    }
 
 
 def validate_event(contract: dict[str, Any], event: Any, correlations: Any | None = None) -> dict[str, Any]:
@@ -93,29 +138,47 @@ def validate_event(contract: dict[str, Any], event: Any, correlations: Any | Non
         findings.append({"code": "UNKNOWN_ERROR_CLASSIFICATION", "field": "classification"})
     elif event.get("kind") != policy.get("kind"):
         findings.append({"code": "ERROR_KIND_MISMATCH", "field": "kind"})
-    elif event.get("retry_semantics") != policy.get("retry_semantics"):
-        findings.append({"code": "RETRY_SEMANTICS_MISMATCH", "field": "retry_semantics"})
+    else:
+        if event.get("retry_semantics") != policy.get("retry_semantics"):
+            findings.append({"code": "RETRY_SEMANTICS_MISMATCH", "field": "retry_semantics"})
+        if event.get("recovery_semantics") != policy.get("recovery_semantics"):
+            findings.append({"code": "RECOVERY_SEMANTICS_MISMATCH", "field": "recovery_semantics"})
     user = event.get("user")
     developer = event.get("developer")
+    operations = event.get("operations")
     if not isinstance(user, dict):
         findings.append({"code": "MISSING_USER_CHANNEL", "field": "user"})
         user = {}
     if not isinstance(developer, dict):
         findings.append({"code": "MISSING_DEVELOPER_CHANNEL", "field": "developer"})
         developer = {}
+    if not isinstance(operations, dict):
+        findings.append({"code": "MISSING_OPERATIONS_CHANNEL", "field": "operations"})
+        operations = {}
+    for channel_name, channel in (("user", user), ("developer", developer), ("operations", operations)):
+        if channel.get("visibility") != CHANNEL_VISIBILITY[channel_name]:
+            findings.append({"code": "ERROR_CHANNEL_VISIBILITY_MISMATCH", "field": f"{channel_name}.visibility"})
     if user.get("error_id") != error_id or developer.get("error_id") != error_id:
         findings.append({"code": "ERROR_ID_CORRELATION_MISMATCH", "field": "error_id"})
-    if developer.get("trace_id") != trace_id:
+    if operations.get("error_id") != error_id:
+        findings.append({"code": "ERROR_ID_CORRELATION_MISMATCH", "field": "operations.error_id"})
+    if developer.get("trace_id") != trace_id or operations.get("trace_id") != trace_id:
         findings.append({"code": "TRACE_ID_CORRELATION_MISMATCH", "field": "trace_id"})
     message = str(user.get("message") or "")
     if not message or not user.get("next_step"):
         findings.append({"code": "INCOMPLETE_USER_MESSAGE", "field": "user"})
-    if INTERNAL_VALUE.search(message) or TECHNICAL_USER_TEXT.search(message) or SECRET_TEXT.search(message):
+    user_serialized = json.dumps(user, ensure_ascii=False)
+    internal_fields = _internal_user_fields(user)
+    if internal_fields or INTERNAL_VALUE.search(user_serialized) or TECHNICAL_USER_TEXT.search(user_serialized) or SECRET_TEXT.search(user_serialized):
         findings.append({"code": "UNSAFE_USER_ERROR_MESSAGE", "field": "user.message"})
     if not isinstance(developer.get("diagnostic_evidence_refs"), list) or not developer.get("diagnostic_evidence_refs"):
         findings.append({"code": "MISSING_DIAGNOSTIC_EVIDENCE", "field": "developer.diagnostic_evidence_refs"})
     if developer.get("redaction_status") != "PASS":
         findings.append({"code": "DIAGNOSTIC_REDACTION_UNVERIFIED", "field": "developer.redaction_status"})
+    if not isinstance(operations.get("diagnostic_evidence_refs"), list) or not operations.get("diagnostic_evidence_refs"):
+        findings.append({"code": "MISSING_OPERATIONS_EVIDENCE", "field": "operations.diagnostic_evidence_refs"})
+    if operations.get("redaction_status") != "PASS":
+        findings.append({"code": "OPERATIONS_REDACTION_UNVERIFIED", "field": "operations.redaction_status"})
     if event.get("kind") == "UNEXPECTED_SYSTEM":
         for field in ("exception_type", "cause", "stack_ref"):
             if not developer.get(field):
@@ -134,7 +197,7 @@ def validate_event(contract: dict[str, Any], event: Any, correlations: Any | Non
 
 def _catch_blocks(text: str) -> list[tuple[int, str]]:
     blocks: list[tuple[int, str]] = []
-    for match in re.finditer(r"\bcatch\s*\([^)]*\)\s*\{(.{0,1600}?)\}", text, re.I | re.S):
+    for match in re.finditer(r"\bcatch(?:\s*\([^)]*\))?\s*\{(.{0,1600}?)\}", text, re.I | re.S):
         blocks.append((text.count("\n", 0, match.start()) + 1, match.group(1)))
     lines = text.splitlines()
     for index, line in enumerate(lines):
@@ -168,8 +231,10 @@ def audit_sources(root: Path, requested: list[str]) -> dict[str, Any]:
             diagnostic = re.search(r"\b(?:log(?:ger)?|trace|throw|raise|rethrow|errorMapper|mapError|diagnostic|evidence|emit)\b", body, re.I)
             if user_response and not diagnostic:
                 findings.append({"code": "CATCH_AND_HIDE", "path": relative.as_posix(), "line": line, "block_sha256": hashlib.sha256(body.encode("utf-8", errors="replace")).hexdigest()})
-                if len(findings) >= MAX_FINDINGS:
-                    break
+            elif not diagnostic:
+                findings.append({"code": "UNKNOWN_EXCEPTION_SILENTLY_SWALLOWED", "path": relative.as_posix(), "line": line, "block_sha256": hashlib.sha256(body.encode("utf-8", errors="replace")).hexdigest()})
+            if len(findings) >= MAX_FINDINGS:
+                break
         if len(findings) >= MAX_FINDINGS:
             break
     if len(requested) > MAX_SOURCE_FILES:

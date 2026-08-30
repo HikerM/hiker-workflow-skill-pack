@@ -15,6 +15,8 @@ from benchmark_delivery_velocity import benchmark as benchmark_delivery_velocity
 from benchmark_router import benchmark as benchmark_router
 from audit_skill_coherence import audit as audit_skill_coherence
 from audit_governance_enforcement import audit as audit_governance_enforcement
+from audit_resource_budgets import audit as audit_resource_budgets
+from audit_static_drift import audit as audit_static_drift
 from desktop_stability_gate import audit as audit_desktop_stability
 from evaluate_master_progression import evaluate as evaluate_master_progression
 from evaluate_router import evaluate as evaluate_router
@@ -72,6 +74,10 @@ def architecture_gate(repository_root: Path = REPOSITORY_ROOT, suite: Path = SUI
             errors.append(f"{extracted} introduced a second Task domain writer")
     enforcement = audit_governance_enforcement(suite)
     errors.extend(f"governance enforcement: {item}" for item in enforcement.get("errors", []))
+    resource_budgets = audit_resource_budgets(suite)
+    errors.extend(f"resource budget: {item}" for item in resource_budgets.get("errors", []))
+    static_drift = audit_static_drift(suite)
+    errors.extend(f"static drift: {item}" for item in static_drift.get("errors", []))
     facts = {
         "production_python_files": len(files),
         "largest": sorted(({"path": name, "lines": lines} for name, lines in sizes.items()), key=lambda item: item["lines"], reverse=True)[:10],
@@ -79,6 +85,8 @@ def architecture_gate(repository_root: Path = REPOSITORY_ROOT, suite: Path = SUI
         "governance_state_lines": sizes.get(governance.relative_to(repository_root).as_posix()),
         "single_task_writer": not any("second Task domain writer" in item for item in errors),
         "governance_enforcement": enforcement,
+        "resource_budgets": resource_budgets,
+        "static_drift": static_drift,
     }
     return _stage("architecture", not errors, errors=errors, facts=facts, seconds=time.perf_counter() - started)
 

@@ -9,7 +9,7 @@ from typing import Any
 from control_common import SCHEMA_VERSION, bounded, inside, safe_id, workspace_module, write_context
 from control_kernel import execute_operation, write_gate
 from control_trace import record_event
-from corelib import read_json, sha256_file
+from corelib import atomic_write_json, read_json, sha256_file
 
 
 def _fingerprint_paths(root: Path, relative_paths: list[str]) -> str:
@@ -399,6 +399,92 @@ def checkpoint(root: Path, task_id: str, label: str, operation_id: str) -> dict[
         root,
         operation_id=operation_id,
         command="checkpoint",
+        payload=payload,
+        prepare=prepare,
+        commit_domain=commit_domain,
+        recover_domain=recover_domain,
+        commit_trace=commit_trace,
+    )
+
+
+def record_closure(root: Path, task_id: str, phase: str, operation_id: str) -> dict[str, Any]:
+    governance = workspace_module("governance_state")
+    closure = workspace_module("closure_gate")
+    root = root.resolve()
+    if phase not in {"merge", "release"}:
+        raise ValueError("closure phase must be merge or release")
+    task_key = safe_id(task_id).upper()
+    evidence_rel = f".ai/evidence/{task_key}-{phase}-closure.json"
+    relative_paths = [_task_path(task_key), evidence_rel]
+    payload = {"task_id": task_key, "phase": phase}
+    def prepare() -> dict[str, Any]:
+        governance.load_task(root, task_key)
+        before = _fingerprint_paths(root, relative_paths)
+        return {
+            "before_fingerprint": before,
+            "intended_after_fingerprint": _intended_fingerprint("closure", payload, before),
+        }
+
+    def domain_result(task: dict[str, Any], report: dict[str, Any], recovered: bool) -> dict[str, Any]:
+        evidence_path, _ = inside(root, evidence_rel)
+        return {
+            "task_id": task_key,
+            "phase": phase,
+            "closure_status": (task.get("closure") or {}).get(phase),
+            "closure_ok": bool(report.get("ok")),
+            "evidence": evidence_rel,
+            "evidence_sha256": sha256_file(evidence_path),
+            "recovered_after_interruption": recovered,
+        }
+
+    def commit_domain() -> dict[str, Any]:
+        task = governance.load_task(root, task_key)
+        report = closure.evaluate(root, task, phase)
+        evidence_path, _ = inside(root, evidence_rel)
+        atomic_write_json(evidence_path, report)
+        task.setdefault("closure", {})[phase] = "PASS" if report["ok"] else "FAIL"
+        if report["ok"]:
+            task.setdefault("closure_bindings", {})[phase] = report.get("binding") or {}
+        if not any(item.get("operation_id") == operation_id for item in task.get("history", [])):
+            task.setdefault("history", []).append({
+                "at": closure.now(), "event": f"CLOSURE:{phase}:{task['closure'][phase]}",
+                "operation_id": operation_id,
+            })
+        governance.save_task(root, task)
+        return {
+            "domain_result": domain_result(task, report, False),
+            "committed_after_fingerprint": _fingerprint_paths(root, relative_paths),
+        }
+
+    def recover_domain(entry: dict[str, Any]) -> dict[str, Any]:
+        task = governance.load_task(root, task_key)
+        evidence_path, _ = inside(root, evidence_rel)
+        report = read_json(evidence_path, {}) or {}
+        proved = any(item.get("operation_id") == operation_id for item in task.get("history", []))
+        return _domain_recovery(
+            root, entry, relative_paths, operation_proved=proved,
+            domain_result=domain_result(task, report, True),
+        )
+
+    def commit_trace(result: dict[str, Any]) -> dict[str, Any]:
+        return record_event(
+            root,
+            event_type="closure",
+            summary_code="GATE_PASSED" if result.get("closure_ok") else "GATE_BLOCKED",
+            task_id=task_key,
+            phase=phase,
+            tool="closure_gate",
+            result="PASS" if result.get("closure_ok") else "FAIL",
+            evidence_paths=[evidence_rel],
+            operation_id=operation_id,
+            operation_fingerprint=result.get("evidence_sha256"),
+            durable=True,
+        )
+
+    return execute_operation(
+        root,
+        operation_id=operation_id,
+        command="closure",
         payload=payload,
         prepare=prepare,
         commit_domain=commit_domain,

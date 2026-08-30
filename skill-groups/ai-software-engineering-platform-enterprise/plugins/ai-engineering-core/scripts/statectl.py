@@ -10,6 +10,7 @@ from corelib import ai_root, atomic_write_json, atomic_write_text, ensure_schema
 from context_memory import bounded_items, crop, enforce_checkpoint_retention, ensure_memory_policy, limit_text, memory_status
 from suite_router import PLUGIN_DISPLAY, PLUGIN_FOR, skill_display
 from suite_version import inspect_suite
+from decision_memory import AUTHORITIES, record as record_decision
 
 
 def task_path(root: Path) -> Path: return ai_root(root) / "runtime" / "task.json"
@@ -20,6 +21,107 @@ def routing_path(root: Path) -> Path: return ai_root(root) / "runtime" / "skill-
 def load_task(root: Path) -> dict:
     data = read_json(task_path(root), {})
     return data if isinstance(data, dict) else {}
+
+
+def _next_task_gate(task: dict) -> str | None:
+    progress = (task.get("convergence") or {}).get("delivery_progress") or {}
+    if str(progress.get("next_business_gate") or "").strip():
+        return crop(progress["next_business_gate"], 240)
+    gates = (task.get("gate_applicability") or {}).get("gates") or {}
+    state = str(task.get("state") or task.get("status") or "")
+    order = {
+        "Created": ("planning", "development", "architecture", "review", "testing", "documentation", "merge", "release"),
+        "Planning": ("development", "architecture", "review", "testing", "documentation", "merge", "release"),
+        "Development": ("architecture", "review", "testing", "documentation", "merge", "release"),
+        "Review": ("testing", "documentation", "merge", "release"),
+        "Testing": ("documentation", "merge", "release"),
+        "MergedPendingCleanup": ("merge", "release"),
+        "Merged": ("release",),
+        "Released": (),
+    }
+    for gate in order.get(state, ("planning", "development", "review", "testing")):
+        if not gates or (gates.get(gate) or {}).get("status") != "NOT_APPLICABLE":
+            return gate
+    return None
+
+
+def direct_progress(root: Path) -> dict:
+    ai = ai_root(root)
+    reads = [
+        "governance/goal-contract.json",
+        "governance/task-index.json",
+        "runtime/task.json",
+        "runtime/checkpoint-ledger.json",
+    ]
+    goal = read_json(ai / reads[0], {}) or {}
+    index = read_json(ai / reads[1], {}) or {}
+    legacy_task = read_json(ai / reads[2], {}) or {}
+    ledger = read_json(ai / reads[3], {}) or {}
+    summaries = [
+        item for item in (index.get("tasks") or [])
+        if isinstance(item, dict) and item.get("task_id") and item.get("state") not in {"Merged", "Released"}
+    ][:8]
+    preferred_id = str(legacy_task.get("id") or legacy_task.get("task_id") or "")
+    candidates = [str(item["task_id"]) for item in summaries]
+    selected_id = preferred_id if preferred_id in candidates else candidates[0] if len(candidates) == 1 else ""
+    ambiguity = None
+    task: dict = {}
+    if selected_id:
+        relative = f"tasks/{re.sub(r'[^A-Za-z0-9._-]+', '-', selected_id).strip('._-')}.json"
+        reads.append(relative)
+        task = read_json(ai / relative, {}) or {}
+    elif len(candidates) > 1:
+        ambiguity = {"code": "AMBIGUOUS_CURRENT_TASK", "candidate_task_ids": candidates}
+    elif isinstance(legacy_task, dict):
+        task = legacy_task
+    goal_binding = task.get("goal_binding") if isinstance(task.get("goal_binding"), dict) else {}
+    current_goal = {
+        "goal_id": goal.get("goal_id") or goal_binding.get("goal_id"),
+        "revision": goal.get("revision") or goal_binding.get("revision"),
+        "status": goal.get("status"),
+        "outcome": crop(goal.get("outcome") or task.get("goal") or "", 400),
+        "fingerprint": goal.get("fingerprint") or goal_binding.get("fingerprint"),
+    }
+    delivery = (task.get("convergence") or {}).get("delivery_progress") or {}
+    completed = [crop(item, 240) for item in (task.get("completed_changes") or task.get("completed") or [])[-8:]]
+    pending = [crop(item, 240) for item in (task.get("pending_items") or task.get("pending") or [])[:8]]
+    blockers = [crop(item, 240) for item in (task.get("risks") or [])[:8]]
+    if task.get("control_status") == "PAUSED" or task.get("status") == "PAUSED":
+        blockers.insert(0, "TASK_PAUSED")
+    adjustment = task.get("goal_adjustment") or {}
+    if adjustment.get("status") not in {None, "CURRENT"}:
+        blockers.insert(0, f"GOAL_ADJUSTMENT_{adjustment.get('status')}")
+    convergence = task.get("convergence") or {}
+    if convergence.get("status") in {"PIVOT_REQUIRED", "DIAGNOSIS_REQUIRED", "BUSINESS_REQUIRED"}:
+        blockers.insert(0, str(convergence["status"]))
+    retained = ledger.get("retained") if isinstance(ledger.get("retained"), list) else []
+    checkpoint_value = retained[0] if retained and isinstance(retained[0], dict) else None
+    return {
+        "schema_version": "hiker-direct-progress/v1",
+        "status": "AMBIGUOUS" if ambiguity else "READY" if task else "NO_ACTIVE_TASK",
+        "current_goal": current_goal,
+        "current_task": {
+            "task_id": task.get("task_id") or task.get("id"),
+            "state": task.get("state") or task.get("status"),
+            "control_status": task.get("control_status"),
+            "updated_at": task.get("updated_at"),
+        } if task else None,
+        "business_progress": {
+            "last_summary": crop(delivery.get("last_summary") or "", 240),
+            "business_events": int(delivery.get("business_events") or 0),
+            "completed": completed,
+            "pending": pending,
+        },
+        "checkpoint": checkpoint_value,
+        "blockers": list(dict.fromkeys(blockers))[:8],
+        "next_gate": _next_task_gate(task) if task else None,
+        "ambiguity": ambiguity,
+        "reads": reads,
+        "cold_history_scanned": False,
+        "git_scanned": False,
+        "chat_history_used": False,
+        "writes": 0,
+    }
 
 
 def save_task(root: Path, task: dict) -> None:
@@ -140,6 +242,7 @@ def main() -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("task-start"); p.add_argument("--id", required=True); p.add_argument("--goal", required=True); p.add_argument("--scope", default="current task module")
     sub.add_parser("status")
+    sub.add_parser("progress")
     p = sub.add_parser("pause"); p.add_argument("--reason", default="user interruption")
     sub.add_parser("resume")
     p = sub.add_parser("adjust"); p.add_argument("--instruction", required=True)
@@ -148,7 +251,7 @@ def main() -> int:
     sub.add_parser("validate")
     sub.add_parser("memory-status")
     p = sub.add_parser("route-record"); p.add_argument("--stage", required=True); p.add_argument("--active-skill", action="append", default=[]); p.add_argument("--loaded-skill", action="append", default=[]); p.add_argument("--deferred-skill", action="append", default=[]); p.add_argument("--route-fingerprint", default="")
-    p = sub.add_parser("lock-decision"); p.add_argument("--id", required=True); p.add_argument("--content", required=True); p.add_argument("--reason", required=True)
+    p = sub.add_parser("lock-decision"); p.add_argument("--id", required=True); p.add_argument("--content", required=True); p.add_argument("--reason", required=True); p.add_argument("--authority", choices=sorted(AUTHORITIES), default="USER_LOCKED_DECISION"); p.add_argument("--generation", type=int, default=0); p.add_argument("--task-id", action="append", default=[]); p.add_argument("--scope", action="append", default=[]); p.add_argument("--project-global", action="store_true"); p.add_argument("--supersedes")
     args = ap.parse_args(); root = Path(args.root).resolve()
     ok, version = ensure_schema(root)
     if not ok and args.cmd != "validate": raise SystemExit(f"STATE_ERROR: {version}")
@@ -157,6 +260,8 @@ def main() -> int:
         task = {"schema_version": "1.0.0", "id": args.id, "goal": args.goal, "scope": args.scope, "status": "EXECUTING", "plan_version": 1, "completed": [], "working": ["分析并执行当前计划"], "pending": [], "risks": [], "updated_at": utc_now()}; save_task(root, task); update_active(root, task); checkpoint(root, "task-start")
     elif args.cmd == "status":
         print(json.dumps({"schema_ok": ok, "schema": version, "task": task, "git": git_info(root), "control": read_json(control_path(root), {}), "skill_routing": read_json(routing_path(root), {})}, ensure_ascii=False, indent=2)); return 0
+    elif args.cmd == "progress":
+        print(json.dumps({"schema_ok": ok, "schema": version, "progress": direct_progress(root)}, ensure_ascii=False, indent=2)); return 0
     elif args.cmd == "pause":
         task["status"] = "PAUSED"; task.setdefault("risks", []).append(f"暂停原因：{args.reason}"); save_task(root, task); update_active(root, task); checkpoint(root, "paused")
     elif args.cmd == "resume":
@@ -177,10 +282,16 @@ def main() -> int:
         except ValueError as exc: raise SystemExit(f"ROUTE_STATE_ERROR: {exc}")
         update_active(root, task); print(json.dumps({"ok": True, "routing": routing}, ensure_ascii=False, indent=2)); return 0
     elif args.cmd == "lock-decision":
-        path = ai_root(root) / "governance" / "locked-decisions.json"; data = read_json(path, {"schema_version": "1.0.0", "decisions": []}); decisions = data.setdefault("decisions", [])
-        if any(d.get("id") == args.id for d in decisions): raise SystemExit("decision id already exists")
-        decisions.append({"id": args.id, "status": "LOCKED", "content": args.content, "reason": args.reason, "created_at": utc_now(), "superseded_by": None}); atomic_write_json(path, data)
-    if args.cmd not in {"status", "validate", "checkpoint", "memory-status"}: print(json.dumps({"ok": True, "command": args.cmd, "task": load_task(root)}, ensure_ascii=False, indent=2))
+        try:
+            receipt = record_decision(
+                root, decision_id=args.id, content=args.content, reason=args.reason,
+                authority=args.authority, generation=args.generation, task_relevance=args.task_id,
+                scope=args.scope, bind_current_goal=not args.project_global, supersedes=args.supersedes,
+            )
+        except ValueError as exc:
+            raise SystemExit(f"DECISION_STATE_ERROR: {exc}")
+        print(json.dumps({"ok": True, "command": args.cmd, **receipt}, ensure_ascii=False, indent=2)); return 0
+    if args.cmd not in {"status", "progress", "validate", "checkpoint", "memory-status"}: print(json.dumps({"ok": True, "command": args.cmd, "task": load_task(root)}, ensure_ascii=False, indent=2))
     return 0
 
 if __name__ == "__main__": raise SystemExit(main())

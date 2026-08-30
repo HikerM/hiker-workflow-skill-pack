@@ -12,14 +12,9 @@ from typing import Any
 
 from corelib import ai_root, atomic_write_json, read_json
 from source_identity import identify
+from technology_markers import STATE_FINGERPRINT_NAMES
 
-
-MANIFEST_NAMES = {
-    "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock",
-    "pyproject.toml", "poetry.lock", "requirements.txt", "pom.xml",
-    "build.gradle", "build.gradle.kts", "Cargo.toml", "Cargo.lock",
-    "go.mod", "go.sum", "manifest.json", "ProjectVersion.txt",
-}
+MANIFEST_NAMES = STATE_FINGERPRINT_NAMES
 MATERIAL_HINTS = (
     "migration", "schema", "openapi", "asyncapi", "proto", "contract",
     "routes", "router", "projectsettings", "packages/manifest",

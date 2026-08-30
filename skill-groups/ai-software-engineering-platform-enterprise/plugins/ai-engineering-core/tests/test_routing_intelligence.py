@@ -6,12 +6,14 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 PLUGIN = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PLUGIN / "scripts"))
 
 from engineering_manifests import DiscoveryBudget, discover_engineering_manifests
+from project_fact_plane import build_project_fact_plane
 from route_contract import normalize_route_contract
 from suite_router import inspect_project, route
 
@@ -124,6 +126,106 @@ class RoutingIntelligenceTests(unittest.TestCase):
             result = route(root, proposal("web-component-implementation", architecture="bs"), legacy)
         self.assertEqual("bs", result["project_architecture"])
         self.assertNotEqual("IMPORTED_LEGACY", result["project_fact_plane"]["project_architecture"]["authority"])
+        self.assertEqual("HISTORICAL_IGNORED", result["project_fact_plane"]["authority_resolutions"][0]["resolution"])
+
+    def test_current_authority_conflict_is_detected_and_blocks_route(self):
+        pro = {"facts": {"project_id": "project-1", "project_generation": 2, "project_architecture": {
+            "value": "cs", "classification": "DECISION", "authority": "AUTHORITATIVE_CURRENT",
+            "source": "PRO_STATE_PLANE", "source_fingerprint": "b" * 64,
+            "generation": 2, "freshness": "CURRENT", "lifecycle": "CURRENT", "scope": "PROJECT", "confidence": "HIGH",
+        }}}
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); bs_fixture(root)
+            result = route(root, proposal("web-component-implementation", architecture="bs"), pro)
+        self.assertFalse(result["accepted"])
+        self.assertIn("FACT_AUTHORITY_CONFLICT", {item["code"] for item in result["diagnostics"]})
+        self.assertEqual("CONFLICT", result["project_fact_plane"]["authority_status"])
+        self.assertEqual("RECONCILE_BEFORE_EXECUTION", result["project_fact_plane"]["authority_conflicts"][0]["resolution"])
+
+    def test_model_inference_cannot_override_current_workspace_fact(self):
+        inferred = {"facts": {"project_architecture": {
+            "value": "cs", "classification": "INFERENCE", "authority": "MODEL_INFERENCE",
+            "source_fingerprint": "c" * 64, "freshness": "CURRENT", "lifecycle": "CURRENT",
+        }}}
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); bs_fixture(root)
+            result = route(root, proposal("web-component-implementation", architecture="bs"), inferred)
+        self.assertTrue(result["accepted"], result["diagnostics"])
+        self.assertEqual("bs", result["project_architecture"])
+        self.assertEqual("LOWER_AUTHORITY_INFERENCE_IGNORED", result["project_fact_plane"]["authority_resolutions"][0]["resolution"])
+
+    def test_fact_envelopes_distinguish_known_and_unknown_without_guessing(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            unknown = build_project_fact_plane(root)
+            package(root / "package.json", {"express": "5.0.0"})
+            known = build_project_fact_plane(root)
+        self.assertIsNone(unknown["project_architecture"]["value"])
+        self.assertEqual("UNKNOWN", unknown["project_architecture"]["freshness"])
+        self.assertEqual("NONE", unknown["fact_contract"]["overrides"]["project_architecture"]["confidence"])
+        self.assertEqual("INFERENCE", known["fact_contract"]["overrides"]["project_architecture"]["classification"])
+        self.assertEqual("PROJECT", known["fact_contract"]["defaults"]["scope"])
+        self.assertEqual(["authority", "source_fingerprint"], known["fact_contract"]["defaults"]["source"])
+        for field in ("authority", "source_fingerprint", "generation", "freshness"):
+            self.assertIn(field, known["project_architecture"])
+
+    def test_route_context_is_projected_from_current_pro_scope_without_history_scan(self):
+        pro = {"facts": {
+            "project_id": "project-current",
+            "project_generation": 8,
+            "current_goal": "GOAL-CURRENT",
+            "current_task": "TASK-CURRENT",
+            "current_changed_scope": ["services/current"],
+            "current_direct_dependencies": ["service://direct"],
+            "current_contracts": ["contract://current"],
+            "current_evidence_refs": ["evidence://current"],
+        }}
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); package(root / "package.json", {"fastify": "5.0.0"})
+            result = route(root, proposal("backend-component-implementation", architecture="backend"), pro)
+        self.assertTrue(result["accepted"], result["diagnostics"])
+        working = result["context_budget"]["working_set"]
+        self.assertEqual("GOAL-CURRENT", working["current_goal"])
+        self.assertEqual("TASK-CURRENT", working["current_task"])
+        self.assertEqual(["services/current"], working["changed_paths"])
+        self.assertEqual(["service://direct"], working["direct_dependencies"])
+        self.assertEqual(["contract://current"], working["relevant_contracts"])
+        self.assertEqual(["evidence://current"], working["relevant_evidence"])
+
+    def test_fact_plane_bounds_active_scope_before_it_enters_route_context(self):
+        pro = {"facts": {
+            "current_goal": "G" * 500,
+            "current_task": "T" * 500,
+            "current_changed_scope": [f"src/current-{index}.ts" for index in range(1000)],
+            "current_evidence_refs": [f"evidence://{index}" for index in range(1000)],
+        }}
+        with tempfile.TemporaryDirectory() as td:
+            plane = build_project_fact_plane(Path(td), pro_payload=pro)
+        self.assertEqual(160, len(plane["current_goal"]))
+        self.assertEqual(160, len(plane["current_task"]))
+        self.assertEqual(80, len(plane["current_changed_scope"]))
+        self.assertEqual(16, len(plane["current_evidence_refs"]))
+
+    def test_inspect_reuses_identity_inventory_for_context_budget(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, stdout=subprocess.PIPE)
+            (root / "README.md").write_text("fixture", encoding="utf-8")
+            subprocess.run(["git", "add", "README.md"], cwd=root, check=True)
+            with patch("context_budget._run", side_effect=AssertionError("duplicate git inventory")):
+                result = inspect_project(root)
+        self.assertEqual(1, result["project_facts"]["tracked_file_count"])
+
+    def test_trusted_context_decision_conflicting_with_current_manifests_is_not_silently_applied(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); bs_fixture(root)
+            context = root / ".ai" / "context" / "tech-stack.json"
+            context.parent.mkdir(parents=True)
+            context.write_text(json.dumps({"project_architecture": "cs"}), encoding="utf-8")
+            facts = build_project_fact_plane(root, state_consistency={"execution_policy": {"trusted_ai_state": True}})
+        self.assertEqual("CONFLICT", facts["authority_status"])
+        self.assertEqual("bs", facts["project_architecture"]["value"])
+        self.assertEqual("CURRENT_PROJECT_DECISION", facts["authority_conflicts"][0]["competing_authority"])
 
     def test_architecture_conflict_requires_positive_contradiction(self):
         with tempfile.TemporaryDirectory() as td:

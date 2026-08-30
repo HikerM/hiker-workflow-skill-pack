@@ -9,7 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from workspacelib import atomic_json, common_dir, locked_state, read_json, safe_id
+from workspacelib import RESOURCE_HARD_MAX, atomic_json, common_dir, locked_state, read_json, safe_id
 
 
 CORE_SCRIPTS = Path(__file__).resolve().parents[2] / "ai-engineering-core" / "scripts"
@@ -21,9 +21,9 @@ from control_trace import status as trace_status  # noqa: E402
 
 SCHEMA_VERSION = "1.0.0"
 EVENT_CLASSES = {"STATE_EVENT", "CONTROL_EVENT", "TRACE_EVENT", "STREAM_EVENT"}
-MAX_STREAM_TURNS = 2
-MAX_OBSERVATIONS = 32
-MAX_OBSERVATION_IDS = 64
+MAX_STREAM_TURNS = RESOURCE_HARD_MAX["event"]["streaming_turns"]
+MAX_OBSERVATIONS = RESOURCE_HARD_MAX["event"]["max_observations"]
+MAX_OBSERVATION_IDS = RESOURCE_HARD_MAX["event"]["max_observation_ids"]
 DRAINING_ACTIONS = {"checkpoint", "verify", "archive", "release", "recovery", "complete"}
 SOFT_LIMITS = {
     "task_hot_events": 48,
@@ -36,14 +36,8 @@ SOFT_LIMITS = {
     "largest_stream_events": 5_000,
 }
 HARD_LIMITS = {
-    "task_hot_events": 64,
-    "turn_hot_events": 32,
-    "hot_event_bytes": 2 * 1024 * 1024,
-    "trace_segment_bytes": 384 * 1024,
-    "growth_per_minute": 5_000,
-    "active_turns": 3,
-    "streaming_turns": 2,
-    "largest_stream_events": 10_000,
+    key: RESOURCE_HARD_MAX["event"][key]
+    for key in SOFT_LIMITS
 }
 
 

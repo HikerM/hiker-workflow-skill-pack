@@ -3,10 +3,9 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
-from workspacelib import atomic_json, safe_id, worktree_fingerprint
+from workspacelib import safe_id, worktree_fingerprint
 SCHEMA_VERSION = "1.0.0"
 LEVELS = {"static": 1, "integration": 2, "runtime": 3, "user-visible": 4, "production": 5}
 OBSERVATIONS = {
@@ -28,22 +27,6 @@ MAX_REJECTED_HYPOTHESES_PER_ISSUE = 2
 
 def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-
-def task_path(root: Path, task_id: str) -> Path:
-    return root / ".ai" / "tasks" / f"{safe_id(task_id).upper()}.json"
-
-
-def read_task(root: Path, task_id: str) -> dict[str, Any]:
-    path = task_path(root, task_id)
-    if not path.is_file():
-        raise RuntimeError(f"task not found: {safe_id(task_id).upper()}")
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def save_task(root: Path, task: dict[str, Any]) -> None:
-    task["updated_at"] = now()
-    atomic_json(task_path(root, str(task["task_id"])), task)
 
 
 def _bounded(values: list[Any], limit: int) -> list[Any]:

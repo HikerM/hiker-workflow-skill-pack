@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import convergence_guard as domain
+import governance_state as task_store
 from implementation_guard import validate_registry
 from workspacelib import repo_root, state_lock, worktree_fingerprint
 
@@ -91,7 +92,7 @@ def _parser() -> argparse.ArgumentParser:
 
 def _execute(root: Path, args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None]:
     operation_result: dict[str, Any] | None = None
-    task = domain.read_task(root, args.task_id)
+    task = task_store.load_task(root, args.task_id)
     state = task.get("convergence")
     if args.command == "init":
         state = domain.initialize(task, args.criterion, args.strategy)
@@ -129,7 +130,7 @@ def _execute(root: Path, args: argparse.Namespace) -> tuple[dict[str, Any], dict
     elif args.command == "ack":
         domain.acknowledge(state, args.fingerprint)
     task["convergence"] = state
-    domain.save_task(root, task)
+    task_store.save_task(root, task)
     phase = args.phase if args.command == "status" else "status"
     report = domain.health_report(state, phase)
     implementation_report = validate_registry(root)

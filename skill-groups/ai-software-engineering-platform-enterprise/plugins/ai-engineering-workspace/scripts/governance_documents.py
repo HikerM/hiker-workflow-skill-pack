@@ -121,7 +121,7 @@ def ensure_supporting_docs(root: Path, architecture: str) -> None:
     if not architecture_file.exists():
         frontend = "B/S Web 前端" if architecture == "bs" else "C/S 客户端" if architecture == "cs" else "B/S Web 前端与 C/S 客户端"
         architecture_file.write_text(
-            "# Architecture\n\n## 系统边界\n\n- 待 Planning Agent 完成边界确认。\n\n"
+            "# Architecture\n\n## 系统边界\n\n- 待当前模型提出边界并由 CONTROL responsibility 记录。\n\n"
             f"## 前端/客户端\n\n- {frontend}\n\n"
             "## 后端服务\n\n- API、领域服务、鉴权、任务与集成边界。\n\n"
             "## 数据与契约\n\n- 数据库版本、迁移、API/事件契约和兼容策略。\n\n"

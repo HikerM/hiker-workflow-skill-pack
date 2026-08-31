@@ -17,6 +17,7 @@ SENSITIVITY = {"PUBLIC", "PERSONAL", "SENSITIVE", "SECRET"}
 OVERFLOW_STRATEGIES = {"wrap", "truncate_with_access", "scroll", "adaptive", "project_native"}
 MAX_FIELDS = 1000
 MAX_BINDINGS = 2000
+MAX_STATE_MAPPINGS = 256
 
 TECHNICAL_FIELD = re.compile(r"(?:^|_)(?:id|uuid|guid|status_code|type_code|sqlstate|stack_trace|debug|exception)(?:$|_)", re.I)
 RAW_TIME_FIELD = re.compile(r"(?:^|_)(?:created_at|updated_at|deleted_at|timestamp)(?:$|_)", re.I)
@@ -26,6 +27,107 @@ RAW_ENUM = re.compile(r"^[A-Z][A-Z0-9_]{2,}$")
 
 def contract_fingerprint(contract: dict[str, Any]) -> str:
     return fingerprint({key: value for key, value in contract.items() if key not in {"fingerprint", "updated_at"}})
+
+
+STATE_PERSISTENCE = {
+    "BOOLEAN": {"NATIVE_BOOLEAN", "PROJECT_NATIVE"},
+    "FINITE_STATE": {"COMPACT_ENUM", "SEMANTIC_CODE", "PROJECT_NATIVE"},
+    "EXTENSIBLE_CATEGORY": {"SEMANTIC_CODE", "REFERENCE", "PROJECT_NATIVE"},
+    "SOFT_DELETE": {"DELETED_AT", "PROJECT_LIFECYCLE", "PROJECT_NATIVE"},
+}
+PRESENTATION_STRATEGIES = {"LOCALIZATION", "PRESENTATION_MAPPING", "DEVELOPER_RAW"}
+
+
+def validate_state_mappings(contract: dict[str, Any]) -> list[dict[str, str]]:
+    raw = contract.get("state_mappings", [])
+    if not isinstance(raw, list):
+        return [{"code": "INVALID_STATE_MAPPING_LIST", "field": "state_mappings"}]
+    errors: list[dict[str, str]] = []
+    if len(raw) > MAX_STATE_MAPPINGS:
+        errors.append({"code": "STATE_MAPPING_BUDGET_EXCEEDED", "field": "state_mappings"})
+    seen: set[str] = set()
+    for index, mapping in enumerate(raw[:MAX_STATE_MAPPINGS]):
+        location = f"state_mappings[{index}]"
+        if not isinstance(mapping, dict):
+            errors.append({"code": "INVALID_STATE_MAPPING", "field": location}); continue
+        mapping_id = str(mapping.get("mapping_id") or "").strip()
+        if not mapping_id:
+            errors.append({"code": "MISSING_STATE_MAPPING_ID", "field": location})
+        elif mapping_id in seen:
+            errors.append({"code": "DUPLICATE_STATE_MAPPING_ID", "field": location})
+        seen.add(mapping_id)
+        semantic_type = str(mapping.get("semantic_type") or "").strip().upper()
+        if semantic_type not in STATE_PERSISTENCE:
+            errors.append({"code": "INVALID_STATE_SEMANTIC_TYPE", "field": location}); continue
+        layers = {name: mapping.get(name) for name in ("persistence", "domain", "transport", "presentation")}
+        for name, layer in layers.items():
+            if not isinstance(layer, dict):
+                errors.append({"code": "MISSING_STATE_LAYER", "field": f"{location}.{name}"})
+        if errors and any(not isinstance(layer, dict) for layer in layers.values()):
+            continue
+        persistence = layers["persistence"]
+        domain = layers["domain"]
+        transport = layers["transport"]
+        presentation = layers["presentation"]
+        if persistence.get("representation") not in STATE_PERSISTENCE[semantic_type]:
+            errors.append({"code": "INVALID_PERSISTENCE_REPRESENTATION", "field": f"{location}.persistence"})
+        if domain.get("representation") != semantic_type:
+            errors.append({"code": "DOMAIN_STATE_TYPE_MISMATCH", "field": f"{location}.domain"})
+        if not transport.get("representation"):
+            errors.append({"code": "MISSING_TRANSPORT_REPRESENTATION", "field": f"{location}.transport"})
+        strategy = presentation.get("strategy")
+        visibility = presentation.get("visibility")
+        if strategy not in PRESENTATION_STRATEGIES:
+            errors.append({"code": "INVALID_PRESENTATION_MAPPING", "field": f"{location}.presentation"})
+        if visibility == "USER_VISIBLE" and (strategy == "DEVELOPER_RAW" or not presentation.get("mapping_ref")):
+            errors.append({"code": "RAW_INTERNAL_STATUS_TO_USER", "field": f"{location}.presentation"})
+        if semantic_type == "FINITE_STATE" and not isinstance(domain.get("values"), list):
+            errors.append({"code": "FINITE_STATE_VALUES_REQUIRED", "field": f"{location}.domain.values"})
+        if semantic_type == "SOFT_DELETE":
+            extra = set(persistence.get("fields", [])) & {"deleted_by", "deleted_reason"}
+            requirements = set(mapping.get("requirements", []))
+            if "deleted_by" in extra and "audit_actor" not in requirements:
+                errors.append({"code": "UNJUSTIFIED_DELETED_BY", "field": f"{location}.persistence.fields"})
+            if "deleted_reason" in extra and "deletion_reason" not in requirements:
+                errors.append({"code": "UNJUSTIFIED_DELETED_REASON", "field": f"{location}.persistence.fields"})
+    return errors
+
+
+def audit_state_usages(contract: dict[str, Any], usages: Any) -> dict[str, Any]:
+    contract_errors = validate_state_mappings(contract)
+    rows = usages.get("usages", []) if isinstance(usages, dict) else []
+    if not isinstance(rows, list):
+        return {"status": "BLOCKED", "findings": [{"code": "INVALID_STATE_USAGE_LIST", "field": "usages"}]}
+    mappings = {str(item.get("mapping_id")): item for item in contract.get("state_mappings", []) if isinstance(item, dict)}
+    findings = list(contract_errors)
+    topic_mappings: dict[str, set[str]] = {}
+    for index, usage in enumerate(rows[:MAX_BINDINGS]):
+        location = f"usages[{index}]"
+        if not isinstance(usage, dict):
+            findings.append({"code": "INVALID_STATE_USAGE", "field": location}); continue
+        mapping_id = str(usage.get("mapping_id") or "").strip()
+        topic = str(usage.get("state_topic") or usage.get("source_field") or "").strip()
+        literal = usage.get("literal")
+        developer_only = usage.get("developer_only") is True
+        user_visible = usage.get("user_visible") is True
+        if mapping_id and mapping_id not in mappings:
+            findings.append({"code": "UNKNOWN_STATE_MAPPING", "field": location})
+        if topic and mapping_id:
+            topic_mappings.setdefault(topic, set()).add(mapping_id)
+        if isinstance(literal, (int, float)) and not isinstance(literal, bool) and not mapping_id:
+            findings.append({"code": "MAGIC_NUMBER_STATE", "field": location})
+        raw = "" if literal is None else str(literal)
+        direct = usage.get("mapping") in {None, "direct", "schema-direct"}
+        if user_visible and not developer_only and (not mapping_id or direct) and (RAW_ENUM.fullmatch(raw) or re.fullmatch(r"STATUS[_-]?\d+", raw, re.I)):
+            findings.append({"code": "RAW_INTERNAL_STATUS_TO_USER", "field": location})
+        if user_visible and not developer_only and usage.get("source_layer") == "PERSISTENCE" and direct:
+            findings.append({"code": "STATE_LAYER_BYPASS", "field": location})
+    for topic, ids in topic_mappings.items():
+        if len(ids) > 1:
+            findings.append({"code": "NON_CENTRALIZED_STATE_MAPPING", "field": topic})
+    if len(rows) > MAX_BINDINGS:
+        findings.append({"code": "STATE_USAGE_BUDGET_EXCEEDED", "field": "usages"})
+    return {"status": "BLOCKED" if findings else "PASS", "findings": findings, "summary": {"usages": len(rows), "mappings": len(mappings)}}
 
 
 def validate_contract(contract: Any) -> dict[str, Any]:
@@ -42,6 +144,7 @@ def validate_contract(contract: Any) -> dict[str, Any]:
         fields = []
     if len(fields) > MAX_FIELDS:
         errors.append({"code": "FIELD_BUDGET_EXCEEDED", "field": "fields"})
+    errors.extend(validate_state_mappings(contract))
     ids: set[str] = set()
     for index, field in enumerate(fields[:MAX_FIELDS]):
         location = f"fields[{index}]"
@@ -157,6 +260,7 @@ def main() -> int:
     parser.add_argument("--contract", required=True)
     parser.add_argument("--bindings")
     parser.add_argument("--copy")
+    parser.add_argument("--state-usages")
     parser.add_argument("--output")
     args = parser.parse_args()
     contract = load_json(Path(args.contract).resolve())
@@ -165,6 +269,8 @@ def main() -> int:
         result["bindings"] = audit_bindings(contract, load_json(Path(args.bindings).resolve()))
     if args.copy:
         result["copy"] = audit_copy(load_json(Path(args.copy).resolve()))
+    if args.state_usages:
+        result["state_usages"] = audit_state_usages(contract, load_json(Path(args.state_usages).resolve()))
     result["status"] = "BLOCKED" if any(value.get("status") == "BLOCKED" for value in result.values() if isinstance(value, dict)) else "PASS"
     if args.output:
         write_json(Path(args.output).resolve(), result)

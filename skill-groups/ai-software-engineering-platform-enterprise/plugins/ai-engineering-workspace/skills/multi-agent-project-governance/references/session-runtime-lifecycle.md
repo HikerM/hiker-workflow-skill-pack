@@ -1,24 +1,23 @@
 # 会话与运行时生命周期
 
-本契约只由 Master Agent 执行。Developer、Review、Test 等角色不得自行创建桌面任务、Worktree 或替代会话。
+本契约只由当前 CONTROL 执行。旧版 Master/Developer/Review/Test 标签只用于兼容映射，不是必须存在的 Agent；WRITE 与 ASSURE 不得自行创建桌面任务、Worktree 或替代会话。
 
-## 固定槽位
+## 按需运行时绑定
 
-槽位键是 `project_id + repository + role_family`：
+默认不创建任何新槽位。只有结构化 Gate 已证明职责适用且当前会话不能安全复用时，才按 `project_id + repository + execution_class` 建立绑定：
 
-- `writer/<ownership-lane>`：Developer、Fix、Repair按稳定所有权通道复用；通道由真实模块和变更契约动态产生，不限于frontend/backend。规划态可登记最多8个，默认最多两个活动writer通道，同一通道共用一个写会话和返工Worktree链。
-- `assurance`：Review、Test、Reverify，共用一个只读验证会话；默认读取冻结候选，不创建审核 Worktree。
-- `control`：Planning、Merge、Document；只有确有隔离运行时需要时才创建。
-- `browser`：浏览器/E2E；复用同一受控浏览器槽。
-- `master`：只保留决策、队列、状态与回收，不承载大日志。
+- `write/<ownership-lane>`：WRITE按稳定所有权通道复用；通道由真实模块和变更契约动态产生。默认复用当前会话，只有写冲突或隔离环境要求时才创建，活动上限为两个。
+- `assure`：ASSURE默认复用当前会话；独立性Gate要求时才建立一个只读验证绑定，不创建审核 Worktree。
+- `control`：CONTROL绑定当前控制器，不为Planning/Merge/Document旧标签分别建会话。
+- 浏览器、设备和E2E是绑定资源，不是第四类权威职责；按任务资源租约复用和释放。
 
 Task ID、Candidate ID、base SHA 和 Gate 指纹记录在槽位内，用于证据隔离，但不改变槽位身份。writer身份额外包含 `ownership_lane`，不得用Task ID冒充新通道；同一通道正忙则排队，不同且已证明独立的通道可在预算内并行。
 
 ## 自动分派协议
 
 ```powershell
-python <plugin-root>/scripts/dispatch_guard.py --root . observe --project-id PROJECT-A --task-id KG-001 --role "Developer Agent" --repository . --base-sha <sha> --api-result EMPTY
-python <plugin-root>/scripts/dispatch_guard.py --root . bind --project-id PROJECT-A --task-id KG-001 --role "Developer Agent" --repository . --base-sha <sha> --thread-id <id> --runtime-state RUNNING --worktree <path>
+python <plugin-root>/scripts/dispatch_guard.py --root . observe --project-id PROJECT-A --task-id KG-001 --role "WRITE" --repository . --base-sha <sha> --api-result EMPTY
+python <plugin-root>/scripts/dispatch_guard.py --root . bind --project-id PROJECT-A --task-id KG-001 --role "WRITE" --repository . --base-sha <sha> --thread-id <id> --runtime-state RUNNING --worktree <path>
 python <plugin-root>/scripts/dispatch_guard.py --root . turn-guard --task-id KG-001 --thread-id <id> --host-status notLoaded --turn-status completed --turn-id <turn-id> --dispatch-id <dispatch-id> --operation-id <operation-id> --message-digest <sha256> --reserve
 python <plugin-root>/scripts/dispatch_guard.py --root . turn-ack --thread-id <id> --operation-id <operation-id> --accepted
 python <plugin-root>/scripts/dispatch_guard.py --root . pressure-observe --task-id KG-001 --backend-status ALIVE --observation-id <local-observation-id>
@@ -39,7 +38,7 @@ python <plugin-root>/scripts/dispatch_guard.py --root . stream-observe --thread-
 - `DRAIN_DESKTOP_PRESSURE` / `BLOCK_DESKTOP_PRESSURE`：宿主负载已进入熔断，只允许 Checkpoint、终态对账、归档和资源释放。
 - `RECOVERY_PROBE_REQUIRED`：旧Turn处于 `INTERRUPTED_UNKNOWN` 或证据不足；禁止自动重发。
 
-默认 `max_resident_slots=6`、`max_writer_slots=2`、`max_pending_creates=1`、`max_active_turns=2`。常驻槽不等于同时运行；空闲槽只用于复用。总控不得通过改 Task ID、角色别名、所有权通道别名或 base SHA 绕开预算。
+默认新增槽位数为零；硬上限仍为 `max_resident_slots=6`、`max_writer_slots=2`、`max_pending_creates=1`、`max_active_turns=2`。上限不是预建数量，也不能成为固定多Agent拓扑。CONTROL不得通过改Task ID、旧角色别名、所有权通道别名或base SHA绕开预算。
 
 查询失败或超时只禁止创建替代桌面任务；已有会话或不要求隔离运行时的工作使用 `CURRENT_THREAD_BOUNDED` 降级继续。每个目标任务同一时刻最多一个未确认分派；普通工具失败在当前 Task 内记录并收敛，不得通过重复 `send_message`、循环 `wait/read` 或创建替代任务升级成桌面事件风暴。每个分派携带Task上下文路径和目标契约指纹，禁止所有角色共用最后写入的根上下文。
 

@@ -17,7 +17,7 @@ sys.path.insert(0, str(PLUGIN / "scripts"))
 
 from bootstrap_project import initialize
 from detect_project import detect
-from statectl import checkpoint, record_routing, update_active
+from statectl import checkpoint, direct_progress, record_routing, update_active
 from corelib import atomic_write_json
 from context_budget import build_context_plan
 from state_consistency import assess as assess_state_consistency, repair as repair_state_consistency
@@ -25,7 +25,7 @@ from requirements_fusion import init as init_requirements, merge as merge_requir
 from brownfield_reconcile import initialize as init_brownfield, set_baseline, reconcile, validate as validate_brownfield
 from suite_router import inspect_project, route
 from session_epoch import assess as assess_epoch, record as record_epoch, rotate as rotate_epoch
-from bounded_run import run_bounded
+from bounded_run import retrieve_artifact, run_bounded
 from suite_version import inspect_suite
 from context_memory import ensure_memory_policy
 from control_trace import record_event, status as trace_status
@@ -102,13 +102,80 @@ class CoreTests(unittest.TestCase):
     def test_bounded_run_keeps_large_output_out_of_conversation(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); initialize(root)
-            report = run_bounded(root, "TEST-LARGE", [sys.executable, "-c", "print('x' * 8000)"], max_chars=800)
+            report = run_bounded(root, "TEST-LARGE", [sys.executable, "-c", "print('x' * 2500000)"], max_chars=800)
             self.assertEqual(0, report["exit_code"])
             self.assertTrue(report["truncated"])
             self.assertLess(len(report["stdout_excerpt"]), 1200)
-            evidence = root / report["evidence_path"]
-            self.assertTrue(evidence.is_file())
-            self.assertGreater(evidence.stat().st_size, 7000)
+            index_path = root / report["evidence_path"]
+            self.assertTrue(index_path.is_file())
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+            self.assertGreater(len(index["channels"]["stdout"]["pages"]), 1)
+            self.assertEqual("PASS", index["redaction_status"])
+            first = retrieve_artifact(root, report["artifact_reference"], "stdout", 1, max_chars=1000)
+            self.assertTrue(first["bounded"])
+            self.assertLessEqual(len(first["content"]), 1000)
+            self.assertIsNotNone(first["next_offset"])
+
+    def test_bounded_artifact_page_integrity_fails_closed(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); initialize(root)
+            report = run_bounded(root, "TEST-INTEGRITY", [sys.executable, "-c", "print('safe output')"])
+            index_path = root / report["evidence_path"]
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+            record = index["channels"]["stdout"]["pages"][0]
+            page = index_path.parent / index["generation"] / record["path"]
+            page.write_text("tampered", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "integrity"):
+                retrieve_artifact(root, report["artifact_reference"], "stdout", 1)
+
+    def test_bounded_spool_caps_runaway_output_and_preserves_redaction(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); initialize(root)
+            report = run_bounded(
+                root, "TEST-SPOOL-CAP",
+                [sys.executable, "-c", "print('x' * 6000 + ' token=private-value ' + 'y' * 6000)"],
+                max_artifact_bytes=8192,
+            )
+            self.assertTrue(report["spool"]["overflow"])
+            self.assertLessEqual(report["spool"]["captured_bytes"], 8192)
+            index_path = root / report["evidence_path"]
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+            content = "".join(
+                (index_path.parent / index["generation"] / page["path"]).read_text(encoding="utf-8")
+                for page in index["channels"]["stdout"]["pages"]
+            )
+            self.assertNotIn("private-value", content)
+            self.assertIn("[REDACTED]", content)
+
+    def test_direct_progress_reads_only_hot_authority_files(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); ai = root / ".ai"
+            (ai / "governance").mkdir(parents=True); (ai / "runtime").mkdir(); (ai / "tasks").mkdir()
+            (ai / "governance/goal-contract.json").write_text(json.dumps({"goal_id": "GOAL-1", "revision": 3, "status": "ACTIVE", "outcome": "Ship bounded change", "fingerprint": "goal-fp"}), encoding="utf-8")
+            (ai / "governance/task-index.json").write_text(json.dumps({"tasks": [{"task_id": "KG-001", "state": "Development"}]}), encoding="utf-8")
+            task = {"task_id": "KG-001", "state": "Development", "control_status": "ACTIVE", "completed_changes": ["implemented slice"], "pending_items": ["targeted test"], "risks": [], "goal_binding": {"goal_id": "GOAL-1", "revision": 3}, "gate_applicability": {"gates": {"architecture": {"status": "NOT_APPLICABLE"}, "review": {"status": "REQUIRED"}}}, "convergence": {"delivery_progress": {"business_events": 1, "last_summary": "implemented slice", "next_business_gate": "run targeted test"}}}
+            (ai / "tasks/KG-001.json").write_text(json.dumps(task), encoding="utf-8")
+            (ai / "runtime/checkpoint-ledger.json").write_text(json.dumps({"retained": [{"name": "cp-1.json", "label": "slice", "created_at": "now"}]}), encoding="utf-8")
+            with patch.object(Path, "glob", side_effect=AssertionError("cold history scan")):
+                result = direct_progress(root)
+            self.assertEqual("READY", result["status"])
+            self.assertEqual("GOAL-1", result["current_goal"]["goal_id"])
+            self.assertEqual("KG-001", result["current_task"]["task_id"])
+            self.assertEqual("run targeted test", result["next_gate"])
+            self.assertEqual("cp-1.json", result["checkpoint"]["name"])
+            self.assertFalse(result["cold_history_scanned"])
+            self.assertFalse(result["git_scanned"])
+            self.assertEqual(0, result["writes"])
+
+    def test_direct_progress_does_not_guess_between_active_tasks(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); ai = root / ".ai"
+            (ai / "governance").mkdir(parents=True); (ai / "runtime").mkdir()
+            (ai / "governance/task-index.json").write_text(json.dumps({"tasks": [{"task_id": "KG-001", "state": "Development"}, {"task_id": "KG-002", "state": "Review"}]}), encoding="utf-8")
+            result = direct_progress(root)
+            self.assertEqual("AMBIGUOUS", result["status"])
+            self.assertEqual("AMBIGUOUS_CURRENT_TASK", result["ambiguity"]["code"])
+            self.assertIsNone(result["current_task"])
 
     def test_session_recovery_prefers_bound_task_context_over_master_summary(self):
         with tempfile.TemporaryDirectory() as td:
@@ -346,6 +413,51 @@ class CoreTests(unittest.TestCase):
             self.assertEqual("large", plan["scale"]["mode"])
             self.assertEqual("bounded-index-only", plan["budget"]["history_scope"])
 
+    def test_context_budget_uses_supplied_inventory_without_second_git_scan(self):
+        with tempfile.TemporaryDirectory() as td, patch("context_budget._run", side_effect=AssertionError("unexpected git scan")):
+            plan = build_context_plan(Path(td), "development", tracked_files=1200)
+        self.assertEqual("standard", plan["scale"]["mode"])
+        self.assertEqual(1200, plan["scale"]["tracked_file_count"])
+
+    def test_context_budget_projects_only_current_changed_scope_and_bounded_refs(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            plan = build_context_plan(
+                root,
+                "development",
+                [f"src/current-{index}.ts" for index in range(60)],
+                tracked_files=1200,
+                active_facts={
+                    "current_goal": "GOAL-11",
+                    "current_task": "TASK-11",
+                    "direct_dependencies": [f"dependency://{index}" for index in range(10)],
+                    "relevant_contracts": [f"contract://{index}" for index in range(10)],
+                    "relevant_evidence": [f"evidence://{index}" for index in range(10)],
+                },
+            )
+        working = plan["working_set"]
+        self.assertEqual("GOAL-11", working["current_goal"])
+        self.assertEqual("TASK-11", working["current_task"])
+        self.assertEqual(40, len(working["changed_paths"]))
+        self.assertEqual(4, len(working["direct_dependencies"]))
+        self.assertEqual(4, len(working["relevant_contracts"]))
+        self.assertEqual(4, len(working["relevant_evidence"]))
+        self.assertNotIn("scope_expansion", working)
+        self.assertIn(".ai/archive", working["never_default_scan"])
+
+    def test_context_scope_expansion_requires_explicit_structured_signal(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            ordinary = build_context_plan(root, "development", tracked_files=100)
+            architecture = build_context_plan(
+                root, "development", signals={"architecture-boundary-change"}, tracked_files=100,
+            )
+        self.assertNotIn("scope_expansion", ordinary["working_set"])
+        self.assertEqual(
+            {"mode": "EXPLICIT", "reasons": ["architecture-boundary-change"]},
+            architecture["working_set"]["scope_expansion"],
+        )
+
     def test_state_consistency_repairs_incremental_and_material_drift(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -399,7 +511,7 @@ class CoreTests(unittest.TestCase):
             first_governance = route(root, model_proposal("workspace-task-router", stage="governance"))
             self.assertTrue(first_governance["accepted"], first_governance["diagnostics"])
 
-    def test_legacy_ai_without_provenance_is_quarantined_and_cannot_be_auto_trusted(self):
+    def test_legacy_ai_without_provenance_is_quarantined_while_current_project_remains_usable(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             (root / ".ai/runtime").mkdir(parents=True)
@@ -411,13 +523,14 @@ class CoreTests(unittest.TestCase):
             repaired = repair_state_consistency(root)
             self.assertTrue(repaired["repair_blocked"])
             self.assertFalse((root / ".ai/governance/source-provenance.json").exists())
-            with self.assertRaisesRegex(RuntimeError, "untrusted"):
-                initialize(root)
-            blocked = route(root, model_proposal("workspace-task-router", stage="governance"))
-            self.assertFalse(blocked["accepted"])
-            self.assertIn("STALE_AI_STATE_DEPENDENCY", {item["code"] for item in blocked["diagnostics"]})
-            stateless = route(root, model_proposal("backend-component-implementation", stage="development", architecture="backend"))
-            self.assertTrue(stateless["accepted"], stateless["diagnostics"])
+            initialized = initialize(root)
+            recovery = initialized["new_session_recovery"]
+            self.assertEqual("CURRENT_PROJECT_READY", recovery["recovery_status"])
+            self.assertEqual("QUARANTINED", recovery["old_state_resumability"])
+            self.assertEqual("NONE", recovery["user_action_required"])
+            self.assertNotEqual("OLD", json.loads((root / ".ai/runtime/task.json").read_text(encoding="utf-8"))["id"])
+            current = route(root, model_proposal("workspace-task-router", stage="governance"))
+            self.assertTrue(current["accepted"], current["diagnostics"])
     def test_detect_monorepo(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

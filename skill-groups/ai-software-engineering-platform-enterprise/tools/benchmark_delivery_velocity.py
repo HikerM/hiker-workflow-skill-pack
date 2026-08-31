@@ -106,6 +106,7 @@ def _runtime(source: str = "source-1", platform: str = "BS_BROWSER") -> dict[str
 def _identity(scope: list[str]) -> dict[str, Any]:
     return {
         "source_fingerprint": "source-1", "design_fingerprint": "design-1", "project_config_fingerprint": "config-1",
+        "contract_fingerprint": "contract-1", "dependency_fingerprint": "dependency-1",
         "technology_fingerprint": "technology-1", "environment_fingerprint": "environment-1",
         "relevant_state_fingerprint": "state-1", "affected_scope": scope,
     }

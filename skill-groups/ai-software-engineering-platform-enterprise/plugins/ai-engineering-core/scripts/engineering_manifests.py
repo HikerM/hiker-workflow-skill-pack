@@ -10,31 +10,10 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable
 
+from technology_markers import ENGINEERING_MANIFEST_NAMES, is_engineering_manifest as marker_is_engineering_manifest
+from resource_budget import DEFAULT_BUDGETS as RESOURCE_DEFAULT_BUDGETS, effective_budget
 
-EXACT_MANIFESTS = {
-    "package.json",
-    "pnpm-workspace.yaml",
-    "pnpm-workspace.yml",
-    "lerna.json",
-    "turbo.json",
-    "composer.json",
-    "go.mod",
-    "Cargo.toml",
-    "pyproject.toml",
-    "requirements.txt",
-    "Gemfile",
-    "pom.xml",
-    "build.gradle",
-    "build.gradle.kts",
-    "CMakeLists.txt",
-    "ProjectVersion.txt",
-    "Dockerfile",
-    "docker-compose.yml",
-    "docker-compose.yaml",
-    "compose.yml",
-    "compose.yaml",
-}
-LOWER_EXACT_MANIFESTS = {item.lower() for item in EXACT_MANIFESTS}
+EXACT_MANIFESTS = ENGINEERING_MANIFEST_NAMES
 
 IGNORED_DIRECTORIES = {
     ".git",
@@ -71,22 +50,15 @@ IGNORED_DIRECTORIES = {
 
 @dataclass(frozen=True)
 class DiscoveryBudget:
-    max_depth: int = 4
-    max_dirs: int = 96
-    max_manifests: int = 48
-    max_bytes: int = 512 * 1024
-    max_entries_per_dir: int = 512
+    max_depth: int = RESOURCE_DEFAULT_BUDGETS["manifest_scan"]["max_depth"]
+    max_dirs: int = RESOURCE_DEFAULT_BUDGETS["manifest_scan"]["max_dirs"]
+    max_manifests: int = RESOURCE_DEFAULT_BUDGETS["manifest_scan"]["max_manifests"]
+    max_bytes: int = RESOURCE_DEFAULT_BUDGETS["manifest_scan"]["max_bytes"]
+    max_entries_per_dir: int = RESOURCE_DEFAULT_BUDGETS["manifest_scan"]["max_entries_per_dir"]
 
 
 def is_engineering_manifest(path: Path) -> bool:
-    name = path.name
-    lower = name.lower()
-    return (
-        name in EXACT_MANIFESTS
-        or lower in LOWER_EXACT_MANIFESTS
-        or path.suffix.lower() in {".sln", ".csproj"}
-        or (name == "manifest.json" and path.parent.name == "Packages")
-    )
+    return marker_is_engineering_manifest(path)
 
 
 def _is_reparse_or_symlink(path: Path) -> bool:
@@ -196,7 +168,8 @@ def discover_engineering_manifests(
 ) -> dict[str, Any]:
     """Discover only engineering manifests under hard budgets; never inspect source files."""
     root = root.resolve()
-    limits = budget or DiscoveryBudget()
+    requested = budget or DiscoveryBudget()
+    limits = DiscoveryBudget(**effective_budget("manifest_scan", vars(requested)))
     tracked: list[Path] = []
     tracked_set: set[Path] = set()
     excluded: list[Path] = []

@@ -12,11 +12,18 @@ MAX_BYTES = 1024 * 1024
 MAX_INTERACTIONS = 500
 MAX_STATES = 64
 MAX_TRANSITIONS = 256
+MAX_HANDOFFS = 128
+MAX_PARTICIPANTS = 32
 MAX_FINDINGS = 50
 ID_RE = re.compile(r"^INT-[A-Z0-9]+(?:-[A-Z0-9]+)*$")
+HANDOFF_ID_RE = re.compile(r"^HND-[A-Z0-9]+(?:-[A-Z0-9]+)*$")
 ASYNC_POLICIES = {"latest-wins", "single-flight", "queue", "idempotent"}
 OVERLAY_KINDS = {"modal", "drawer", "popover", "menu", "combobox", "tooltip", "toast"}
 HIDDEN_SURFACES = {"select", "combobox", "dropdown", "menu", "context-menu", "modal", "drawer", "popover", "tooltip", "date-picker", "tree", "cascader", "upload", "editor"}
+CONTINUITY_DIMENSIONS = (
+    "trigger", "state_transition", "authority_transfer", "data_transfer",
+    "failure_recovery", "downstream_visibility",
+)
 
 
 def finding(target: list[dict], code: str, message: str, interaction_id: str | None = None) -> None:
@@ -51,6 +58,94 @@ def reachable(initial: str, transitions: list[dict]) -> set[str]:
                 seen.add(target)
                 queue.append(target)
     return seen
+
+
+def _meaningful_dimension(value: object) -> bool:
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, list):
+        return bool(value)
+    if isinstance(value, dict):
+        if value.get("applicable") is False:
+            return bool(str(value.get("reason") or "").strip())
+        return bool(value)
+    return False
+
+
+def evaluate_handoffs(raw: object) -> dict:
+    if raw in (None, []):
+        return {
+            "status": "NOT_APPLICABLE", "handoffs": 0, "errors": [],
+            "case_specific_role_count": 0,
+            "reason": "No project-fact handoff was declared; no handoff model is forced.",
+        }
+    if not isinstance(raw, list):
+        return {
+            "status": "BLOCKED", "handoffs": 0,
+            "errors": [{"code": "INVALID_HANDOFFS", "message": "handoffs must be an array"}],
+            "case_specific_role_count": 0,
+        }
+    errors: list[dict] = []
+    if len(raw) > MAX_HANDOFFS:
+        errors.append({"code": "TOO_MANY_HANDOFFS", "message": f"handoffs exceed {MAX_HANDOFFS}"})
+    seen_handoffs: set[str] = set()
+    evaluated = 0
+    for position, row in enumerate(raw[:MAX_HANDOFFS]):
+        if len(errors) >= MAX_FINDINGS:
+            break
+        if not isinstance(row, dict):
+            errors.append({"code": "INVALID_HANDOFF", "location": f"handoffs[{position}]"})
+            continue
+        evaluated += 1
+        handoff_id = str(row.get("id") or "").strip()
+
+        def add(code: str, message: str) -> None:
+            if len(errors) < MAX_FINDINGS:
+                errors.append({"code": code, "message": message, "handoff_id": handoff_id or f"index-{position}"})
+
+        if not HANDOFF_ID_RE.fullmatch(handoff_id):
+            add("INVALID_HANDOFF_ID", "handoff id must use a stable HND-* identifier")
+        elif handoff_id in seen_handoffs:
+            add("DUPLICATE_HANDOFF_ID", "handoff id is duplicated")
+        seen_handoffs.add(handoff_id)
+
+        participants = row.get("participants", [])
+        participant_ids: set[str] = set()
+        if not isinstance(participants, list) or not 2 <= len(participants) <= MAX_PARTICIPANTS:
+            add("INVALID_HANDOFF_PARTICIPANTS", f"handoff requires 2..{MAX_PARTICIPANTS} project-defined participants")
+            participants = []
+        for participant in participants:
+            if not isinstance(participant, dict) or not str(participant.get("id") or "").strip():
+                add("INVALID_HANDOFF_PARTICIPANT", "each participant requires a project-defined id")
+                continue
+            participant_id = str(participant["id"]).strip()
+            if participant_id in participant_ids:
+                add("DUPLICATE_HANDOFF_PARTICIPANT", f"participant {participant_id} is duplicated")
+            participant_ids.add(participant_id)
+            if "category" in participant and not str(participant.get("category") or "").strip():
+                add("INVALID_PARTICIPANT_CATEGORY", "participant category is optional but must be non-empty when present")
+
+        evidence_refs = row.get("evidence_refs", [])
+        if not isinstance(evidence_refs, list) or not evidence_refs or not all(isinstance(item, str) and item.strip() for item in evidence_refs):
+            add("HANDOFF_PROJECT_FACT_EVIDENCE_REQUIRED", "handoff identification requires project-fact evidence references")
+        for dimension in CONTINUITY_DIMENSIONS:
+            value = row.get(dimension)
+            if not _meaningful_dimension(value):
+                add("HANDOFF_CONTINUITY_DIMENSION_MISSING", f"missing or empty {dimension}")
+                continue
+            if isinstance(value, dict):
+                for key in ("from_participant", "to_participant", "participant_id"):
+                    reference = str(value.get(key) or "").strip()
+                    if reference and reference not in participant_ids:
+                        add("UNKNOWN_HANDOFF_PARTICIPANT_REFERENCE", f"{dimension}.{key} references unknown participant {reference}")
+    return {
+        "status": "BLOCKED" if errors else "PASS",
+        "handoffs": evaluated,
+        "errors": errors,
+        "case_specific_role_count": 0,
+        "required_dimensions": ["participants", *CONTINUITY_DIMENSIONS],
+        "truncated": len(errors) >= MAX_FINDINGS,
+    }
 
 
 def evaluate(contract: dict, mode: str = "review") -> dict:
@@ -153,12 +248,15 @@ def evaluate(contract: dict, mode: str = "review") -> dict:
         if mode in {"implementation", "review"} and not row.get("evidence"):
             finding(warnings, "UNVERIFIED_INTERACTION", "尚无已执行的交互证据，不得声称验证通过", interaction_id or None)
 
+    handoff_continuity = evaluate_handoffs(contract.get("handoffs"))
+    errors.extend(handoff_continuity.get("errors", [])[:max(0, MAX_FINDINGS - len(errors))])
     status = "BLOCKED" if errors else "PASS_WITH_WARNINGS" if warnings else "PASS"
     return {
         "schema_version": "1.0.0",
         "status": status,
         "mode": mode,
-        "summary": {"interactions": len(interactions), "states": state_count, "transitions": transition_count, "errors": len(errors), "warnings": len(warnings)},
+        "summary": {"interactions": len(interactions), "states": state_count, "transitions": transition_count, "handoffs": handoff_continuity["handoffs"], "errors": len(errors), "warnings": len(warnings)},
+        "handoff_continuity": handoff_continuity,
         "errors": errors,
         "warnings": warnings,
         "truncated": len(errors) >= MAX_FINDINGS or len(warnings) >= MAX_FINDINGS,

@@ -9,7 +9,7 @@ from pathlib import Path
 PLUGIN = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PLUGIN / "scripts"))
 
-from evidence_cache import compact_summary, decide as decide_evidence, evidence_key, invalidate
+from evidence_cache import compact_summary, decide as decide_evidence, evidence_key, invalidate, minimum_verification_set
 from runtime_reuse import decide as decide_runtime
 
 
@@ -33,6 +33,8 @@ def runtime(platform: str = "BS_BROWSER") -> dict:
 def identity(scope: list[str]) -> dict:
     return {
         "source_fingerprint": "source-1",
+        "contract_fingerprint": "contract-1",
+        "dependency_fingerprint": "dependency-1",
         "design_fingerprint": "design-1",
         "project_config_fingerprint": "config-1",
         "technology_fingerprint": "technology-1",
@@ -82,6 +84,59 @@ class IncrementalGovernanceTests(unittest.TestCase):
         self.assertEqual(["settings"], result["invalidated"])
         self.assertEqual(1, result["preserved"])
         self.assertEqual("VALID", result["records"][1]["status"])
+
+    def test_scope_invalidation_understands_path_ancestors_and_rejects_unscoped_pass(self):
+        records = [
+            {"evidence_id": "service", "status": "VALID", "affected_scope": ["services/api"]},
+            {"evidence_id": "client", "status": "VALID", "affected_scope": ["apps/client"]},
+            {"evidence_id": "legacy-unscoped", "status": "VALID", "affected_scope": []},
+        ]
+        result = invalidate(records, ["services/api/routes/auth.ts"], "source change")
+        self.assertEqual(["service", "legacy-unscoped"], result["invalidated"])
+        self.assertEqual("VALID", result["records"][1]["status"])
+
+    def test_minimum_verification_reuses_only_exact_current_pass(self):
+        current = identity(["services/api"])
+        key = evidence_key(current)
+        checks = [
+            {"verification_id": "api-unit", "affected_scope": ["services/api"], "command": "npm test"},
+            {"verification_id": "client-unit", "affected_scope": ["apps/client"], "command": "npm test"},
+        ]
+        records = [{
+            "verification_id": "api-unit", "evidence_id": "EV-API", "status": "VALID",
+            "result": "PASS", "freshness": "CURRENT", "evidence_key": key,
+            "affected_scope": ["services/api"],
+        }]
+        base = {key: value for key, value in current.items() if key != "affected_scope"}
+        result = minimum_verification_set(checks, records, base)
+        self.assertEqual(["api-unit"], [item["verification_id"] for item in result["reused"]])
+        self.assertEqual(["client-unit"], [item["verification_id"] for item in result["execute"]])
+        self.assertFalse(result["full_rerun"])
+
+    def test_contract_or_dependency_change_cannot_reuse_pass(self):
+        current = identity(["services/api"])
+        record = {
+            "verification_id": "api-unit", "status": "VALID", "result": "PASS", "freshness": "CURRENT",
+            "evidence_key": evidence_key(current), "affected_scope": ["services/api"],
+        }
+        check = [{"verification_id": "api-unit", "affected_scope": ["services/api"]}]
+        for field in ("contract_fingerprint", "dependency_fingerprint"):
+            changed = {key: value for key, value in current.items() if key != "affected_scope"}
+            changed[field] += "-changed"
+            with self.subTest(field=field):
+                result = minimum_verification_set(check, [record], changed)
+                self.assertEqual(0, result["reuse_count"])
+                self.assertEqual("STALE", result["execute"][0]["reuse_status"])
+
+    def test_failed_or_historical_evidence_cannot_be_reused(self):
+        current = identity(["services/api"])
+        base = {key: value for key, value in current.items() if key != "affected_scope"}
+        check = [{"verification_id": "api-unit", "affected_scope": ["services/api"]}]
+        for record in (
+            {"verification_id": "api-unit", "status": "VALID", "result": "FAIL", "freshness": "CURRENT", "evidence_key": evidence_key(current)},
+            {"verification_id": "api-unit", "status": "VALID", "result": "PASS", "freshness": "HISTORICAL", "evidence_key": evidence_key(current)},
+        ):
+            self.assertEqual(0, minimum_verification_set(check, [record], base)["reuse_count"])
 
     def test_cold_summary_keeps_only_bounded_refs_hashes_and_findings(self):
         summary = compact_summary(

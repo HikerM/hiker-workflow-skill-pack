@@ -9,6 +9,7 @@ from pathlib import Path
 
 from workspacelib import atomic_json, common_dir, load_state, read_json, repo_root, run, safe_branch, safe_id, state_lock, state_path
 from worktree_inventory import inventory
+from task_router import execution_class_for
 
 PROTECTED = {"main", "develop", "release"}
 PREFIXES = ("feature/", "bugfix/", "hotfix/", "release/")
@@ -46,7 +47,7 @@ def default_base(branch: str) -> str:
 def validate_branch_policy(root: Path, branch: str, base: str, agent_role: str) -> None:
     if branch in PROTECTED: raise RuntimeError("creating a task worktree on main/develop/release is forbidden")
     if not branch.startswith(PREFIXES): raise RuntimeError("invalid branch prefix")
-    if branch.startswith("release/") and agent_role != "Merge Agent": raise RuntimeError("only Merge Agent may create release/* worktrees")
+    if branch.startswith("release/") and execution_class_for(agent_role) != "CONTROL": raise RuntimeError("CONTROL responsibility is required to create release/* worktrees")
     expected = default_base(branch)
     if base != expected: raise RuntimeError(f"{branch} must be based on {expected}")
     if not branch_exists(root, base): raise RuntimeError(f"required base branch does not exist: {base}")
@@ -76,6 +77,7 @@ def cmd_create(root: Path, a) -> dict:
     if stock["summary"]["over_active_budget"]:
         raise RuntimeError(f"active worktree budget exceeded: {stock['summary']['active_managed']}/{stock['summary']['max_active_write_worktrees']}")
     default_parent = root.parent / f"{root.name}.ai-worktrees"; path = Path(a.path).expanduser().resolve() if a.path else (default_parent / task).resolve(); path.parent.mkdir(parents=True, exist_ok=True)
+    worktree_id = "WT-" + hashlib.sha256(f"{root.resolve()}|{path}|{branch}".encode("utf-8")).hexdigest()[:16].upper()
     with state_lock(root):
         state = load_state(root)
         if task in state.get("worktrees", {}): raise RuntimeError(f"task already has worktree: {task}")
@@ -83,8 +85,8 @@ def cmd_create(root: Path, a) -> dict:
         if path.exists() and any(path.iterdir()): raise RuntimeError(f"worktree path is not empty: {path}")
         if path in {Path(x["path"]).resolve() for x in worktree_list(root)}: raise RuntimeError("worktree already registered")
         cmd = ["git", "worktree", "add"] + ([str(path), branch] if branch_exists(root, branch) else ["-b", branch, str(path), base]); result = run(cmd, root)
-        state.setdefault("worktrees", {})[task] = {"task_id": task, "path": str(path), "branch": branch, "base": base, "agent_role": role, "status": "ACTIVE", "created_at": now(), "last_activity_at": now(), "lease_expires_at": future(14)}; state.setdefault("leases", {})[branch] = {"task_id": task, "path": str(path), "status": "ACTIVE", "updated_at": now(), "lease_expires_at": future(14)}; atomic_json(state_path(root), state)
-    return {"ok": True, "command": result.args, "task_id": task, "path": str(path), "branch": branch, "base": base, "agent_role": role, "worktree_summary_before_create": stock["summary"]}
+        state.setdefault("worktrees", {})[task] = {"worktree_id": worktree_id, "task_id": task, "path": str(path), "branch": branch, "base": base, "agent_role": role, "status": "ACTIVE", "created_at": now(), "last_activity_at": now(), "lease_expires_at": future(14)}; state.setdefault("leases", {})[branch] = {"worktree_id": worktree_id, "task_id": task, "path": str(path), "status": "ACTIVE", "updated_at": now(), "lease_expires_at": future(14)}; atomic_json(state_path(root), state)
+    return {"ok": True, "command": result.args, "worktree_id": worktree_id, "task_id": task, "path": str(path), "branch": branch, "base": base, "agent_role": role, "worktree_summary_before_create": stock["summary"]}
 
 
 def cmd_list(root: Path) -> dict:

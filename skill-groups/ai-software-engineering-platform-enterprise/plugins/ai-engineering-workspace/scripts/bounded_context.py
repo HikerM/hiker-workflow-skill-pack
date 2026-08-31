@@ -7,23 +7,11 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from workspacelib import atomic_json, locked_state, read_json
+from workspacelib import RESOURCE_DEFAULT_BUDGETS, atomic_json, effective_budget, locked_state, read_json
 
 DEFAULT_POLICY = {
     "schema_version": "1.1.0",
-    "active_context_max_chars": 8000,
-    "session_context_max_chars": 4000,
-    "max_items_per_section": 8,
-    "max_recent_checkpoints": 8,
-    "max_milestone_checkpoints": 6,
-    "max_ledger_entries": 24,
-    "max_task_index_closed": 120,
-    "max_task_history_events": 40,
-    "max_task_history_ledger_entries": 20,
-    "max_session_epoch_turns": 20,
-    "max_session_epoch_tool_calls": 40,
-    "max_session_epoch_tool_output_chars": 60000,
-    "max_session_epoch_compactions": 1,
+    **RESOURCE_DEFAULT_BUDGETS["context"],
 }
 LEGACY_DEFAULTS = {
     "active_context_max_chars": 12000,
@@ -58,6 +46,7 @@ def ensure_policy(root: Path) -> dict[str, Any]:
                     policy[key] = value
             else:
                 policy[key] = default
+    policy.update(effective_budget("context", policy))
     if current != policy:
         atomic_json(path, policy)
     return policy

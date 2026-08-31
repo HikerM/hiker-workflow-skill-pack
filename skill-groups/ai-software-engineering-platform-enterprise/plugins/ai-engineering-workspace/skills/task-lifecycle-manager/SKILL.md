@@ -1,23 +1,23 @@
 ---
 name: task-lifecycle-manager
-description: 创建和推进带Task ID的工程任务状态机，记录目标、影响文件、负责人、分支、Commit、审核、测试、证据和发布结果；用于Created到Released的全过程及暂停、调整、恢复。
+description: 创建和推进带Task ID的工程状态，记录目标、适用Gate、影响范围、Commit和证据；状态顺序只提供单调恢复坐标，实际工作由结构化Gate Applicability决定。
 ---
 
 # 任务生命周期
 
-状态只能按 `Created → Planning → Development → Review → Testing → MergedPendingCleanup → Merged → Released` 推进。合并后必须安全关闭任务 Worktree 才能进入 Merged；角色负责状态：Planning、Developer、Review、Test、Merge、Master，禁止 Developer 自审、自测后直接合并。
+状态词汇按 `Created → Planning → Development → Review → Testing → MergedPendingCleanup → Merged → Released` 单调排序，但不要求每个 Task 依次执行全部阶段。ChatGPT 先提交结构化 Gate Applicability，Runtime 只验证 `REQUIRED / NOT_APPLICABLE`、工作事实和证据；未解析的 `CONDITIONAL` 不能执行。风险只提高已存在工作的保证深度，不能凭空创建 architecture、merge 或 release 工作。
 
 ```bash
-python <plugin-root>/scripts/governance_state.py --root . task-create --task-id KG-001 --goal "统一账户登录" --owner-agent "Planning Agent" --branch feature/KG-001-login --affected-files src/auth.ts tests/auth.test.ts
-python <core>/scripts/hikerctl.py transition --task-id KG-001 --to Planning --agent-role "Planning Agent" --operation-id KG1-T1
-python <plugin-root>/scripts/governance_state.py --root . contract-set --task-id KG-001 --agent-role "Planning Agent" --allowed-files src/auth.ts tests/auth.test.ts --behavior-invariants "现有登录方式继续可用" --required-tests "认证单测" "登录回归"
+python <plugin-root>/scripts/governance_state.py --root . task-create --task-id KG-001 --goal "统一账户登录" --owner-agent "CONTROL" --branch feature/KG-001-login --affected-files src/auth.ts tests/auth.test.ts --gate-plan-file .ai/runtime/current-gate-plan.json
+python <core>/scripts/hikerctl.py transition --task-id KG-001 --to Planning --agent-role "CONTROL" --operation-id KG1-T1
+python <plugin-root>/scripts/governance_state.py --root . contract-set --task-id KG-001 --agent-role "CONTROL" --allowed-files src/auth.ts tests/auth.test.ts --behavior-invariants "现有登录方式继续可用" --required-tests "认证单测" "登录回归"
 ```
 
-使用 `contract-set` 记录本次允许文件/模块、公共契约变化、原有行为不变量和最低回归；没有范围、不变量和测试不得进入 Development。使用 `record` 写入 commit/review/test/artifact/document/decision/risk；使用 `checkpoint` 保存阶段快照。`pause` 不改变生命周期状态，只把 `control_status` 设为 PAUSED；`adjust` 记录新方向；`insert` 必须创建新的Task ID并关联原任务；`resume` 从原状态继续。未满足阶段证据门禁时不得推进。
+`task-create` 可直接消费模型生成的Gate计划；若尚未提供，只能进入Planning，并在`contract-set`时依据CONTROL提交的结构化范围生成最小计划，绝不退化为“新任务全部Gate必选”。`contract-set`记录允许范围、不变量与最低回归；merge仅来自结构化计划或真实source/target集成事实，不能由`repository_change`自动推出。使用`record`和`checkpoint`只保存适用Gate的证据。
 
 生命周期状态之外单独维护会话绑定子状态：`SETUP_PENDING → BOUND → RUNNING → IDLE_REUSABLE / RELEASE_PENDING → RELEASED`。writer 槽按项目、仓库和稳定所有权通道区分，默认最多两个；同一通道仍只有一个活动writer。`clientThreadId` 不能当作真实 `threadId`，pending不能通过换Task ID制造替代会话。
 
-Development 进入 Review 前必须生成与当前 Git HEAD、工作区指纹一致的架构守卫证据，并运行 `governance_state.py candidate-freeze --task-id <TASK-ID> --agent-role "Developer Agent" --candidate-id <CANDIDATE-ID>` 冻结只读审核候选。Review、Testing 与 Merge 只可消费该 `candidate_id`；候选提交、索引、源文件集合或工作区指纹发生任何变化即 `STALE`，必须生成新候选并重新取得受影响证据。普通局部任务只需最小变更契约，不要求维护全量模块、依赖或运行拓扑配置。
+当Review/Testing/Merge适用时，WRITE在交付保证前生成与当前Git HEAD、工作区指纹一致的架构守卫证据，并运行`governance_state.py candidate-freeze --task-id <TASK-ID> --agent-role "WRITE" --candidate-id <CANDIDATE-ID>`冻结候选。后续ASSURE/CONTROL只消费该`candidate_id`；候选指纹变化才使受影响证据`STALE`。Gate不适用时不创建对应证据或会话。
 
 跨模块、跨仓库、真实外部执行、部署回滚、同一目标反复修复或用户推翻既有结论时，必须同时启用「长链路变更收敛」。用户纠正、验收范围变化或策略失效会使旧证据失效；不得保留原 PASS 继续推进。合并与发布前必须确认同一职责只有一个活动实现路径，迁移兼容代码已经收敛，未结实验为零。
 

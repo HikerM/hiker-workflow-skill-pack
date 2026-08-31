@@ -5,6 +5,8 @@ import json
 from collections import deque
 from typing import Any, Iterable
 
+from capability_metadata import capability_families
+
 
 INTENT_STATES = {
     "CURRENT",
@@ -20,40 +22,7 @@ AMBIGUITY_POLICIES = {"SAFE_INFERENCE", "EVIDENCE_FIRST", "ASK_REQUIRED", "BLOCK
 ROUTING_COSTS = {"FAST", "STANDARD", "DEEP"}
 RISK_LEVELS = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
 
-CAPABILITY_FAMILIES: dict[str, tuple[str, ...]] = {
-    "frontend": (
-        "web-ui-design", "web-component-implementation", "web-quality-review",
-        "interaction-conflict-governance", "regression-test-planner",
-    ),
-    "backend": (
-        "backend-technology-router", "api-event-contract-design", "backend-component-implementation",
-        "database-migration-governance", "backend-quality-review", "full-change-risk-review",
-    ),
-    "database": (
-        "database-migration-governance", "api-event-contract-design", "backend-component-implementation",
-        "backend-quality-review", "regression-test-planner",
-    ),
-    "client": (
-        "cs-client-router", "cs-ui-design", "cs-component-implementation", "cs-quality-review",
-        "regression-test-planner",
-    ),
-    "unity": (
-        "unity-ui-design", "unity-component-implementation", "unity-quality-review",
-        "regression-test-planner",
-    ),
-    "workspace": (
-        "project-state-manager", "task-lifecycle-manager", "workspace-task-router",
-        "multi-agent-project-governance", "long-chain-change-convergence", "worktree-safe-convergence",
-    ),
-    "quality": (
-        "design-readiness-review", "full-change-risk-review", "regression-test-planner",
-        "feature-acceptance-closure", "release-readiness-review",
-    ),
-    "architecture": (
-        "architecture-decision-challenge", "brownfield-requirement-reconciliation",
-        "api-event-contract-design", "full-change-risk-review",
-    ),
-}
+CAPABILITY_FAMILIES = capability_families()
 
 
 def _bounded_strings(raw: Any, limit: int = 16, max_chars: int = 200) -> list[str]:

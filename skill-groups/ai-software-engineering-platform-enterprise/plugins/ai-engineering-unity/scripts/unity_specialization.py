@@ -5,8 +5,14 @@ import hashlib
 import json
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Any, Iterable
+
+CORE_SCRIPTS = Path(__file__).resolve().parents[2] / "ai-engineering-core" / "scripts"
+if str(CORE_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(CORE_SCRIPTS))
+from resource_budget import effective_budget  # noqa: E402
 
 
 SKIP = {"Library", "Temp", "Logs", "obj", "bin", "Build", "Builds", ".git", ".ai", "UserSettings"}
@@ -14,6 +20,8 @@ SUFFIXES = {".cs", ".asmdef", ".json", ".prefab", ".unity", ".asset", ".meta", "
 
 
 def bounded_files(root: Path, max_depth: int = 9, max_files: int = 6000) -> tuple[list[Path], bool]:
+    limits = effective_budget("source_scan", {"max_depth": max_depth, "max_files": max_files})
+    max_depth, max_files = limits["max_depth"], limits["max_files"]
     root = root.resolve(); found: list[Path] = []
     for dirpath, dirnames, filenames in os.walk(root):
         current = Path(dirpath); rel = current.relative_to(root)

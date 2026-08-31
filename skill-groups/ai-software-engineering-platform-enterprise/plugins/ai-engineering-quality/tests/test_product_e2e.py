@@ -93,10 +93,10 @@ def presentation_contract() -> dict:
 def error_contract() -> dict:
     contract = {
         "schema_version": "1.0.0", "contract_id": "operation-errors-e2e", "revision": 1,
-        "protocol": {"family": "CUSTOM", "serialization": "project-native", "existing_contract_ref": "contracts/errors", "semantic_mappings": {"classification": "kind", "user_message": "safe_message", "developer_diagnostic": "diagnostic", "error_code": "code", "correlation": "error_id", "retry": "retry"}},
+        "protocol": {"family": "CUSTOM", "serialization": "project-native", "existing_contract_ref": "contracts/errors", "semantic_mappings": {"classification": "kind", "user_action": "next_step", "diagnostic_reference": "diagnostic_ref", "visibility": "audience", "error_code": "code", "correlation": "error_id", "retry_semantics": "retry", "recovery_semantics": "recovery"}},
         "classifications": [
-            {"code": "CONFLICT", "kind": "EXPECTED_BUSINESS", "retry_semantics": "AFTER_CHANGE", "user_message_policy": "explain conflict and next step", "diagnostic_requirements": ["operation"]},
-            {"code": "UNEXPECTED", "kind": "UNEXPECTED_SYSTEM", "retry_semantics": "UNKNOWN", "user_message_policy": "safe message and error id", "diagnostic_requirements": ["exception", "stack", "cause", "source-version"]},
+            {"code": "CONFLICT", "kind": "EXPECTED_BUSINESS", "retry_semantics": "AFTER_CHANGE", "recovery_semantics": "USER_ACTION", "user_message_policy": "explain conflict and next step", "user_action_policy": "refresh current record", "diagnostic_requirements": ["operation"]},
+            {"code": "UNEXPECTED", "kind": "UNEXPECTED_SYSTEM", "retry_semantics": "UNKNOWN", "recovery_semantics": "OPERATOR_ACTION", "user_message_policy": "safe message and error id", "user_action_policy": "provide error id to support", "diagnostic_requirements": ["exception", "stack", "cause", "source-version"]},
         ],
     }
     contract["fingerprint"] = error_fingerprint(contract)
@@ -108,9 +108,10 @@ def error_event(kind: str) -> dict:
     return {
         "schema_version": "1.0.0", "error_id": "ERR-E2E-0001", "trace_id": "TRACE-E2E-1", "timestamp": "2026-08-26T12:00:00Z",
         "operation": "update-record", "version": "5.18-candidate", "source_fingerprint": "source-e2e",
-        "classification": "UNEXPECTED" if unexpected else "CONFLICT", "kind": kind, "retry_semantics": "UNKNOWN" if unexpected else "AFTER_CHANGE",
-        "user": {"message": "暂时无法完成，请稍后重试。" if unexpected else "记录已经变化，请刷新后重试。", "next_step": "提供错误编号联系支持" if unexpected else "刷新记录", "error_id": "ERR-E2E-0001"},
-        "developer": {"error_id": "ERR-E2E-0001", "trace_id": "TRACE-E2E-1", "exception_type": "DependencyUnavailable" if unexpected else None, "cause": "dependency unavailable" if unexpected else None, "stack_ref": "evidence://errors/stack-e2e" if unexpected else None, "diagnostic_evidence_refs": ["evidence://errors/event-e2e"], "redaction_status": "PASS"},
+        "classification": "UNEXPECTED" if unexpected else "CONFLICT", "kind": kind, "retry_semantics": "UNKNOWN" if unexpected else "AFTER_CHANGE", "recovery_semantics": "OPERATOR_ACTION" if unexpected else "USER_ACTION",
+        "user": {"visibility": "USER", "message": "暂时无法完成，请稍后重试。" if unexpected else "记录已经变化，请刷新后重试。", "next_step": "提供错误编号联系支持" if unexpected else "刷新记录", "error_id": "ERR-E2E-0001"},
+        "developer": {"visibility": "DEVELOPER", "error_id": "ERR-E2E-0001", "trace_id": "TRACE-E2E-1", "exception_type": "DependencyUnavailable" if unexpected else None, "cause": "dependency unavailable" if unexpected else None, "stack_ref": "evidence://errors/stack-e2e" if unexpected else None, "diagnostic_evidence_refs": ["evidence://errors/event-e2e"], "redaction_status": "PASS"},
+        "operations": {"visibility": "OPERATIONS", "error_id": "ERR-E2E-0001", "trace_id": "TRACE-E2E-1", "diagnostic_evidence_refs": ["evidence://operations/health-e2e"], "redaction_status": "PASS"},
     }
 
 

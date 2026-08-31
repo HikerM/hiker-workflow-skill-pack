@@ -20,6 +20,7 @@ from community_pro_bridge import (
     invoke_bridge,
     normalize_current_authority_facts,
     query_project_facts,
+    resolve_local_current_authority,
     router_boundary_adoption,
 )
 import suite_router
@@ -45,13 +46,13 @@ def _envelope(
     })
 
 
-def _protocol_version(product: str = "5.19.0-rc.8", protocol: int = 2) -> str:
+def _protocol_version(product: str = "5.19.0-rc.8", protocol: int = 2, runtime: str = "0.1.0", schema: str = "3.0.0") -> str:
     return _envelope(
         "version",
         "READY",
         product_version=product,
-        runtime_api_version="0.1.0",
-        state_schema_version="3.0.0",
+        runtime_api_version=runtime,
+        state_schema_version=schema,
         live_adoption_protocol=protocol,
     )
 
@@ -115,6 +116,34 @@ def _authority_establishment(status: str = "ESTABLISHED", *, ok: bool = True, ex
 
 
 class CommunityProBridgeTests(unittest.TestCase):
+    def _write_current_authority(self, root: Path, *, tasks: int = 1) -> None:
+        ai = root / ".ai"; (ai / "governance").mkdir(parents=True); (ai / "tasks").mkdir()
+        goal = {"status": "ACTIVE", "goal_id": "GOAL-CURRENT", "revision": 4, "outcome": "Continue current bounded delivery", "fingerprint": "a" * 64}
+        (ai / "governance/goal-contract.json").write_text(json.dumps(goal), encoding="utf-8")
+        summaries = []
+        for number in range(1, tasks + 1):
+            task_id = f"KG-{number:03d}"; summaries.append({"task_id": task_id, "state": "Development"})
+            task = {"task_id": task_id, "goal": f"Implement slice {number}", "state": "Development", "history": [{"event": "CREATED"}], "goal_binding": {"scope": "project", "goal_id": "GOAL-CURRENT", "revision": 4, "fingerprint": "a" * 64}}
+            (ai / f"tasks/{task_id}.json").write_text(json.dumps(task), encoding="utf-8")
+        (ai / "governance/task-index.json").write_text(json.dumps({"tasks": summaries}), encoding="utf-8")
+
+    def test_unique_local_goal_and_task_authority_resolve_without_prompt(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); self._write_current_authority(root)
+            facts, error, reads = resolve_local_current_authority(root)
+        self.assertIsNone(error)
+        self.assertEqual("Continue current bounded delivery", facts["goal"]["statement"])
+        self.assertEqual("Implement slice 1", facts["task"]["statement"])
+        self.assertLessEqual(len(reads), 5)
+
+    def test_multiple_local_current_tasks_remain_authority_ambiguity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); self._write_current_authority(root, tasks=2)
+            facts, error, reads = resolve_local_current_authority(root)
+        self.assertIsNone(facts)
+        self.assertEqual("MULTIPLE_CURRENT_TASK_AUTHORITIES", error)
+        self.assertEqual(4, len(reads))
+
     def test_current_authority_facts_are_bounded_and_deterministically_fingerprinted(self):
         first, error = normalize_current_authority_facts(_authority_facts())
         second, second_error = normalize_current_authority_facts(_authority_facts())
@@ -131,7 +160,7 @@ class CommunityProBridgeTests(unittest.TestCase):
         self.assertIsNone(normalized)
         self.assertEqual("TASK_AUTHORITY_SOURCE_UNTRUSTED", error)
 
-    def test_missing_authority_facts_blocks_without_guessing_or_establishment(self):
+    def test_missing_authority_facts_keeps_current_project_in_community_safe_mode(self):
         calls: list[list[str]] = []
 
         def run(command, **_kwargs):
@@ -154,9 +183,11 @@ class CommunityProBridgeTests(unittest.TestCase):
                 {"HIKER_EXECUTABLE": "C:/fixture/hiker.exe", "CODEX_THREAD_ID": "session"},
                 run,
             )
-        self.assertEqual("AUTHORITY_AMBIGUOUS", report["status"])
+        self.assertEqual("COMMUNITY_SAFE_MODE", report["status"])
         self.assertEqual("CURRENT_AUTHORITY_FACTS_REQUIRED", report["reason"])
-        self.assertTrue(report["ask_required"])
+        self.assertTrue(report["project_ready"])
+        self.assertEqual("NONE", report["user_action_required"])
+        self.assertFalse(report["manual_recovery_prompt_required"])
         self.assertEqual(2, len(calls))
 
     def test_brownfield_authority_establishes_then_existing_attach_live_adopts(self):
@@ -193,6 +224,56 @@ class CommunityProBridgeTests(unittest.TestCase):
         self.assertNotIn("raw-session", json.dumps(report))
         self.assertNotIn(_authority_facts()["goal"]["statement"], json.dumps(report))
         self.assertNotIn(_authority_facts()["task"]["statement"], json.dumps(report))
+
+    def test_unique_local_authority_auto_converges_to_live_adoption(self):
+        calls: list[list[str]] = []
+
+        def run(command, **_kwargs):
+            calls.append(command)
+            if command[1] == "version":
+                return subprocess.CompletedProcess(command, 0, _protocol_version(), "")
+            if command[1] == "establish-current-authority":
+                return subprocess.CompletedProcess(command, 0, _authority_establishment(), "")
+            if sum(call[1] == "attach" for call in calls) == 1:
+                return subprocess.CompletedProcess(command, 2, _envelope("attach", "GOAL_ADOPTION_REQUIRED", ok=False, exit_code=2, pro_state="PRO_DEGRADED", reasons=["NO_PROVABLE_CURRENT_GOAL"]), "")
+            return subprocess.CompletedProcess(command, 0, _adoption(), "")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); self._write_current_authority(root)
+            report = router_boundary_adoption(
+                root,
+                {"HIKER_EXECUTABLE": "C:/fixture/hiker.exe", "CODEX_THREAD_ID": "session"},
+                run,
+            )
+        self.assertEqual("LIVE_SESSION_ADOPTED", report["status"])
+        self.assertFalse(report["manual_recovery_prompt_required"])
+        self.assertEqual("RESOLVED", report["authority_resolution"]["status"])
+        self.assertEqual(["DETECT", "CLASSIFY", "RECONCILE", "ESTABLISH_AUTHORITY", "ATTACH", "ADOPT", "RESUME"], report["adoption_flow"])
+        self.assertEqual(["version", "attach", "establish-current-authority", "attach"], [call[1] for call in calls])
+
+    def test_ambiguous_local_authority_only_blocks_old_task_resume(self):
+        calls: list[list[str]] = []
+
+        def run(command, **_kwargs):
+            calls.append(command)
+            if command[1] == "version":
+                return subprocess.CompletedProcess(command, 0, _protocol_version(), "")
+            return subprocess.CompletedProcess(command, 2, _envelope("attach", "TASK_ADOPTION_REQUIRED", ok=False, exit_code=2, pro_state="PRO_DEGRADED", reasons=["NO_PROVABLE_CURRENT_TASK"]), "")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); self._write_current_authority(root, tasks=2)
+            report = router_boundary_adoption(
+                root,
+                {"HIKER_EXECUTABLE": "C:/fixture/hiker.exe", "CODEX_THREAD_ID": "session"},
+                run,
+            )
+        self.assertEqual("COMMUNITY_SAFE_MODE", report["status"])
+        self.assertFalse(report["manual_recovery_prompt_required"])
+        self.assertEqual("SELECT_AUTHORITY", report["old_state_resume_user_action"])
+        self.assertEqual("NONE", report["user_action_required"])
+        self.assertEqual("OLD_STATE_AUTHORITY_QUARANTINED", report["authority_resolution"]["reason"])
+        self.assertEqual("AMBIGUOUS", report["new_session_recovery"]["old_state_resumability"])
+        self.assertEqual(["version", "attach"], [call[1] for call in calls])
 
     def test_authority_ambiguity_never_continues_to_attach(self):
         calls: list[list[str]] = []
@@ -257,7 +338,7 @@ class CommunityProBridgeTests(unittest.TestCase):
         self.assertEqual("COMMUNITY_FALLBACK", report["pro_state"])
         self.assertEqual("PRO_RUNTIME_NOT_FOUND", report["reason"])
 
-    def test_community_runtime_version_is_not_mistaken_for_pro(self):
+    def test_product_version_is_informational_when_capability_contract_matches(self):
         calls: list[list[str]] = []
 
         def run(command, **_kwargs):
@@ -265,9 +346,32 @@ class CommunityProBridgeTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, 0, _protocol_version("5.18.0"), "")
 
         report = detect_pro_runtime({"HIKER_EXECUTABLE": "C:/fixture/hiker.exe"}, run)
+        self.assertEqual("PRO_RUNTIME_DETECTED", report["status"])
+        self.assertTrue(report["pro_available"])
+        self.assertEqual("5.18.0", report["product_version"])
+        self.assertEqual({"machine_json": True, "live_adoption": True}, report["feature_availability"])
+        self.assertEqual(1, len(calls))
+
+    def test_non_semantic_future_product_label_uses_runtime_capabilities(self):
+        def run(command, **_kwargs):
+            return subprocess.CompletedProcess(command, 0, _protocol_version("future-channel"), "")
+
+        report = detect_pro_runtime({"HIKER_EXECUTABLE": "C:/fixture/hiker.exe"}, run)
+        self.assertEqual("PRO_RUNTIME_DETECTED", report["status"])
+        self.assertEqual("future-channel", report["product_version"])
+
+    def test_runtime_api_capability_floor_fails_closed(self):
+        def run(command, **_kwargs):
+            return subprocess.CompletedProcess(command, 0, _protocol_version(runtime="0.0.9"), "")
+
+        report = detect_pro_runtime({"HIKER_EXECUTABLE": "C:/fixture/hiker.exe"}, run)
         self.assertEqual("COMMUNITY_FALLBACK", report["status"])
         self.assertEqual("PRO_LIVE_ADOPTION_PROTOCOL_INCOMPATIBLE", report["reason"])
-        self.assertEqual(1, len(calls))
+
+    def test_bridge_has_no_product_version_execution_gate(self):
+        source = (PLUGIN / "scripts" / "community_pro_bridge.py").read_text(encoding="utf-8")
+        self.assertNotIn("MINIMUM_PRO_VERSION", source)
+        self.assertNotIn("product_version[:", source)
 
     def test_versioned_runtime_locator_wins_over_stale_path_without_directory_scan(self):
         calls: list[list[str]] = []
@@ -492,11 +596,19 @@ class CommunityProBridgeTests(unittest.TestCase):
         self.assertEqual("LIVE_SESSION_ADOPTED", report["status"])
         self.assertEqual("checkpoint", report["terminal_action"])
         self.assertEqual("TURN_TERMINAL", report["terminal_boundary"])
+        self.assertTrue(report["terminal_contract"]["required"])
+        self.assertEqual("BEFORE_FINAL_RESPONSE", report["terminal_contract"]["execute_at"])
+        self.assertEqual(
+            ["TURN_CHECKPOINTED", "ALREADY_CHECKPOINTED"],
+            report["terminal_contract"]["success_statuses"],
+        )
+        self.assertEqual("checkpoint", report["terminal_contract"]["command"][-1])
+        self.assertEqual(str(Path(temporary).resolve()), report["terminal_contract"]["command"][-3])
         self.assertEqual(2, len(calls))
 
     def test_router_boundary_fallback_is_machine_observable(self):
-        with patch("community_pro_bridge.shutil.which", return_value=None):
-            report = router_boundary_adoption(Path.cwd(), {"CODEX_THREAD_ID": "session"})
+        with tempfile.TemporaryDirectory() as temporary, patch("community_pro_bridge.shutil.which", return_value=None):
+            report = router_boundary_adoption(Path(temporary), {"CODEX_THREAD_ID": "session"})
         self.assertEqual("COMMUNITY_FALLBACK", report["pro_state"])
         self.assertFalse(report["pro_available"])
 

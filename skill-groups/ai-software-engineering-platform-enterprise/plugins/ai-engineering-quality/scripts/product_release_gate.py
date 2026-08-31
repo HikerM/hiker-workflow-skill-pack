@@ -21,7 +21,7 @@ def evaluate(root: Path) -> dict[str, Any]:
     ui = root / ".ai" / "ui"
     design_path = ui / "project-ui.json"
     if not design_path.is_file():
-        return {"status": "NOT_APPLICABLE", "blockers": [], "reason": "no 5.18 UI model", "reads": 1}
+        return {"status": "NOT_APPLICABLE", "blockers": [], "reason": "no legacy UI model", "reads": 1}
     design = load_json(design_path)
     registry = load_json(ui / "component-registry.json")
     presentation = load_json(ui / "presentation-contract.json")
@@ -39,6 +39,8 @@ def evaluate(root: Path) -> dict[str, Any]:
     for name, result in checks.items():
         if result.get("status") != "PASS":
             blockers.append({"code": f"{name.upper()}_NOT_RELEASE_READY", "detail": str(result.get("status"))})
+    if (checks["design"].get("handoff_continuity") or {}).get("status") == "BLOCKED":
+        blockers.append({"code": "HANDOFF_CONTINUITY_NOT_RELEASE_READY", "detail": "interaction handoff continuity is blocked"})
     screens = design.get("screens", []) if isinstance(design, dict) else []
     if not screens:
         blockers.append({"code": "NO_RELEASE_UI_SCREENS", "detail": "UI model has no screen baseline"})
@@ -91,7 +93,7 @@ def evaluate(root: Path) -> dict[str, Any]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Hiker 5.18 product release gate")
+    parser = argparse.ArgumentParser(description="Hiker product release gate")
     parser.add_argument("--root", default=".")
     args = parser.parse_args()
     result = evaluate(Path(args.root).resolve())

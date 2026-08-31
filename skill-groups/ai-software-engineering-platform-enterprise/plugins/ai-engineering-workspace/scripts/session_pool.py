@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from workspacelib import atomic_json, common_dir, locked_state, read_json, safe_id
+from workspacelib import atomic_json, common_dir, effective_budget, locked_state, read_json, safe_id
 from dispatch_state import OUTSTANDING_TURN_LEASES, load_dispatch
 from file_lock import load_locks
 from turn_lease import read_turn_lease
@@ -26,7 +26,10 @@ RELEASE_BLOCKING_STATES = {"PAUSED_DIRTY", "RELEASE_PENDING", "ARCHIVE_REQUESTED
 TERMINAL_OUTCOMES = {"PASS", "FAIL", "CANCELLED", "SUPERSEDED"}
 RESERVATION_TTL_SECONDS = 120
 ROLE_FAMILIES = {
-    "master agent": "master",
+    "control": "control",
+    "write": "writer",
+    "assure": "assurance",
+    "master agent": "control",
     "planning agent": "control",
     "developer agent": "writer",
     "fix agent": "writer",
@@ -37,8 +40,8 @@ ROLE_FAMILIES = {
     "verification agent": "assurance",
     "merge agent": "control",
     "document agent": "control",
-    "browser agent": "browser",
-    "e2e agent": "browser",
+    "browser agent": "assurance",
+    "e2e agent": "assurance",
 }
 
 
@@ -59,9 +62,9 @@ def role_family(role: str) -> str:
     if any(value in token for value in ("developer", "writer", "fix", "repair", "开发", "实现", "修复")):
         return "writer"
     if any(value in token for value in ("browser", "e2e", "浏览器")):
-        return "browser"
+        return "assurance"
     if any(value in token for value in ("master", "总控")):
-        return "master"
+        return "control"
     return "control"
 
 
@@ -90,6 +93,16 @@ def resolved_slot_key(state: dict[str, Any], project_id: str, repository: str, f
         legacy = legacy_slot_key(project_id, repository, family)
         if legacy in state.get("slots", {}):
             return legacy
+    compatible_legacy = {"control": {"master"}, "assurance": {"browser"}}.get(family, set())
+    normalized_project = safe_id(project_id).upper()
+    normalized_repository = str(Path(repository).resolve()).casefold()
+    for existing_key, slot in state.get("slots", {}).items():
+        if (
+            slot.get("project_id") == normalized_project
+            and str(Path(slot.get("repository") or repository).resolve()).casefold() == normalized_repository
+            and slot.get("role_family") in compatible_legacy
+        ):
+            return existing_key
     return key
 
 
@@ -133,12 +146,7 @@ def runtime_registration_id(slot: dict[str, Any]) -> str | None:
 def project_policy(root: Path) -> dict[str, int]:
     project = read_json(root / ".ai" / "governance" / "project-state.json", {}) or {}
     configured = project.get("session_budget", {})
-    return {
-        "max_resident_slots": int(configured.get("max_resident_slots", 6)),
-        "max_pending_creates": int(configured.get("max_pending_creates", 1)),
-        "max_writer_slots": int(configured.get("max_writer_slots", 2)),
-        "max_active_turns": int(configured.get("max_active_turns", 2)),
-    }
+    return effective_budget("execution", configured)
 
 
 def _resident(slot: dict[str, Any]) -> bool:

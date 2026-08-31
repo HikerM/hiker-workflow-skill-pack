@@ -54,6 +54,13 @@ HIGH_RISK_SIGNALS = {
     "multiple-writers",
 }
 
+SCOPE_EXPANSION_SIGNALS = {
+    "architecture-boundary-change",
+    "database-migration",
+    "deep-investigation",
+    "production-release",
+}
+
 
 def _run(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
@@ -72,9 +79,14 @@ def tracked_file_count(root: Path) -> int | None:
 
 
 def closed_task_count(root: Path) -> int:
-    index = read_json(ai_root(root) / "governance" / "task-index.json", None)
-    if not isinstance(index, dict):
-        index = read_json(ai_root(root) / "runtime" / "task-index.json", {}) or {}
+    index: Any = None
+    for path in (
+        ai_root(root) / "governance" / "task-index.json",
+        ai_root(root) / "runtime" / "task-index.json",
+    ):
+        if path.is_file():
+            index = read_json(path, {}) or {}
+            break
     if not isinstance(index, dict):
         return 0
     closed = index.get("closed")
@@ -125,34 +137,63 @@ def build_context_plan(
     changed_paths: list[str] | None = None,
     signals: set[str] | None = None,
     tracked_files: int | None = None,
+    active_facts: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     scale = classify_scale(root, signals, tracked_files)
     budget = dict(MODE_BUDGETS[scale["mode"]])
-    changed = [str(item).replace("\\", "/") for item in (changed_paths or []) if str(item).strip()]
+    active_facts = active_facts if isinstance(active_facts, dict) else {}
+    changed = [str(item).strip().replace("\\", "/")[:240] for item in (changed_paths or []) if str(item).strip()]
+    reference_limit = int(budget["max_reference_files"])
+
+    def scalar(name: str) -> str | None:
+        value = active_facts.get(name)
+        return str(value).strip()[:160] if isinstance(value, (str, int)) and str(value).strip() else None
+
+    def refs(name: str) -> list[str]:
+        value = active_facts.get(name)
+        if not isinstance(value, list):
+            return []
+        return [str(item).strip()[:240] for item in value if str(item).strip()][:reference_limit]
+
+    working_set: dict[str, Any] = {
+        "changed_paths": changed[: budget["max_source_files"]],
+        "read_order": [
+            "current-goal",
+            "current-task",
+            "changed-scope",
+            "direct-dependencies",
+            "relevant-contracts",
+            "relevant-evidence",
+        ],
+        "never_default_scan": [
+            ".ai/archive",
+            "all-task-files",
+            "all-checkpoints",
+            "all-skill-bodies",
+            "full-repository-history",
+        ],
+    }
+    if changed:
+        working_set["changed_path_count"] = len(changed)
+    for key, value in (
+        ("current_goal", scalar("current_goal")),
+        ("current_task", scalar("current_task")),
+        ("direct_dependencies", refs("direct_dependencies")),
+        ("relevant_contracts", refs("relevant_contracts")),
+        ("relevant_evidence", refs("relevant_evidence")),
+    ):
+        if value:
+            working_set[key] = value
+    scope_expansion = sorted(set(scale["signals"]) & SCOPE_EXPANSION_SIGNALS)
+    if scope_expansion:
+        working_set["scope_expansion"] = {"mode": "EXPLICIT", "reasons": scope_expansion}
     return {
         "schema_version": "1.0.0",
         "stage": str(stage or "unknown").strip().lower() or "unknown",
         "latency_path": "governed" if str(stage or "").lower() in {"governance", "merge", "release"} else "project",
         "scale": scale,
         "budget": budget,
-        "working_set": {
-            "changed_paths": changed[: budget["max_source_files"]],
-            "changed_path_count": len(changed),
-            "read_order": [
-                "current-task",
-                "git-delta",
-                "direct-contracts",
-                "direct-tests",
-                "risk-reachable-consumers-if-needed",
-            ],
-            "never_default_scan": [
-                ".ai/archive",
-                "all-task-files",
-                "all-checkpoints",
-                "all-skill-bodies",
-                "full-repository-history",
-            ],
-        },
+        "working_set": working_set,
         "output_policy": {
             "raw_logs": "store-as-evidence",
             "conversation": "summary-failures-evidence-path",

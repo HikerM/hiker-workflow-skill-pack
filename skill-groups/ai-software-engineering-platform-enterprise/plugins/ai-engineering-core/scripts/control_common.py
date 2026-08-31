@@ -7,17 +7,16 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from capability_metadata import load_registry
 from control_kernel import write_gate
 from corelib import ai_root, read_json
 from suite_version import plugin_root
+from resource_budget import HARD_MAX as RESOURCE_HARD_MAX
 
 
 SCHEMA_VERSION = "1.0.0"
 GOVERNED_STAGES = {"governance", "merge", "release"}
-MAX_ADMISSION_OUTPUT_CHARS = 4000
-CAPABILITY_REGISTRY = Path(__file__).resolve().parents[1] / "references" / "capability-registry.json"
-
-
+MAX_ADMISSION_OUTPUT_CHARS = RESOURCE_HARD_MAX["output"]["admission_output_chars"]
 def safe_id(value: str, limit: int = 100) -> str:
     result = re.sub(r"[^A-Za-z0-9._-]+", "-", str(value or "").strip()).strip("-._")
     if not result:
@@ -42,8 +41,8 @@ def inside(root: Path, value: str) -> tuple[Path, str]:
 
 
 def load_capability_registry() -> dict[str, Any]:
-    data = read_json(CAPABILITY_REGISTRY, {}) or {}
-    if not isinstance(data.get("capabilities"), list) or not isinstance(data.get("specializations"), list):
+    data = load_registry()
+    if not isinstance(data.get("capability_groups"), list) or not isinstance(data.get("specializations"), list):
         raise RuntimeError("capability registry is invalid")
     return data
 
@@ -51,19 +50,36 @@ def load_capability_registry() -> dict[str, Any]:
 def capability_indexes(
     registry: dict[str, Any],
 ) -> tuple[dict[str, dict[str, str]], dict[str, dict[str, Any]]]:
-    skills: dict[str, dict[str, str]] = {}
-    for capability in registry["capabilities"]:
+    capability_names: dict[str, str] = {}
+    domain_names: dict[tuple[str, str], str] = {}
+    for capability in registry["capability_groups"]:
+        capability_id = str(capability.get("id") or "")
+        capability_names[capability_id] = str(capability.get("display_name") or capability_id)
         for domain in capability.get("domains", []):
-            for skill in domain.get("skills", []):
-                if skill in skills:
-                    raise RuntimeError(f"capability registry duplicates skill: {skill}")
-                skills[str(skill)] = {
-                    "capability": str(capability.get("id") or ""),
-                    "capability_name": str(capability.get("display_name") or ""),
-                    "domain": str(domain.get("id") or ""),
-                    "domain_name": str(domain.get("display_name") or ""),
-                }
-    focuses = {str(item.get("id")): item for item in registry["specializations"] if item.get("id")}
+            domain_id = str(domain.get("id") or "")
+            domain_names[(capability_id, domain_id)] = str(domain.get("display_name") or domain_id)
+    skills: dict[str, dict[str, str]] = {}
+    for skill, metadata in registry["skills"].items():
+        capability_id = str(metadata.get("capability") or "")
+        domain_id = str(metadata.get("domain") or "")
+        if capability_id not in capability_names or (capability_id, domain_id) not in domain_names:
+            raise RuntimeError(f"capability registry references unknown ownership: {skill}")
+        skills[str(skill)] = {
+            "capability": capability_id,
+            "capability_name": capability_names[capability_id],
+            "domain": domain_id,
+            "domain_name": domain_names[(capability_id, domain_id)],
+        }
+    focuses = {
+        str(item.get("id")): {**item, "skills": []}
+        for item in registry["specializations"]
+        if item.get("id")
+    }
+    for skill, metadata in registry["skills"].items():
+        for focus_id in metadata.get("specializations", []):
+            if focus_id not in focuses:
+                raise RuntimeError(f"capability registry references unknown specialization: {skill}/{focus_id}")
+            focuses[focus_id]["skills"].append(skill)
     return skills, focuses
 
 

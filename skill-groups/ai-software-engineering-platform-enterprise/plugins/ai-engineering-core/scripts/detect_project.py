@@ -1,9 +1,11 @@
 from __future__ import annotations
-import argparse,json,os,re
+import argparse,json,re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 from corelib import git_info
+from engineering_manifests import DiscoveryBudget, discover_engineering_manifests
+from technology_markers import NODE_FRAMEWORK_PACKAGES, PACKAGE_MANAGER_LOCKS
 
 try:
     import tomllib
@@ -12,9 +14,6 @@ except ModuleNotFoundError:
         import tomli as tomllib
     except ModuleNotFoundError:
         tomllib = None
-
-IGNORED={".git",".hg",".svn","node_modules","Library","Temp","obj","bin","dist","build",".venv","venv","__pycache__",".idea",".vs","DerivedData","Pods"}
-MANIFESTS={"package.json","pyproject.toml","requirements.txt","pom.xml","build.gradle","build.gradle.kts","go.mod","Cargo.toml","composer.json","ProjectVersion.txt","CMakeLists.txt","Package.swift","Gemfile","pubspec.yaml","project.pbxproj"}
 
 def safe_json(path:Path)->dict[str,Any]:
     try:
@@ -43,16 +42,12 @@ def detect_package_json(path:Path)->dict[str,Any]:
     for key in ("dependencies","devDependencies","peerDependencies","optionalDependencies"):
         value=data.get(key,{})
         if isinstance(value,dict):deps.update({str(k):str(v) for k,v in value.items()})
-    mapping=[("vue","Vue"),("react","React"),("next","Next.js"),("nuxt","Nuxt"),("@angular/core","Angular"),("svelte","Svelte"),("vite","Vite"),("element-plus","Element Plus"),("antd","Ant Design"),("@mui/material","MUI"),("express","Express"),("nestjs","NestJS"),("electron","Electron"),("@tauri-apps/api","Tauri"),("react-native","React Native")]
-    frameworks=[{"name":name,"package":pkg,"version":exact_node_version(root,pkg,deps.get(pkg))} for pkg,name in mapping if pkg in deps]
+    frameworks=[{"name":display,"package":package,"version":exact_node_version(root,package,deps.get(package))} for package,(_framework_id,display,_roles) in NODE_FRAMEWORK_PACKAGES.items() if package in deps]
     pm_raw=data.get("packageManager");pm_name=None;pm_version=None
     if isinstance(pm_raw,str) and "@" in pm_raw:pm_name,pm_version=pm_raw.rsplit("@",1)
     elif isinstance(pm_raw,str):pm_name=pm_raw
     if not pm_name:
-        if (root/"pnpm-lock.yaml").exists():pm_name="pnpm"
-        elif (root/"yarn.lock").exists():pm_name="yarn"
-        elif (root/"bun.lockb").exists() or (root/"bun.lock").exists():pm_name="bun"
-        elif (root/"package-lock.json").exists():pm_name="npm"
+        pm_name=next((manager for filename,manager in PACKAGE_MANAGER_LOCKS if (root/filename).exists()),None)
     node_version=(data.get("engines",{}) or {}).get("node") if isinstance(data.get("engines",{}),dict) else None
     volta=data.get("volta",{}) if isinstance(data.get("volta",{}),dict) else {}
     node_version=volta.get("node") or first_text(root/".nvmrc",root/".node-version") or node_version
@@ -178,18 +173,9 @@ def detect_simple(path:Path)->dict[str,Any]|None:
     return None
 
 def candidates(root:Path,max_depth:int)->list[Path]:
-    result=[]
-    for dirpath,dirnames,filenames in os.walk(root):
-        current=Path(dirpath)
-        try:rel=current.relative_to(root)
-        except ValueError:continue
-        depth=len(rel.parts)
-        if depth>=max_depth:dirnames[:]=[]
-        else:dirnames[:]=[name for name in dirnames if name not in IGNORED]
-        for filename in filenames:
-            candidate=current/filename
-            if filename in MANIFESTS or candidate.suffix in {".csproj",".pro"}:result.append(candidate)
-    return sorted(set(result))
+    budget=DiscoveryBudget(max_depth=max(0,min(max_depth,8)),max_dirs=256,max_manifests=128,max_bytes=4*1024*1024,max_entries_per_dir=512)
+    report=discover_engineering_manifests(root,budget=budget)
+    return [root/item["path"] for item in report["manifests"]]
 def detect(root:Path,max_depth:int=6)->dict[str,Any]:
     root=root.resolve();projects=[];seen=set()
     for path in candidates(root,max_depth):

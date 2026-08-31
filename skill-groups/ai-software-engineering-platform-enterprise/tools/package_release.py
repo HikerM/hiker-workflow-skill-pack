@@ -8,7 +8,7 @@ import zipfile
 from pathlib import Path
 from typing import Any, Callable
 
-from package_facts import package_plan, sha256, source_files
+from package_facts import canonical_content, package_plan, sha256, source_files
 from self_governance import finalize_pipeline, package_gate, run_pipeline
 from verify_clean_install import verify as verify_clean_install
 
@@ -30,7 +30,7 @@ def build_candidates(suite: Path, target_dir: Path) -> list[dict[str, Any]]:
                 info.compress_type = zipfile.ZIP_DEFLATED
                 info.external_attr = 0o100644 << 16
                 info.create_system = 3
-                archive.writestr(info, source.read_bytes(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+                archive.writestr(info, canonical_content(source), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
         outputs.append({"plugin": item["plugin"], "version": item["version"], "archive": target.name, "sha256": sha256(target)})
     (target_dir / "SHA256SUMS.txt").write_text(
         "\n".join(f"{item['sha256']}  {item['archive']}" for item in outputs) + "\n",

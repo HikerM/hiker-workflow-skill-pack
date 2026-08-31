@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from interaction_guard import evaluate_handoffs
 from product_model_common import (
     MAX_DECISIONS,
     MAX_OBSERVATIONS,
@@ -147,6 +148,11 @@ def validate(model: Any) -> dict[str, Any]:
             errors.append({"code": "SCREEN_BUDGET_EXCEEDED", "field": "screens"})
         for index, screen in enumerate(screens[:MAX_SCREENS]):
             _validate_screen(screen, index, errors)
+    handoff_continuity = evaluate_handoffs(model.get("handoffs"))
+    errors.extend(
+        {**item, "field": "handoffs"}
+        for item in handoff_continuity.get("errors", [])
+    )
     expected = model_fingerprint(model)
     if model.get("fingerprint") != expected:
         errors.append({"code": "MODEL_FINGERPRINT_MISMATCH", "field": "fingerprint"})
@@ -154,9 +160,11 @@ def validate(model: Any) -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "status": "BLOCKED" if errors else "PASS",
         "errors": errors,
+        "handoff_continuity": handoff_continuity,
         "summary": {
             "screens": len(screens) if isinstance(screens, list) else 0,
             "decisions": len(decisions) if isinstance(decisions, list) else 0,
+            "handoffs": handoff_continuity["handoffs"],
             "observations": sum(len(model.get(key, [])) for key in ("project_facts", "visual_context") if isinstance(model.get(key), list)),
         },
     }
@@ -249,7 +257,7 @@ def inspect(path: Path) -> dict[str, Any]:
             "path": str(path),
             "writes": 0,
             "migration_required": True,
-            "message": "No 5.18 UI IR exists; migrate incrementally for an affected UI scope only.",
+            "message": "No legacy UI IR exists; migrate incrementally for an affected UI scope only.",
         }
     model = load_json(path)
     result = validate(model)
@@ -257,7 +265,7 @@ def inspect(path: Path) -> dict[str, Any]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Hiker 5.18 semantic UI design model")
+    parser = argparse.ArgumentParser(description="Hiker semantic UI design model")
     parser.add_argument("--root", default=".")
     parser.add_argument("--model", default=".ai/ui/project-ui.json")
     sub = parser.add_subparsers(dest="command", required=True)

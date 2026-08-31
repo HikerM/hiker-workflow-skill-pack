@@ -126,23 +126,40 @@ def observe(root: Path, args: argparse.Namespace) -> dict[str, Any]:
     task_map = read_json(root / ".ai" / "workspace" / "task-map.json", {}) or {}
     lane_contract = next((item for item in task_map.get("lanes", []) if item.get("ownership_lane") == lane), {})
     serial_with = set(lane_contract.get("serial_with") or [])
+    authority_serial_with = {
+        str(item.get("lane")) for item in lane_contract.get("authority_conflicts", []) if item.get("lane")
+    }
     active_conflicts = [
         item for item in pool_status(root, project_id).get("slots", [])
         if item.get("role_family") == "writer"
         and item.get("ownership_lane") in serial_with
         and item.get("state") in ACTIVE_STATES
     ]
+    active_authority_conflicts = [
+        item for item in active_conflicts if item.get("ownership_lane") in authority_serial_with
+    ]
+    active_scope_conflicts = [
+        item for item in active_conflicts if item.get("ownership_lane") not in authority_serial_with
+    ]
     pressure = current_pressure(state)
+    isolated = bool(getattr(args, "require_isolated_runtime", False))
+    session_policy = str(lane_contract.get("provider_session_policy") or "LEGACY")
     blocked_action = blocked_reason = None
     if pressure.get("blocks_new_dispatch"):
         blocked_action, blocked_reason = "BLOCK_DESKTOP_PRESSURE", "桌面压力熔断未解除；禁止创建或绑定新的执行任务"
+    elif lane_contract and (lane_contract.get("required") is False or lane_contract.get("status") == "NOT_APPLICABLE"):
+        blocked_action, blocked_reason = "BLOCK_GATE_NOT_APPLICABLE", "当前责任门禁不适用于该任务，禁止创建额外执行会话"
+    elif session_policy == "REUSE_CURRENT_PROVIDER_SESSION" and not isolated:
+        blocked_action, blocked_reason = "CONTINUE_CURRENT_SESSION", "当前责任复用现有Controller，不创建Agent、Provider Session或Worktree"
     elif task and str(task.get("control_status") or "ACTIVE").upper() != "ACTIVE":
         blocked_action, blocked_reason = "BLOCK_TASK_CONTROL", "任务已暂停或调整，禁止继续派发"
     elif not goal_check["ok"]:
         blocked_action, blocked_reason = "BLOCK_GOAL_DRIFT", "任务绑定的目标修订已过期，禁止按旧目标继续"
     elif (task.get("goal_adjustment") or {}).get("status") == "REPLAN_REQUIRED":
         blocked_action, blocked_reason = "BLOCK_REPLAN_REQUIRED", "目标已重新绑定但变更契约尚未对账，禁止继续旧实现"
-    elif active_conflicts:
+    elif active_authority_conflicts:
+        blocked_action, blocked_reason = "BLOCK_AUTHORITY_CONFLICT", "活动写通道共享API、Schema或Contract权威，必须串行"
+    elif active_scope_conflicts:
         blocked_action, blocked_reason = "BLOCK_SCOPE_CONFLICT", "写范围与活动所有权通道重叠，必须串行"
     if blocked_action:
         session = {
@@ -154,13 +171,13 @@ def observe(root: Path, args: argparse.Namespace) -> dict[str, Any]:
             "action": blocked_action,
             "reason": blocked_reason,
             "reservation_created": False,
+            "provider_session_policy": session_policy,
         }
     else:
         session = plan_slot(
             root, project_id, args.task_id, args.role, args.repository or str(root), args.base_sha,
             observed, args.thread_id, args.client_thread_id, lane,
         )
-    isolated = bool(getattr(args, "require_isolated_runtime", False))
     fallback = {
         "allowed": session.get("action") == "BLOCK_QUERY" and not isolated,
         "mode": "CURRENT_THREAD_BOUNDED" if session.get("action") == "BLOCK_QUERY" and not isolated else None,
@@ -176,7 +193,8 @@ def observe(root: Path, args: argparse.Namespace) -> dict[str, Any]:
         "goal_check": goal_check,
         "desktop_pressure": {"level": pressure.get("level"), "action": pressure.get("action")},
         "lane_contract": lane_contract,
-        "scope_conflicts": active_conflicts,
+        "scope_conflicts": active_scope_conflicts,
+        "authority_conflicts": active_authority_conflicts,
         "context_packet": context_packet.relative_to(root).as_posix(),
         "conflicts": conflicts,
         "rule": "reuse a project/repository/role/lane slot before creating a thread",

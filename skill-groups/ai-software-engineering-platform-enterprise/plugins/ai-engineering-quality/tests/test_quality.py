@@ -145,6 +145,47 @@ class QualityTests(unittest.TestCase):
     def test_test_plan_uses_real_package_scripts(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);repo(root);(root/"package.json").write_text(json.dumps({"packageManager":"pnpm@9","scripts":{"lint":"eslint .","build":"vite build"}}));data=plan(root,{"risk":{"level":"MEDIUM","tags":[]},"changes":[]});commands={x["command"] for x in data["mandatory"]+data["recommended"]};self.assertIn("pnpm lint",commands);self.assertIn("pnpm build",commands);self.assertNotIn("npm test -- --runInBand",commands)
+
+    def test_test_plan_reuses_current_pass_and_keeps_other_projects_out_of_scope(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);repo(root)
+            for name in ("web","api"):
+                folder=root/name;folder.mkdir();(folder/"package.json").write_text(json.dumps({"scripts":{"test":"vitest run","build":"vite build"}}))
+            identity={"source_fingerprint":"source-1","contract_fingerprint":"contract-1","dependency_fingerprint":"dependency-1","affected_scope":["web/src/a.ts"]}
+            risk={"risk":{"level":"MEDIUM","tags":[]},"changes":[{"path":"web/src/a.ts"}],"verification_identity":identity}
+            first=plan(root,risk)
+            self.assertEqual(["web"],sorted({item["cwd"] for item in first["mandatory"]+first["recommended"]}))
+            required=first["mandatory"][0]
+            record={"verification_id":required["verification_id"],"evidence_id":"EV-WEB","status":"VALID","result":"PASS","freshness":"CURRENT","evidence_key":required["evidence_key"],"affected_scope":required["affected_scope"]}
+            second=plan(root,{**risk,"verification_records":[record]})
+            self.assertEqual([],second["mandatory"])
+            self.assertEqual("EV-WEB",second["reused"][0]["evidence_id"])
+            self.assertFalse(second["full_rerun"])
+
+    def test_test_plan_adds_only_fresh_impact_graph_consumers(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);repo(root)
+            for name in ("web","api","unrelated"):
+                folder=root/name;folder.mkdir();(folder/"package.json").write_text(json.dumps({"scripts":{"test":"vitest run"}}))
+            risk={
+                "risk":{"level":"MEDIUM","tags":[]},"changes":[{"path":"web/src/client.ts"}],
+                "graph":{"nodes":["web/src/client.ts","api/src/contract.ts"],"stale":False,"truncated":False},
+            }
+            current=plan(root,risk)
+            stale=plan(root,{**risk,"graph":{**risk["graph"],"stale":True}})
+        self.assertEqual(["api","web"],sorted({item["cwd"] for item in current["mandatory"]}))
+        self.assertEqual(["web"],sorted({item["cwd"] for item in stale["mandatory"]}))
+        self.assertNotIn("unrelated",{item["cwd"] for item in current["mandatory"]})
+
+    def test_risk_review_emits_bounded_verification_identity(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);repo(root);(root/"README.md").write_text("changed\n",encoding="utf-8")
+            data=review(root)
+        identity=data["verification_identity"]
+        self.assertTrue(identity["source_fingerprint"])
+        self.assertTrue(identity["contract_fingerprint"])
+        self.assertTrue(identity["dependency_fingerprint"])
+        self.assertEqual(["README.md"],identity["affected_scope"])
     def test_test_plan_is_risk_proportionate_not_a_fixed_workflow(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);repo(root);(root/"package.json").write_text(json.dumps({"packageManager":"pnpm@9","scripts":{"lint":"eslint .","test":"vitest run","build":"vite build"}}))

@@ -134,7 +134,7 @@ class CommunityProBridgeTests(unittest.TestCase):
         self.assertIsNone(error)
         self.assertEqual("Continue current bounded delivery", facts["goal"]["statement"])
         self.assertEqual("Implement slice 1", facts["task"]["statement"])
-        self.assertLessEqual(len(reads), 4)
+        self.assertLessEqual(len(reads), 5)
 
     def test_multiple_local_current_tasks_remain_authority_ambiguity(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -142,7 +142,7 @@ class CommunityProBridgeTests(unittest.TestCase):
             facts, error, reads = resolve_local_current_authority(root)
         self.assertIsNone(facts)
         self.assertEqual("MULTIPLE_CURRENT_TASK_AUTHORITIES", error)
-        self.assertEqual(3, len(reads))
+        self.assertEqual(4, len(reads))
 
     def test_current_authority_facts_are_bounded_and_deterministically_fingerprinted(self):
         first, error = normalize_current_authority_facts(_authority_facts())
@@ -160,7 +160,7 @@ class CommunityProBridgeTests(unittest.TestCase):
         self.assertIsNone(normalized)
         self.assertEqual("TASK_AUTHORITY_SOURCE_UNTRUSTED", error)
 
-    def test_missing_authority_facts_blocks_without_guessing_or_establishment(self):
+    def test_missing_authority_facts_keeps_current_project_in_community_safe_mode(self):
         calls: list[list[str]] = []
 
         def run(command, **_kwargs):
@@ -183,9 +183,11 @@ class CommunityProBridgeTests(unittest.TestCase):
                 {"HIKER_EXECUTABLE": "C:/fixture/hiker.exe", "CODEX_THREAD_ID": "session"},
                 run,
             )
-        self.assertEqual("AUTHORITY_AMBIGUOUS", report["status"])
+        self.assertEqual("COMMUNITY_SAFE_MODE", report["status"])
         self.assertEqual("CURRENT_AUTHORITY_FACTS_REQUIRED", report["reason"])
-        self.assertTrue(report["ask_required"])
+        self.assertTrue(report["project_ready"])
+        self.assertEqual("NONE", report["user_action_required"])
+        self.assertFalse(report["manual_recovery_prompt_required"])
         self.assertEqual(2, len(calls))
 
     def test_brownfield_authority_establishes_then_existing_attach_live_adopts(self):
@@ -249,7 +251,7 @@ class CommunityProBridgeTests(unittest.TestCase):
         self.assertEqual(["DETECT", "CLASSIFY", "RECONCILE", "ESTABLISH_AUTHORITY", "ATTACH", "ADOPT", "RESUME"], report["adoption_flow"])
         self.assertEqual(["version", "attach", "establish-current-authority", "attach"], [call[1] for call in calls])
 
-    def test_ambiguous_local_authority_requires_prompt_and_never_establishes(self):
+    def test_ambiguous_local_authority_only_blocks_old_task_resume(self):
         calls: list[list[str]] = []
 
         def run(command, **_kwargs):
@@ -265,9 +267,12 @@ class CommunityProBridgeTests(unittest.TestCase):
                 {"HIKER_EXECUTABLE": "C:/fixture/hiker.exe", "CODEX_THREAD_ID": "session"},
                 run,
             )
-        self.assertEqual("AUTHORITY_AMBIGUOUS", report["status"])
-        self.assertTrue(report["manual_recovery_prompt_required"])
-        self.assertEqual("MULTIPLE_CURRENT_TASK_AUTHORITIES", report["authority_resolution"]["reason"])
+        self.assertEqual("COMMUNITY_SAFE_MODE", report["status"])
+        self.assertFalse(report["manual_recovery_prompt_required"])
+        self.assertEqual("SELECT_AUTHORITY", report["old_state_resume_user_action"])
+        self.assertEqual("NONE", report["user_action_required"])
+        self.assertEqual("OLD_STATE_AUTHORITY_QUARANTINED", report["authority_resolution"]["reason"])
+        self.assertEqual("AMBIGUOUS", report["new_session_recovery"]["old_state_resumability"])
         self.assertEqual(["version", "attach"], [call[1] for call in calls])
 
     def test_authority_ambiguity_never_continues_to_attach(self):
@@ -602,8 +607,8 @@ class CommunityProBridgeTests(unittest.TestCase):
         self.assertEqual(2, len(calls))
 
     def test_router_boundary_fallback_is_machine_observable(self):
-        with patch("community_pro_bridge.shutil.which", return_value=None):
-            report = router_boundary_adoption(Path.cwd(), {"CODEX_THREAD_ID": "session"})
+        with tempfile.TemporaryDirectory() as temporary, patch("community_pro_bridge.shutil.which", return_value=None):
+            report = router_boundary_adoption(Path(temporary), {"CODEX_THREAD_ID": "session"})
         self.assertEqual("COMMUNITY_FALLBACK", report["pro_state"])
         self.assertFalse(report["pro_available"])
 

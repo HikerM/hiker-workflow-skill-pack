@@ -7,7 +7,11 @@ from pathlib import Path
 from corelib import SCHEMA_VERSION, ai_root, atomic_write_json, atomic_write_text, git_info, read_json, utc_now
 from context_memory import ensure_memory_policy
 from detect_project import detect
-from state_consistency import assess as assess_state_consistency, repair as repair_state_consistency
+from state_consistency import (
+    assess as assess_state_consistency,
+    recover_for_new_session,
+    repair as repair_state_consistency,
+)
 
 DEFAULT_POLICY = {
     "schema_version": "1.0.0",
@@ -24,14 +28,10 @@ DEFAULT_POLICY = {
 }
 
 
-def initialize(root: Path, force: bool = False) -> dict:
+def initialize(root: Path, force: bool = False, recovery: dict | None = None) -> dict:
     root = root.resolve()
     initial_consistency = assess_state_consistency(root)
-    if initial_consistency.get("execution_policy", {}).get("mode") == "QUARANTINE_AI_STATE":
-        raise RuntimeError(
-            "existing .ai is untrusted or belongs to another source identity; "
-            "keep it quarantined and start from the current request and Git"
-        )
+    recovery = recovery or recover_for_new_session(root)
     ai = ai_root(root)
     ai.mkdir(parents=True, exist_ok=True)
     detected = detect(root)
@@ -72,7 +72,21 @@ def initialize(root: Path, force: bool = False) -> dict:
             root,
             allow_untrusted_initialization=initial_consistency["status"] == "STATELESS_UNMANAGED",
         )
+    detected["new_session_recovery"] = recovery
     return detected
+
+
+def prepare_for_new_session(root: Path) -> dict:
+    """Run one bounded recovery pass and bootstrap only when current derived state needs it."""
+    root = root.resolve()
+    recovery = recover_for_new_session(root)
+    if recovery.get("bootstrap_required"):
+        detected = initialize(root, recovery=recovery)
+        recovery = {**recovery, "project_detection": {
+            "project_count": len(detected.get("projects") or []),
+            "monorepo": bool(detected.get("monorepo")),
+        }}
+    return recovery
 
 
 def main() -> int:

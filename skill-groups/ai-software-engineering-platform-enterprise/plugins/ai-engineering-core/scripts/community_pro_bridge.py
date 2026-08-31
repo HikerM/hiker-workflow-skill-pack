@@ -11,14 +11,12 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from pro_machine_contract import MACHINE_CONTRACT_VERSION, machine_payload, protocol_facts
 from resource_budget import HARD_MAX as RESOURCE_HARD_MAX
 
 
 MINIMUM_RUNTIME_API_VERSION = (0, 1, 0)
 REQUIRED_LIVE_ADOPTION_PROTOCOL = 2
-MACHINE_CONTRACT_VERSION = "hiker-cli/v1"
-VALID_PRO_STATES = {"PRO_ACTIVE", "PRO_DEGRADED", "COMMUNITY_FALLBACK", "PRO_REQUIRED_BLOCKED"}
-VALID_MACHINE_EXIT_CODES = {0, 2, 64, 70}
 PROBE_TIMEOUT_SECONDS = 5
 ACTION_TIMEOUT_SECONDS = 30
 LOCATOR_CONTRACT_VERSION = "hiker-pro-locator/v1"
@@ -48,6 +46,30 @@ def _result(status: str, **values: Any) -> dict[str, Any]:
         )
     manual_recovery = values.pop("manual_recovery_prompt_required", bool(values.get("ask_required", False)))
     return {"status": status, "pro_state": pro_state, "manual_recovery_prompt_required": manual_recovery, **values}
+
+
+def _prepare_new_session_project(root: Path) -> dict[str, Any]:
+    try:
+        from bootstrap_project import prepare_for_new_session
+
+        return prepare_for_new_session(root)
+    except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as error:
+        return {
+            "ok": False,
+            "classification": "RECOVERY_OPERATION_FAILED",
+            "affected_capability": "AUTOMATIC_STATE_RECOVERY",
+            "automatic_action_taken": ["PRESERVE_EXISTING_STATE"],
+            "recovery_status": "CURRENT_PROJECT_USABLE_FROM_REQUEST_AND_GIT",
+            "diagnostic_ref": f"{type(error).__name__}",
+            "user_action_required": "NONE",
+            "project_usability": "READY",
+            "old_state_resumability": "UNKNOWN",
+            "bootstrap_required": False,
+            "state_reads": 0,
+            "state_writes": 0,
+            "full_ai_scan": False,
+            "cold_history_scanned": False,
+        }
 
 
 def _provider_session_available(environment: Mapping[str, str]) -> bool:
@@ -96,61 +118,6 @@ def _resolve_pro_executable(environment: Mapping[str, str]) -> tuple[str | None,
     return shutil.which("hiker"), "PATH"
 
 
-def _parse_semantic_version(value: Any) -> tuple[int, int, int] | None:
-    if not isinstance(value, str):
-        return None
-    match = re.match(r"^(\d+)\.(\d+)(?:\.(\d+))?", value.strip())
-    if match is None:
-        return None
-    return int(match.group(1)), int(match.group(2)), int(match.group(3) or 0)
-
-
-def _single_json_document(output: str) -> dict[str, Any] | None:
-    decoder = json.JSONDecoder()
-    stripped = output.lstrip()
-    try:
-        payload, end = decoder.raw_decode(stripped)
-    except (TypeError, json.JSONDecodeError):
-        return None
-    if stripped[end:].strip() or not isinstance(payload, dict):
-        return None
-    return payload
-
-
-def _machine_payload(
-    completed: subprocess.CompletedProcess[str],
-    command: str,
-) -> tuple[dict[str, Any] | None, str | None]:
-    payload = _single_json_document(completed.stdout)
-    if payload is None:
-        return None, "STDOUT_NOT_SINGLE_JSON_DOCUMENT"
-    if completed.stderr.strip() and _single_json_document(completed.stderr) is not None:
-        return None, "PRIMARY_PAYLOAD_ON_STDERR"
-    if payload.get("contract_version") != MACHINE_CONTRACT_VERSION:
-        return None, "MACHINE_CONTRACT_VERSION_MISMATCH"
-    if payload.get("command") != command:
-        return None, "MACHINE_COMMAND_MISMATCH"
-    if payload.get("exit_code") != completed.returncode or completed.returncode not in VALID_MACHINE_EXIT_CODES:
-        return None, "EXIT_CODE_CONTRACT_MISMATCH"
-    if not isinstance(payload.get("ok"), bool) or not isinstance(payload.get("status"), str):
-        return None, "MACHINE_ENVELOPE_INVALID"
-    if payload.get("pro_state") not in VALID_PRO_STATES:
-        return None, "PRO_STATE_INVALID"
-    if (completed.returncode == 0) != bool(payload["ok"]):
-        return None, "SUCCESS_EXIT_STATUS_MISMATCH"
-    return payload, None
-
-
-def _protocol_facts(payload: dict[str, Any]) -> tuple[str, tuple[int, int, int], int, str] | None:
-    product = str(payload.get("product_version") or "unknown").strip() or "unknown"
-    runtime = _parse_semantic_version(payload.get("runtime_api_version"))
-    protocol = payload.get("live_adoption_protocol")
-    state_schema = str(payload.get("state_schema_version") or "unknown").strip() or "unknown"
-    if runtime is None or not isinstance(protocol, int):
-        return None
-    return product, runtime, protocol, state_schema
-
-
 def detect_pro_runtime(
     environment: Mapping[str, str] | None = None,
     runner: Any = subprocess.run,
@@ -173,8 +140,8 @@ def detect_pro_runtime(
         )
     except (OSError, subprocess.SubprocessError):
         return _result("COMMUNITY_FALLBACK", reason="PRO_RUNTIME_UNAVAILABLE", pro_available=False)
-    payload, contract_error = _machine_payload(completed, "version")
-    facts = _protocol_facts(payload) if payload is not None else None
+    payload, contract_error = machine_payload(completed, "version")
+    facts = protocol_facts(payload) if payload is not None else None
     if completed.returncode != 0 or facts is None:
         return _result(
             "COMMUNITY_FALLBACK",
@@ -233,7 +200,7 @@ def _run_machine_action(
         return None, None, "PRO_RUNTIME_TIMEOUT"
     except OSError:
         return None, None, "PRO_RUNTIME_UNAVAILABLE"
-    payload, error = _machine_payload(completed, command_name)
+    payload, error = machine_payload(completed, command_name)
     return payload, completed, error
 
 
@@ -309,10 +276,22 @@ def _bounded_json(path: Path) -> dict[str, Any] | None:
 
 def resolve_local_current_authority(root: Path) -> tuple[dict[str, Any] | None, str | None, list[str]]:
     ai = root / ".ai"
-    reads = ["governance/goal-contract.json", "governance/task-index.json", "runtime/task.json"]
-    goal = _bounded_json(ai / reads[0])
-    index = _bounded_json(ai / reads[1])
-    runtime_task = _bounded_json(ai / reads[2])
+    recovery_relative = "governance/new-session-recovery.json"
+    reads = [recovery_relative, "governance/goal-contract.json", "governance/task-index.json", "runtime/task.json"]
+    recovery = _bounded_json(ai / recovery_relative)
+    if isinstance(recovery, dict):
+        resumability = recovery.get("old_state_resumability")
+        candidate_relative = str(recovery.get("authority_candidate_ref") or "")
+        if resumability == "REBINDABLE" and candidate_relative:
+            reads.append(candidate_relative)
+            candidate = _bounded_json(ai / candidate_relative)
+            if isinstance(candidate, dict) and isinstance(candidate.get("goal"), dict) and isinstance(candidate.get("task"), dict):
+                return {"goal": candidate["goal"], "task": candidate["task"]}, None, reads
+        if resumability in {"QUARANTINED", "AMBIGUOUS", "REBINDABLE"}:
+            return None, "OLD_STATE_AUTHORITY_QUARANTINED", reads
+    goal = _bounded_json(ai / reads[1])
+    index = _bounded_json(ai / reads[2])
+    runtime_task = _bounded_json(ai / reads[3])
     summaries = [
         item for item in ((index or {}).get("tasks") or [])
         if isinstance(item, dict) and item.get("task_id") and item.get("state") not in {"Merged", "Released"}
@@ -583,10 +562,17 @@ def router_boundary_adoption(
 ) -> dict[str, Any]:
     """Adopt only at the router's existing pre-write boundary; fallback remains observable."""
     effective_environment = os.environ if environment is None else environment
+    recovery = _prepare_new_session_project(root)
     resolved = detected
     if resolved is None and _provider_session_available(effective_environment):
         resolved = detect_pro_runtime(effective_environment, runner)
     report = invoke_bridge(root, "attach", "NEW_TASK", effective_environment, runner, resolved)
+    report["new_session_recovery"] = recovery
+    report["project_ready"] = recovery.get("project_usability") == "READY"
+    if report.get("pro_state") == "COMMUNITY_FALLBACK":
+        report["community_safe_mode"] = True
+        report["recovery_status"] = recovery.get("recovery_status")
+        report["user_action_required"] = "NONE"
     if report.get("status") in AUTHORITY_REQUIRED_STATUSES:
         authority_resolution = None
         if authority_facts is None:
@@ -607,11 +593,31 @@ def router_boundary_adoption(
             resolved,
         )
         if not establishment.get("authority_established"):
+            if authority_facts is None and recovery.get("project_usability") == "READY":
+                return _result(
+                    "COMMUNITY_SAFE_MODE",
+                    pro_state="PRO_DEGRADED",
+                    reason=establishment.get("reason") or establishment.get("status"),
+                    pro_available=True,
+                    community_safe_mode=True,
+                    project_ready=True,
+                    new_session_recovery=recovery,
+                    authority_resolution=authority_resolution,
+                    old_state_resume_status=recovery.get("old_state_resumability"),
+                    old_state_resume_user_action=(
+                        "SELECT_AUTHORITY" if recovery.get("old_state_resumability") == "AMBIGUOUS" else "NONE"
+                    ),
+                    recovery_status=recovery.get("recovery_status"),
+                    user_action_required="NONE",
+                    manual_recovery_prompt_required=False,
+                )
             establishment["initial_attach"] = report
             if authority_resolution is not None:
                 establishment["authority_resolution"] = authority_resolution
             return establishment
         report = invoke_bridge(root, "attach", "NEW_TASK", effective_environment, runner, resolved)
+        report["new_session_recovery"] = recovery
+        report["project_ready"] = recovery.get("project_usability") == "READY"
         report["authority_establishment"] = establishment
         if authority_resolution is not None:
             report["authority_resolution"] = authority_resolution
@@ -621,6 +627,7 @@ def router_boundary_adoption(
         report["authority"] = "PRO_5_19_RUNTIME"
         report["adoption_flow"] = ["DETECT", "CLASSIFY", "RECONCILE", "ESTABLISH_AUTHORITY", "ATTACH", "ADOPT", "RESUME"]
         report["manual_recovery_prompt_required"] = False
+        report["user_action_required"] = "NONE"
         report["terminal_contract"] = {
             "required": True,
             "execute_at": "BEFORE_FINAL_RESPONSE",

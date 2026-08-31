@@ -511,7 +511,7 @@ class CoreTests(unittest.TestCase):
             first_governance = route(root, model_proposal("workspace-task-router", stage="governance"))
             self.assertTrue(first_governance["accepted"], first_governance["diagnostics"])
 
-    def test_legacy_ai_without_provenance_is_quarantined_and_cannot_be_auto_trusted(self):
+    def test_legacy_ai_without_provenance_is_quarantined_while_current_project_remains_usable(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             (root / ".ai/runtime").mkdir(parents=True)
@@ -523,13 +523,14 @@ class CoreTests(unittest.TestCase):
             repaired = repair_state_consistency(root)
             self.assertTrue(repaired["repair_blocked"])
             self.assertFalse((root / ".ai/governance/source-provenance.json").exists())
-            with self.assertRaisesRegex(RuntimeError, "untrusted"):
-                initialize(root)
-            blocked = route(root, model_proposal("workspace-task-router", stage="governance"))
-            self.assertFalse(blocked["accepted"])
-            self.assertIn("STALE_AI_STATE_DEPENDENCY", {item["code"] for item in blocked["diagnostics"]})
-            stateless = route(root, model_proposal("backend-component-implementation", stage="development", architecture="backend"))
-            self.assertTrue(stateless["accepted"], stateless["diagnostics"])
+            initialized = initialize(root)
+            recovery = initialized["new_session_recovery"]
+            self.assertEqual("CURRENT_PROJECT_READY", recovery["recovery_status"])
+            self.assertEqual("QUARANTINED", recovery["old_state_resumability"])
+            self.assertEqual("NONE", recovery["user_action_required"])
+            self.assertNotEqual("OLD", json.loads((root / ".ai/runtime/task.json").read_text(encoding="utf-8"))["id"])
+            current = route(root, model_proposal("workspace-task-router", stage="governance"))
+            self.assertTrue(current["accepted"], current["diagnostics"])
     def test_detect_monorepo(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

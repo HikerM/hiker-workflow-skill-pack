@@ -128,6 +128,25 @@ class ModelNativePreservationGate(unittest.TestCase):
         self.assertEqual("REUSE_CURRENT_PROVIDER_SESSION", topology["bindings"][0]["provider_session_policy"])
         self.assertFalse(topology["independent_assurance_required"])
 
+    def test_reference_topology_does_not_override_project_facts(self) -> None:
+        reference = (
+            PLUGIN
+            / "skills"
+            / "multi-agent-project-governance"
+            / "references"
+            / "system-lane-model.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("Example != Architecture Constant", reference)
+        self.assertNotIn("Browser UI → API Contract → Server/Application", reference)
+        self.assertNotIn("离线单机也要显式标记", reference)
+
+        result = route("Inspect the bounded current facts", proposal={
+            "architecture": "bs", "client_families": [], "risk_class": "local",
+            "contract_change": False,
+        })
+        active = {item["lane"] for item in result["lanes"] if item["status"] != "NOT_APPLICABLE"}
+        self.assertEqual(set(), active)
+
 
 if __name__ == "__main__":
     unittest.main()

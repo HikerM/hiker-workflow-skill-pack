@@ -108,6 +108,7 @@ def audit(suite: Path = SUITE) -> dict[str, Any]:
 
     governance_skill = _read(suite, workspace.replace("scripts/", "skills/multi-agent-project-governance/") + "SKILL.md", errors)
     role_contract = _read(suite, workspace.replace("scripts/", "skills/multi-agent-project-governance/references/") + "agent-role-contracts.md", errors)
+    system_lane_model = _read(suite, workspace.replace("scripts/", "skills/multi-agent-project-governance/references/") + "system-lane-model.md", errors)
     lifecycle_skill = _read(suite, workspace.replace("scripts/", "skills/task-lifecycle-manager/") + "SKILL.md", errors)
     state_model = _read(suite, workspace.replace("scripts/", "skills/multi-agent-project-governance/references/") + "state-and-task-model.md", errors)
     semantic_sources = governance_skill + role_contract + lifecycle_skill + state_model
@@ -120,6 +121,24 @@ def audit(suite: Path = SUITE) -> dict[str, Any]:
     ):
         if obsolete in semantic_sources:
             errors.append(f"obsolete fixed workflow or role ontology remains: {obsolete}")
+    for fixed_topology in (
+        "Browser UI → API Contract → Server/Application → Data/External Systems",
+        "Desktop/Unity Client → API/Protocol Contract → Server/Application → Data/External Systems",
+        "离线单机也要显式标记",
+        "任何接口变化先由 contract-data 通道定版",
+    ):
+        if fixed_topology in system_lane_model:
+            errors.append(f"reference topology overrides project facts: {fixed_topology}")
+    for authority_marker in (
+        "Architecture Label 只是描述性、粗粒度工程证据",
+        "Project Fact Plane",
+        "changed scope",
+        "authority_ids",
+        "model proposal",
+        "Example != Architecture Constant",
+    ):
+        if authority_marker not in system_lane_model:
+            errors.append(f"dynamic reference topology authority marker is missing: {authority_marker}")
 
     production = _production_scripts(suite, errors)
     checked_bytes = 0

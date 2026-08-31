@@ -488,7 +488,7 @@ def _apply_route_boundary_adoption(
     adoption = router_boundary_adoption(root, detected=detected, authority_facts=authority_facts)
     result["pro_live_adoption"] = adoption
     result["pro_state"] = adoption.get("pro_state", "COMMUNITY_FALLBACK")
-    if adoption.get("adopted") or adoption.get("pro_state") == "COMMUNITY_FALLBACK":
+    if adoption.get("adopted") or adoption.get("pro_state") == "COMMUNITY_FALLBACK" or adoption.get("community_safe_mode"):
         return
     result["guard_decision"] = "REJECT"
     result["accepted"] = False

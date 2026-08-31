@@ -1,23 +1,26 @@
-# B/S 与 C/S 分层模型
+# 系统表面与动态执行拓扑
 
-## B/S
+## 权威边界
 
-`Browser UI → API Contract → Server/Application → Data/External Systems`
+Architecture Label 只是描述性、粗粒度工程证据，不是执行拓扑权威。`bs`、`cs`、`backend`、`hybrid` 不得自动创建 frontend、backend、client、data 或 contract lane。
 
-- 浏览器前端负责页面、交互、状态、响应式与视觉验收。
-- 服务端负责业务规则、权限、API、持久化、任务和集成。
-- API Contract 与数据库迁移是共享串行面，不归任一前端独占。
+真实执行面只从以下当前事实生成：
 
-## C/S
+- Project Fact Plane；
+- 当前 changed scope 与依赖；
+- 共享 `authority_ids`；
+- ChatGPT 对当前任务提出的有界 model proposal。
 
-`Desktop/Unity Client → API/Protocol Contract → Server/Application → Data/External Systems`
+Runtime 只验证范围、依赖、共享权威、预算与冲突，不按架构标签补出模型没有提出的通道。`Example != Architecture Constant`。
 
-- 客户端负责本地UI、场景/Prefab、设备能力、缓存与生命周期。
-- 服务端负责权威业务状态、权限、同步、存储和运维接口。
-- 离线单机也要显式标记“嵌入式后端/本地数据层”，不能把数据和业务服务遗漏。
+## 可观察组合
 
-## 混合系统
+B/S、C/S 与 Hybrid 仅可用于描述已观察到的组合。真实项目可以是 browser only、static site、serverless、external SaaS、local database、embedded runtime、desktop local-only、client + external API、Unity + SaaS、multi-service、multi-repository，或项目事实证明的其他组合。
 
-B/S Web 与 C/S Client 可以共享后端和契约，但各自拥有独立验收矩阵。任何接口变化先由 contract-data 通道定版，再并行实现消费者和提供者。
+某个项目存在 Browser、Client、Server、Data 或 External System，并不证明本次任务需要修改对应表面。只有当前 changed scope 与依赖命中时，model proposal 才声明相应 implementation lane；没有真实写工作时保持不存在。
 
-没有接口、事件、Schema、鉴权或共享DTO变化时，不创建 `contract-data` 前置门禁。大型纯后端、多仓库或模块化客户端可由 ChatGPT 根据变更契约提出动态 `implementation_lanes`；规划态最多8个，运行态最多2个。每个通道带写范围和仓库键，父子路径重叠会生成 `serial_with` 并由派发守门器阻断并行。前端、客户端和后端也只有在公共写表面、测试环境和受保护资产均可证明独立时才自动并行；证据未知即串行。
+## 共享权威与并行
+
+Shared Contract、Schema、API、事件、鉴权或共享 DTO 是否形成串行面，由当前 Project Facts、changed scope 与 `authority_ids` 决定。架构标签本身不得创建 `contract-data` lane。
+
+模型提出的每个 lane 必须带稳定 ID、实际 surface、有界写范围与仓库键；需要时声明 `authority_ids`。父子路径重叠或共享 authority 会产生串行约束；范围、共享权威、受保护资产和测试环境均可证明独立时才允许并行。规划态最多 8 个，运行态最多 2 个。

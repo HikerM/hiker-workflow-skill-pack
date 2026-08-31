@@ -44,8 +44,10 @@ python3 <plugin-root>/scripts/state_consistency.py --root .
 - 当前阶段、活跃原子 Skill、待执行 Skill 与路由指纹。
 - 五插件当前完整版本、套件指纹与旧任务迁移状态。
 
-任何关键状态或项目身份冲突时标记 `BLOCKED_CONTEXT_CONFLICT`，不得自行选择旧聊天或另一仓库的方案覆盖正式状态。存在新版多Agent治理状态时，以其任务状态机为主，旧版 `task.json` 仅作迁移线索。恢复时先再次显示轻量路由回执；路由指纹与当前请求不一致时重新计算，不得照搬压缩前的原子 Skill。
+项目可用性与旧状态可恢复性必须分开判定。关键 Authority 存在多个等权候选时，只将“继续那个旧 Goal/Task”标记为 `AUTHORITY_AMBIGUITY`；当前项目仍按最新用户请求和 Git 进入 `CURRENT_PROJECT_READY`。不得自行选择旧聊天或另一仓库的 Authority 覆盖当前事实。存在新版多Agent治理状态时，以其任务状态机为主，旧版 `task.json` 仅作隔离迁移线索。恢复时重新计算轻量路由指纹，不照搬压缩前的原子 Skill。
 
-项目完全没有 `.ai` 时不属于恢复故障，直接进入无状态轻量模式。发现 `.ai` 有旧 Task/路由但没有可信源码指纹时，必须隔离且不得自动修复来源指纹；最新用户请求和当前 Git 成为唯一执行依据，旧状态只允许在用户明确指定迁移范围后作为只读线索。
+项目完全没有 `.ai` 时不属于恢复故障；在首个项目动作边界执行有界初始化。发现 `.ai` 有旧 Task/路由但没有可信源码指纹时，自动创建只含路径、大小和哈希的有界恢复索引，将旧 Authority 只读隔离，以当前 Git 作为 Source Authority、当前用户请求作为 Intent Authority；不信任旧 PASS，但不得阻断当前项目。只有用户明确要求恢复某个旧任务且存在多个等权候选时，才要求选择 Authority。
+
+恢复结果必须包含 `classification`、`affected_capability`、`automatic_action_taken`、`recovery_status`、`diagnostic_ref`、`user_action_required`。正常确定性恢复的 `user_action_required` 必须为 `NONE`。启动只读取当前 provenance、Goal/Task、热索引和最新相关 checkpoint；不得扫描完整 `.ai/archive`、event 或 trace。
 
 恢复按 L1–L4 影响范围渐进执行。不得为了“确保一致”删除整个 `.ai` 或重建全仓；只有当前候选、契约、图谱或证据被源码变化实际影响时才失效。若发现同一职责的新旧实现并存，交给「长链路变更收敛」登记唯一权威实现和退出条件。

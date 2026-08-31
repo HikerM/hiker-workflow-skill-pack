@@ -5,6 +5,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 
@@ -152,10 +153,12 @@ class SelfGovernanceTests(unittest.TestCase):
             plugin = suite / "plugins" / "demo"
             (plugin / ".codex-plugin").mkdir(parents=True)
             (plugin / ".codex-plugin" / "plugin.json").write_text(json.dumps({"name": "demo", "version": "1.2.3"}), encoding="utf-8")
-            (plugin / "README_CN.md").write_text("first\n", encoding="utf-8")
+            (plugin / "README_CN.md").write_bytes(b"first\r\n")
             candidate = Path(td) / "candidate"
             build_candidates(suite, candidate)
             self.assertTrue(audit_packages(suite, candidate)["ok"])
+            with zipfile.ZipFile(candidate / "demo-1.2.3.zip") as archive:
+                self.assertEqual(b"first\n", archive.read("./README_CN.md"))
             (plugin / "README_CN.md").write_text("changed\n", encoding="utf-8")
             report = audit_packages(suite, candidate)
             self.assertFalse(report["ok"])

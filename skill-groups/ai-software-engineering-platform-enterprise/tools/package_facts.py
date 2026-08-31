@@ -23,6 +23,18 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def canonical_content(path: Path) -> bytes:
+    """Return deterministic package bytes without rewriting binary payloads."""
+    content = path.read_bytes()
+    if b"\r\n" not in content or b"\x00" in content:
+        return content
+    try:
+        content.decode("utf-8")
+    except UnicodeDecodeError:
+        return content
+    return content.replace(b"\r\n", b"\n")
+
+
 def source_files(plugin: Path) -> dict[str, Path]:
     return {
         "./" + path.relative_to(plugin).as_posix(): path
@@ -41,7 +53,7 @@ def package_plan(suite: Path) -> dict[str, Any]:
         for name, path in files.items():
             source_digest.update(plugin.name.encode("utf-8"))
             source_digest.update(name.encode("utf-8"))
-            source_digest.update(path.read_bytes())
+            source_digest.update(canonical_content(path))
         entries.append({
             "plugin": plugin.name,
             "version": str(manifest["version"]),
@@ -87,7 +99,7 @@ def audit_packages(suite: Path, archive_dir: Path | None = None) -> dict[str, An
                         f"missing={sorted(set(expected_files)-names)[:8]} extra={sorted(names-set(expected_files))[:8]}"
                     )
                 for name in sorted(names & set(expected_files)):
-                    if hashlib.sha256(bundle.read(name)).digest() != hashlib.sha256(expected_files[name].read_bytes()).digest():
+                    if hashlib.sha256(bundle.read(name)).digest() != hashlib.sha256(canonical_content(expected_files[name])).digest():
                         errors.append(f"{archive_name}: stale source member {name}")
         except (OSError, zipfile.BadZipFile) as exc:
             errors.append(f"{archive_name}: unreadable archive: {exc}")

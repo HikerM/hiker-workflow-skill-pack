@@ -37,6 +37,7 @@ PATTERNS = (
     ("BEARER_TOKEN", re.compile(r"(?i)\bBearer\s+(?!<|\$\{|REDACTED)[A-Z0-9._~+/-]{20,}={0,2}\b")),
     ("PRIVATE_KEY_BLOCK", re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----")),
 )
+SHA256SUM_LINE = re.compile(r"(?i)^[0-9a-f]{64}\s+\*?(.+)$")
 
 
 def _tracked_files(root: Path) -> list[Path]:
@@ -53,8 +54,14 @@ def _tracked_files(root: Path) -> list[Path]:
 def _scan_text(name: str, text: str) -> list[dict[str, object]]:
     findings: list[dict[str, object]] = []
     for line_no, line in enumerate(text.splitlines(), 1):
+        scanned_line = line
+        logical_name = name.split("!/", 1)[-1]
+        if Path(logical_name).name == "SHA256SUMS.txt":
+            checksum = SHA256SUM_LINE.fullmatch(line.strip())
+            if checksum is not None:
+                scanned_line = checksum.group(1)
         for code, pattern in PATTERNS:
-            if pattern.search(line):
+            if pattern.search(scanned_line):
                 findings.append({"code": code, "path": name, "line": line_no})
     return findings
 

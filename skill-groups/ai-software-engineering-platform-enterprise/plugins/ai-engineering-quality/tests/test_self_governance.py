@@ -70,6 +70,13 @@ class SelfGovernanceTests(unittest.TestCase):
         self.assertTrue({"WINDOWS_USER_PATH", "UNIX_USER_PATH", "SECRET_LITERAL", "BEARER_TOKEN", "PRIVATE_KEY_BLOCK"}.issubset(codes))
         self.assertEqual([], _scan_text("product.txt", "Hiker hikerctl HIKER_CONTROL_TRACE Hiker Engineering Capability System"))
 
+    def test_privacy_treats_sha256_digest_as_checksum_but_still_scans_filename(self):
+        phone = "138" + "0000" + "0000"
+        checksum = phone + "a" * 53
+        self.assertEqual([], _scan_text("dist/SHA256SUMS.txt", f"{checksum}  package.zip"))
+        findings = _scan_text("dist/SHA256SUMS.txt", f"{'a' * 64}  release-{phone}.zip")
+        self.assertEqual(["PHONE"], [item["code"] for item in findings])
+
     def test_architecture_gate_enforces_thin_cli_and_single_task_writer(self):
         report = architecture_gate(REPOSITORY, SUITE)
         self.assertEqual("PASS", report["status"], report["errors"])

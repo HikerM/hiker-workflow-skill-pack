@@ -1,6 +1,6 @@
 # Hiker 工程能力系统：大型软件工程多角色协作
 
-<!-- engineering-current-facts: version=5.19.0; plugins=5; skills=42; tests=477 -->
+<!-- engineering-current-facts: version=5.19.0; plugins=5; skills=42; tests=478 -->
 
 ## 1. 系统定位
 

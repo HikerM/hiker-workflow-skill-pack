@@ -30,6 +30,7 @@ py -3 <plugin-root>\scripts\convergence_guard.py --root . --task-id KG-001 init 
 
 1. 每个业务职责登记唯一活动实现路径。迁移兼容路径必须使用 `MIGRATION` 并带退出条件；合并前必须退役。退役路径必须提供删除提交或调用图不可达证据。
    当能力分散在多个文件、入口或版本时，维护最小 `.ai/governance/implementation-registry.json`，并运行 `implementation_guard.py`。每个能力必须恰有一个权威活动实现，最多一个权威状态写入者；废弃实现禁止接收新需求或写权威状态。
+   已验证的 Structural Change Decision 只作为当前 Task Contract 的结构动作输入；本能力复用其范围与退出条件，不另写第二份结构裁决。
 2. 用户纠正、证据矛盾、范围扩大、方案失效或回滚发生时立即记录。旧 PASS 只对原验收修订、策略修订、代码指纹和环境有效。
 3. 同一验收条件连续两次真实实验失败后进入 `PIVOT_REQUIRED`。停止继续加补丁，先说明旧方案失效依据并创建新的策略修订。
 4. 真实、计费、生产或不可逆实验必须先登记假设、预期观察和停止条件；任何时刻只允许一个未结实验，禁止无依据重复执行。

@@ -9,6 +9,7 @@ from pathlib import Path
 from gate_applicability import plan_from_model_proposal, validate_plan as validate_gate_plan
 from perspective_applicability import validate_plan as validate_perspective_plan
 from workspacelib import RESOURCE_HARD_MAX, atomic_json
+from structural_change_decision import validate_decision as validate_structural_decision
 
 
 def request_metadata(text: str) -> dict[str, object]:
@@ -167,20 +168,33 @@ def _validated_proposal(proposal: dict | None, request: str = "", project_facts:
             except RuntimeError as exc:
                 errors.append(str(exc))
     perspective_applicability = None
+    structural_change_decision = None
+    observed_fact_catalog = (
+        project_facts.get("observed_fact_catalog")
+        if isinstance(project_facts, dict)
+        else None
+    )
+    expected_project_fact_fingerprint = (
+        observed_fact_fingerprint
+        if project_fact_receipt.get("project_fact_plane_bound")
+        else None
+    )
+    if "structural_change_decision" in proposal and "structural_decisions" in proposal:
+        errors.append("STRUCTURAL_DECISION_AUTHORITY_CONFLICT")
     if "perspective_applicability" in proposal:
-        observed_fact_catalog = (
-            project_facts.get("observed_fact_catalog")
-            if isinstance(project_facts, dict)
-            else None
-        )
-        expected_project_fact_fingerprint = (
-            observed_fact_fingerprint
-            if project_fact_receipt.get("project_fact_plane_bound")
-            else None
-        )
         try:
             perspective_applicability = validate_perspective_plan(
                 proposal.get("perspective_applicability"),
+                observed_fact_catalog=observed_fact_catalog,
+                expected_scope_fingerprint=request_metadata(request)["request_fingerprint"],
+                expected_project_fact_fingerprint=expected_project_fact_fingerprint,
+            )
+        except RuntimeError as exc:
+            errors.append(str(exc))
+    if "structural_change_decision" in proposal:
+        try:
+            structural_change_decision = validate_structural_decision(
+                proposal.get("structural_change_decision"),
                 observed_fact_catalog=observed_fact_catalog,
                 expected_scope_fingerprint=request_metadata(request)["request_fingerprint"],
                 expected_project_fact_fingerprint=expected_project_fact_fingerprint,
@@ -289,7 +303,7 @@ def _validated_proposal(proposal: dict | None, request: str = "", project_facts:
         return None, errors
     if gate_applicability and gate_applicability["gates"]["development"]["status"] == "NOT_APPLICABLE" and implementation_lanes:
         return None, ["NON_APPLICABLE_DEVELOPMENT_HAS_WRITE_LANES"]
-    return {"architecture": architecture, "client_families": families, "risk_class": risk_class, "parallel_mode": parallel_mode, "contract_change": contract_change, "implementation_lanes": implementation_lanes, "gate_applicability": gate_applicability, "perspective_applicability": perspective_applicability, "independent_assurance": independent_assurance, "project_fact_fingerprint": project_fact_fingerprint}, []
+    return {"architecture": architecture, "client_families": families, "risk_class": risk_class, "parallel_mode": parallel_mode, "contract_change": contract_change, "implementation_lanes": implementation_lanes, "gate_applicability": gate_applicability, "perspective_applicability": perspective_applicability, "structural_change_decision": structural_change_decision, "independent_assurance": independent_assurance, "project_fact_fingerprint": project_fact_fingerprint}, []
 
 
 def _scopes_overlap(left: list[str], right: list[str]) -> bool:
@@ -392,6 +406,7 @@ def route(text: str, tech_stack: dict | None = None, proposal: dict | None = Non
     independent_assurance_proposal = selected["independent_assurance"]
     gate_applicability = selected["gate_applicability"]
     perspective_applicability = selected["perspective_applicability"]
+    structural_change_decision = selected["structural_change_decision"]
     gate_status = lambda name, fallback=True: gate_applicability["gates"][name]["status"]
     gate_is_required = lambda name, fallback=True: gate_status(name, fallback) != "NOT_APPLICABLE"
     lanes = [
@@ -500,6 +515,7 @@ def route(text: str, tech_stack: dict | None = None, proposal: dict | None = Non
         "contract_change": contract_change,
         "gate_applicability": gate_applicability,
         **({"perspective_applicability": perspective_applicability} if perspective_applicability is not None else {}),
+        **({"structural_change_decision": structural_change_decision} if structural_change_decision is not None else {}),
         "evidence_snapshot": _project_fact_receipt(tech_stack),
         "diagnostics": [],
         "lanes": lanes,

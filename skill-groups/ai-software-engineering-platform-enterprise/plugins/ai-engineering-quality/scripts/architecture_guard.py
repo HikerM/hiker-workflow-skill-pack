@@ -6,12 +6,19 @@ import json
 import re
 import sqlite3
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
 from change_set import collect
 from graph_store import impact, import_tokens, resolve_token
 from qualitylib import git_root, head, load_json, matches_any, now, posix, repo_ai, worktree_fingerprint, write_json
+
+CORE_SCRIPTS = Path(__file__).resolve().parents[2] / "ai-engineering-core" / "scripts"
+if str(CORE_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(CORE_SCRIPTS))
+
+from structural_change_decision import validate_receipt as validate_structural_receipt
 
 
 DEFAULT_BUDGET = {
@@ -65,7 +72,26 @@ def declaration_count(text: str) -> int:
 
 def structural_decisions(contract: dict[str, Any]) -> tuple[dict[str, dict[str, str]], list[str]]:
     decisions: dict[str, dict[str, str]] = {}; errors: list[str] = []
-    for raw in contract.get("structural_decisions", []) or []:
+    structured = contract.get("structural_change_decision")
+    legacy = contract.get("structural_decisions", []) or []
+    if structured is not None and legacy:
+        return {}, ["STRUCTURAL_DECISION_AUTHORITY_CONFLICT"]
+    if structured is not None:
+        receipt, receipt_errors = validate_structural_receipt(structured)
+        if receipt_errors or receipt is None:
+            return {}, receipt_errors
+        for scope in receipt["decision_scope"]:
+            path = posix(str(scope))
+            decisions[path] = {
+                "path": path,
+                "action": str(receipt["action"]),
+                "reason": str(receipt.get("reason") or ""),
+                "target": "",
+                "exit": str(receipt.get("rollback_or_exit_condition") or ""),
+                "authority": "NEXT_02_STRUCTURAL_CHANGE_DECISION",
+            }
+        return decisions, errors
+    for raw in legacy:
         parts = [part.strip() for part in str(raw).split("|")]
         path = posix(parts[0]) if parts else ""; action = parts[1].upper() if len(parts) > 1 else ""
         if not path or action not in {"KEEP", "EXTRACT", "MIGRATE", "RETIRE"}:
@@ -80,6 +106,7 @@ def structural_decisions(contract: dict[str, Any]) -> tuple[dict[str, dict[str, 
         decisions[path] = {
             "path": path, "action": action, "reason": parts[2] if action == "KEEP" else "",
             "target": parts[2] if action != "KEEP" else "", "exit": parts[3] if len(parts) > 3 else "",
+            "authority": "LEGACY_ARCHITECTURE_GUARD_COMPATIBILITY",
         }
     return decisions, errors
 
@@ -196,7 +223,15 @@ def evaluate(root: Path, task_id: str | None = None, mode: str = "all-local", ba
             history_budget -= 1
         if near_budget and adds_responsibility and not decision:
             blockers.append(f"接近文件预算时新增职责但缺少编码前结构决策: {rel}（新增声明 {responsibility_delta}）")
-        if repeated_cycle and (not decision or decision.get("action") not in {"EXTRACT", "MIGRATE", "RETIRE"}):
+        converging_actions = {
+            "EXTRACT",
+            "MIGRATE",
+            "RETIRE",
+            "INTRODUCE_ABSTRACTION",
+            "CONSOLIDATE_SIMPLIFY",
+            "DELETE_SAFELY",
+        }
+        if repeated_cycle and (not decision or decision.get("action") not in converging_actions):
             blockers.append(f"检测到文件反复增长—拆分—再写回: {rel}；必须给出带退出条件的提取、迁移或退役决策")
         if near_budget or repeated_cycle:
             responsibility_risks.append({

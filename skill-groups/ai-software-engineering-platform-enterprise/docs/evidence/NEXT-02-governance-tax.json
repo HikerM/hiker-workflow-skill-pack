@@ -1,0 +1,82 @@
+{
+  "schema_version": "hiker-governance-tax-evidence/v1",
+  "enhancement_id": "NEXT-02-STRUCTURAL-CHANGE-DECISION",
+  "observed_at": "2026-09-01",
+  "baseline_ref": "feat/next-02-structural-change-decision@9c8890b",
+  "baseline_snapshot": "external recovery snapshot; not part of release content",
+  "benchmark": {
+    "default_iterations_per_batch": 4000,
+    "batches": 7,
+    "baseline_default_route_ms": {
+      "p50_reference": 0.0473,
+      "p95_median_across_7_batches": 0.0628,
+      "p95_batches": [0.0569, 0.091, 0.0628, 0.0668, 0.0606, 0.0701, 0.0571]
+    },
+    "next02_default_route_ms": {
+      "p50_reference": 0.0481,
+      "p95_median_across_7_batches": 0.0629,
+      "p95_batches": [0.0637, 0.0586, 0.0612, 0.0849, 0.0977, 0.0629, 0.0567]
+    },
+    "default_p50_delta_ms": 0.0008,
+    "default_p95_delta_ms": 0.0001,
+    "default_serialized_output": {
+      "baseline_bytes": 7538,
+      "next02_bytes": 7538,
+      "bytes_delta": 0,
+      "baseline_sha256": "664541a971af8ef071bd1975d87e4c2d960eecab0cde07ed5a9b3b1827a91b3b",
+      "next02_sha256": "664541a971af8ef071bd1975d87e4c2d960eecab0cde07ed5a9b3b1827a91b3b"
+    },
+    "explicit_structural_decision_ms": {
+      "iterations_per_batch": 2000,
+      "p50_reference": 0.1358,
+      "p95_median_across_7_batches": 0.2041,
+      "p95_batches": [0.1982, 0.2388, 0.2864, 0.1844, 0.2041, 0.2681, 0.1928]
+    }
+  },
+  "default_path": {
+    "prompt_bytes_delta": 0,
+    "model_call_delta": 0,
+    "skill_load_delta": 0,
+    "state_write_delta": 0,
+    "task_map_output_bytes_delta": 0,
+    "agent_delta": 0,
+    "workflow_delta": 0,
+    "manager_delta": 0,
+    "full_repository_scan_delta": 0,
+    "structural_decision_field_present": false
+  },
+  "on_demand_context": {
+    "three_affected_skill_bodies_bytes_delta": 827,
+    "max_two_selected_skill_bytes_delta": 654,
+    "note": "The compact guidance is paid only when an existing atomic Skill is selected. Catalog metadata and default Skill loading are unchanged."
+  },
+  "structural": {
+    "structural_decision_authority_count": 1,
+    "new_state_authority_count": 0,
+    "new_manager_count": 0,
+    "new_workflow_count": 0,
+    "new_model_call_count": 0,
+    "runtime_selects_action": false,
+    "shared_observed_fact_catalog_max_facts": 64,
+    "default_repository_scan": false,
+    "task_contract_writer_count": 1
+  },
+  "verification": {
+    "focused_structural_and_perspective_tests": 46,
+    "core_tests": 196,
+    "workspace_tests": 173,
+    "quality_tests": 116,
+    "affected_total": 485,
+    "architecture_self_gate": "PASS",
+    "architecture_change_gate": "PASS_WITH_WARNINGS_0_BLOCKERS",
+    "privacy_gate": "PASS_822_TEXT_ENTRIES_0_FINDINGS",
+    "skill_coherence": "PASS_5_PLUGINS_42_SKILLS",
+    "real_project_decision_field": "PASS_TWO_READ_ONLY_PROJECTS",
+    "implementation_field": "NOT_RUN_JUSTIFIED"
+  },
+  "verdict": {
+    "governance_tax_regression": false,
+    "model_freedom_regression": false,
+    "reason": "The default output is byte-identical and its median P95 delta is 0.0001 ms; all validation cost is behind the explicit optional section."
+  }
+}

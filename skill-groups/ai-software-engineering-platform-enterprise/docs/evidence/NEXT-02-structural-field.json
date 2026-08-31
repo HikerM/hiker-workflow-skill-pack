@@ -1,0 +1,97 @@
+{
+  "schema_version": "hiker-structural-decision-field/v1",
+  "enhancement_id": "NEXT-02-STRUCTURAL-CHANGE-DECISION",
+  "observed_at": "2026-09-01",
+  "field_mode": "READ_ONLY_REAL_PROJECT",
+  "absolute_project_paths_persisted": false,
+  "business_source_modified_by_field": false,
+  "implementation_field": "NOT_RUN_JUSTIFIED",
+  "implementation_field_reason": "Both projects had active dirty work owned by other tasks; decision evidence was sufficient and no business-source mutation was authorized.",
+  "samples": [
+    {
+      "field_id": "NEXT-02-FIELD-A",
+      "project_alias": "FIELD-UI-A",
+      "project_type": "Vue TypeScript web client",
+      "branch": "testing",
+      "head_before": "6b3725cbfe31eb13245b89be1fb01a00e5b44c0c8",
+      "head_after": "6b3725cbfe31eb13245b89be1fb01a00e5b44c0c8",
+      "status_fingerprint_before": "a813addd718a0892e15ce6346a3538026b3147e8a8cb26e436f2c831a324d974",
+      "status_fingerprint_after": "a813addd718a0892e15ce6346a3538026b3147e8a8cb26e436f2c831a324d974",
+      "bound_source_sha256": "f622007901ae30da3c72b775c6dff18c4a9e48e3c61190305dcf496f92cd5d09",
+      "consumer_observation_sha256": "d2844fc306ad9ba7e454d183b036d9f49fcc96833112327aacbab34c09755a11",
+      "without_structural_decision": {
+        "formal_action": null,
+        "gap": "A growing file could be mistaken for a mandatory split without proving a second responsibility or independently changing contract."
+      },
+      "observed_fact_catalog": {
+        "schema_version": "hiker-observed-fact-catalog/v1",
+        "authority": "EXTERNAL_OBSERVED_EVIDENCE",
+        "scope_fingerprint": "74e707416ac84bf1d01b8c1828cf87a71d50e77e7d49301bf968ac6a079ead1d",
+        "facts": [
+          {"ref": "studio-web/src/features/canvas-execution/runtime/executionErrorProjection.ts", "kind": "SCOPE", "evidence_fingerprint": "f622007901ae30da3c72b775c6dff18c4a9e48e3c61190305dcf496f92cd5d09", "freshness": "CURRENT"},
+          {"ref": "problem://front-error-projection", "kind": "PROBLEM", "evidence_fingerprint": "f622007901ae30da3c72b775c6dff18c4a9e48e3c61190305dcf496f92cd5d09", "freshness": "CURRENT"},
+          {"ref": "structure://front-cohesive", "kind": "STRUCTURE", "evidence_fingerprint": "f622007901ae30da3c72b775c6dff18c4a9e48e3c61190305dcf496f92cd5d09", "freshness": "CURRENT", "claims": ["COHESIVE_RESPONSIBILITY", "LOCALIZED_CHANGE"]},
+          {"ref": "consumer://front-known", "kind": "CONSUMER", "evidence_fingerprint": "d2844fc306ad9ba7e454d183b036d9f49fcc96833112327aacbab34c09755a11", "freshness": "CURRENT", "claims": ["MULTIPLE_CONSUMERS_PROVEN"]},
+          {"ref": "authority://front-single", "kind": "AUTHORITY", "evidence_fingerprint": "f622007901ae30da3c72b775c6dff18c4a9e48e3c61190305dcf496f92cd5d09", "freshness": "CURRENT", "claims": ["SINGLE_ACTIVE_IMPLEMENTATION"]},
+          {"ref": "control://front-rollback", "kind": "CONTROL", "evidence_fingerprint": "f622007901ae30da3c72b775c6dff18c4a9e48e3c61190305dcf496f92cd5d09", "freshness": "CURRENT", "claims": ["ROLLBACK_AVAILABLE", "REVERSIBLE"]}
+        ],
+        "acceptance_refs": []
+      },
+      "structural_decision": {
+        "schema_version": "hiker-structural-change-decision/v1", "authority": "CHATGPT_SEMANTIC_SELECTION",
+        "action": "MODIFY_EXISTING", "decision_scope": ["studio-web/src/features/canvas-execution/runtime/executionErrorProjection.ts"],
+        "problem_refs": ["problem://front-error-projection"],
+        "evidence_refs": ["structure://front-cohesive", "consumer://front-known", "authority://front-single", "control://front-rollback"],
+        "reason": "One projection module owns normalization and display semantics; current consumers share that contract, so change it in place.",
+        "alternatives_rejected": [{"action": "INTRODUCE_ABSTRACTION", "reason": "No separate shared invariant or independently changing consumer contract is evidenced."}],
+        "expected_gain": {"classification": "OBSERVED", "statement": "The current change remains inside the existing projection authority.", "evidence_refs": ["structure://front-cohesive", "consumer://front-known"]},
+        "migration_cost": {"classification": "LOW", "statement": "No authority migration is proposed.", "evidence_refs": ["authority://front-single", "control://front-rollback"]},
+        "regression_risk": {"classification": "MEDIUM", "statement": "Multiple UI consumers depend on this projection contract.", "evidence_refs": ["consumer://front-known"]},
+        "rollback_or_exit_condition": "Restore the prior module revision if focused execution-error display tests regress.",
+        "confidence": "HIGH"
+      },
+      "expected_runtime_result": {"status": "VALIDATED", "action": "MODIFY_EXISTING", "runtime_selected_action": false, "decision_fingerprint": "57ca9666521e21a2db8ca6e27199130bd6d06737522ef37957b5d9f3f62e5714"}
+    },
+    {
+      "field_id": "NEXT-02-FIELD-B",
+      "project_alias": "FIELD-SERVER-B",
+      "project_type": "Python multi-service backend",
+      "branch": "codex/phase1-quote-stability",
+      "head_before": "88c02a859de8f146145b87d716d51fc2756ab059",
+      "head_after": "88c02a859de8f146145b87d716d51fc2756ab059",
+      "status_fingerprint_before": "d9fbb1820e6de221888f9c3482081a55d29d54f154187b457316bb613925cb89",
+      "status_fingerprint_after": "d9fbb1820e6de221888f9c3482081a55d29d54f154187b457316bb613925cb89",
+      "bound_source_sha256": ["0a6b2a6377a75b21d6fb52bc37a0aadfa1d2baa01c71bfe2736360ccafc7e599", "0a6b2a6377a75b21d6fb52bc37a0aadfa1d2baa01c71bfe2736360ccafc7e599"],
+      "consumer_observation_sha256": "61eb9f73f594c3a717df5585e96f61b0073c3ae5ea2661671c26d418eac6ac71",
+      "without_structural_decision": {"formal_action": null, "gap": "The repeated patch could continue in two active files without an explicit authority and migration decision."},
+      "observed_fact_catalog": {
+        "schema_version": "hiker-observed-fact-catalog/v1", "authority": "EXTERNAL_OBSERVED_EVIDENCE",
+        "scope_fingerprint": "3429725fc5b39b0e0f5feea7d4c69b585f4b1af72bfef509c872900add180025",
+        "facts": [
+          {"ref": "apps/admin-api/app/core/dependency_health.py", "kind": "SCOPE", "evidence_fingerprint": "0a6b2a6377a75b21d6fb52bc37a0aadfa1d2baa01c71bfe2736360ccafc7e599", "freshness": "CURRENT"},
+          {"ref": "apps/platform-api/app/core/dependency_health.py", "kind": "SCOPE", "evidence_fingerprint": "0a6b2a6377a75b21d6fb52bc37a0aadfa1d2baa01c71bfe2736360ccafc7e599", "freshness": "CURRENT"},
+          {"ref": "problem://server-readiness-duplication", "kind": "PROBLEM", "evidence_fingerprint": "0a6b2a6377a75b21d6fb52bc37a0aadfa1d2baa01c71bfe2736360ccafc7e599", "freshness": "CURRENT"},
+          {"ref": "authority://readiness-shared", "kind": "AUTHORITY", "evidence_fingerprint": "0a6b2a6377a75b21d6fb52bc37a0aadfa1d2baa01c71bfe2736360ccafc7e599", "freshness": "CURRENT", "claims": ["MULTIPLE_ACTIVE_IMPLEMENTATIONS", "SAME_AUTHORITY"]},
+          {"ref": "structure://readiness-lifecycle", "kind": "STRUCTURE", "evidence_fingerprint": "0a6b2a6377a75b21d6fb52bc37a0aadfa1d2baa01c71bfe2736360ccafc7e599", "freshness": "CURRENT", "claims": ["SAME_LIFECYCLE", "SAME_CHANGE_REASON"]},
+          {"ref": "consumer://readiness-two-services", "kind": "CONSUMER", "evidence_fingerprint": "61eb9f73f594c3a717df5585e96f61b0073c3ae5ea2661671c26d418eac6ac71", "freshness": "CURRENT", "claims": ["MULTIPLE_CONSUMERS_PROVEN"]},
+          {"ref": "migration://readiness-active", "kind": "MIGRATION", "evidence_fingerprint": "0a6b2a6377a75b21d6fb52bc37a0aadfa1d2baa01c71bfe2736360ccafc7e599", "freshness": "CURRENT", "claims": ["MIGRATION_ACTIVE"]},
+          {"ref": "control://server-rollback", "kind": "CONTROL", "evidence_fingerprint": "0a6b2a6377a75b21d6fb52bc37a0aadfa1d2baa01c71bfe2736360ccafc7e599", "freshness": "CURRENT", "claims": ["ROLLBACK_AVAILABLE", "REVERSIBLE"]}
+        ], "acceptance_refs": []
+      },
+      "structural_decision": {
+        "schema_version": "hiker-structural-change-decision/v1", "authority": "CHATGPT_SEMANTIC_SELECTION",
+        "action": "CONSOLIDATE_SIMPLIFY", "decision_scope": ["apps/admin-api/app/core/dependency_health.py", "apps/platform-api/app/core/dependency_health.py"],
+        "problem_refs": ["problem://server-readiness-duplication"],
+        "evidence_refs": ["authority://readiness-shared", "structure://readiness-lifecycle", "consumer://readiness-two-services", "migration://readiness-active", "control://server-rollback"],
+        "reason": "The files are byte-identical active implementations of the same readiness policy and changed together; consolidate behind one existing shared authority while preserving service-local imports.",
+        "alternatives_rejected": [{"action": "KEEP_CURRENT_STRUCTURE", "reason": "Keeping byte-identical policy copies preserves duplicate writers and repeat-patch risk."}],
+        "expected_gain": {"classification": "OBSERVED", "statement": "One authority can remove the currently duplicated policy surface.", "evidence_refs": ["authority://readiness-shared", "structure://readiness-lifecycle", "consumer://readiness-two-services"]},
+        "migration_cost": {"classification": "MEDIUM", "statement": "Both service-local import paths require an explicit compatibility migration.", "evidence_refs": ["migration://readiness-active", "control://server-rollback"]},
+        "regression_risk": {"classification": "MEDIUM", "statement": "Readiness endpoints in two deployed services require focused consumer tests.", "evidence_refs": ["consumer://readiness-two-services"]},
+        "rollback_or_exit_condition": "Keep both current modules until both service consumers pass, and restore them if compatibility tests fail.",
+        "confidence": "HIGH"
+      },
+      "expected_runtime_result": {"status": "VALIDATED", "action": "CONSOLIDATE_SIMPLIFY", "runtime_selected_action": false, "decision_fingerprint": "28578b2c59eeadd47496a7632c89a03c0a7672810d83d4c8ad2c2f16bdb9636b"}
+    }
+  ]
+}

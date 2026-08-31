@@ -59,22 +59,59 @@
       "PROBLEM": "Existing architecture, impact, implementation and decision capabilities do not provide one evidence-grounded model-native contract for choosing whether to modify, abstract, consolidate, delete or keep the current structure.",
       "TARGET_CAPABILITY": "Model-native Structural Change Decision Intelligence under the existing Task Contract",
       "WHY": "Preserve model freedom while deterministically rejecting fabricated, stale, unsafe, contradictory or unbounded structural decisions.",
-      "IMPLEMENTATION_STATUS": "DISCOVERED",
+      "IMPLEMENTATION_STATUS": "FIELD_PROVEN",
       "STATUS_HISTORY": [
         {
           "phase": "NEXT-02_AUDIT",
           "status": "DISCOVERED",
-          "basis": "The bounded capability audit identified reusable fact sources, one legacy overlapping input and the missing unified five-action decision contract; no production implementation exists yet."
+          "basis": "The bounded capability audit identified reusable fact sources, one legacy overlapping input and the missing unified five-action decision contract; no production implementation existed at this phase."
+        },
+        {
+          "phase": "NEXT-02_DESIGN",
+          "status": "DESIGNED",
+          "basis": "One optional model-selected Task Contract section, one shared observed-fact catalog and deterministic action prerequisites were defined without a new manager, workflow, state plane or model call."
+        },
+        {
+          "phase": "NEXT-02_IMPLEMENTATION",
+          "status": "IMPLEMENTED",
+          "basis": "The bounded validator, schema, tamper-evident receipt, Task Contract persistence and Architecture Guard consumer were implemented with legacy/new authority conflict rejection."
+        },
+        {
+          "phase": "NEXT-02_SOURCE_VERIFICATION",
+          "status": "SOURCE_VERIFIED",
+          "basis": "A-K counterexamples, patch-on-patch reconsideration, receipt tamper detection, schema and evidence-field tests passed; all new source and test files remain below 200 lines."
+        },
+        {
+          "phase": "NEXT-02_INTEGRATION_VERIFICATION",
+          "status": "INTEGRATION_VERIFIED",
+          "basis": "Affected Core, Workspace and Quality suites passed; Perspective and Structural Decision share one evidence catalog; default route output remained byte-identical."
+        },
+        {
+          "phase": "NEXT-02_FIELD",
+          "status": "FIELD_PROVEN",
+          "basis": "Two read-only real business repositories produced validated MODIFY_EXISTING and CONSOLIDATE_SIMPLIFY decisions while their HEAD, status and bound-source fingerprints remained unchanged."
         }
       ],
       "SOURCE_EVIDENCE": [
-        "docs/NEXT-02-STRUCTURAL-CHANGE-DECISION.md"
+        "docs/NEXT-02-STRUCTURAL-CHANGE-DECISION.md",
+        "plugins/ai-engineering-core/schemas/structural-change-decision.schema.json",
+        "plugins/ai-engineering-core/scripts/structural_change_decision.py"
       ],
-      "TEST_EVIDENCE": [],
-      "FIELD_EVIDENCE": [],
+      "TEST_EVIDENCE": [
+        "plugins/ai-engineering-core/tests/test_structural_change_decision.py",
+        "plugins/ai-engineering-core/tests/test_structural_decision_contract.py",
+        "plugins/ai-engineering-core/tests/test_structural_field_evidence.py",
+        "plugins/ai-engineering-workspace/tests/test_structural_change_decision_routing.py",
+        "plugins/ai-engineering-workspace/tests/test_structural_decision_persistence.py",
+        "plugins/ai-engineering-quality/tests/test_structural_change_architecture.py",
+        "docs/evidence/NEXT-02-governance-tax.json"
+      ],
+      "FIELD_EVIDENCE": [
+        "docs/evidence/NEXT-02-structural-field.json"
+      ],
       "VERSION_INTRODUCED": "NEXT_UNRELEASED",
-      "CURRENT_AUTHORITY": "Existing Task Contract remains authoritative; ChatGPT will select semantics and deterministic runtime validation will only enforce grounded prerequisites.",
-      "REAL_PROJECT_OUTCOME": "NOT_RUN"
+      "CURRENT_AUTHORITY": "The existing Task Contract remains the sole task writer; ChatGPT selects one structural action and the runtime only validates external evidence, action prerequisites and receipt integrity.",
+      "REAL_PROJECT_OUTCOME": "Two read-only real projects passed: one MODIFY_EXISTING decision prevented an unproved abstraction, and one CONSOLIDATE_SIMPLIFY decision identified byte-identical active readiness authorities with explicit migration and rollback boundaries. Implementation field was NOT_RUN_JUSTIFIED."
     }
   ]
 }

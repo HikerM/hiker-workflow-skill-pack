@@ -2,7 +2,7 @@
 
 ## Status
 
-DISCOVERED
+FIELD_PROVEN
 
 This enhancement adds an optional, model-selected structural decision to the existing Task Contract. It does not add a workflow, manager, state plane, agent, model call, default Skill load, or background runtime.
 
@@ -59,20 +59,48 @@ All scope and problem refs are externally grounded. Observed gain requires direc
 - DELETE_SAFELY: requires proven absence of runtime consumers plus completed or non-applicable migration, bounded rollback/exit evidence and no omitted safety-critical fact.
 - KEEP_CURRENT_STRUCTURE: accepts a grounded positive decision; large size alone never forces splitting.
 
-## Planned integration
+## Implemented integration
 
-1. Extract the existing observed-fact catalog parser into one shared, bounded validator.
-2. Add one pure structural-decision validator beside the current Project Fact Plane contracts.
-3. Add the optional section to task_router.py without changing the default route output.
-4. Make Architecture Guard consume the normalized decision when present and reject conflicting legacy/new authorities.
-5. Keep Implementation Registry, Decision Memory, convergence state and Pro state unchanged.
+1. `observed_fact_catalog.py` is the single bounded evidence parser shared by Perspective Applicability and Structural Decision validation.
+2. `structural_change_decision.py` validates the model-selected action, while stable contract parsing and tamper-evident receipt validation remain separate small responsibilities.
+3. `task_router.py` exposes one optional `structural_change_decision` section. When omitted, the serialized route output is byte-identical to the pre-NEXT-02 baseline.
+4. The existing Task Contract writer persists only a validated receipt. Architecture Guard consumes that receipt and rejects a simultaneous legacy `structural_decisions` authority.
+5. Implementation Registry, Decision Memory, convergence state, Community/Pro boundary and all existing state planes remain unchanged.
 
-## Field and governance plan
+## Authority and execution topology
 
-- Run the eleven required action, fabrication and staleness scenarios.
-- Run affected Core, Workspace and Quality regressions.
-- Perform read-only decision comparison on at least two real business repositories.
-- Do not change business source during decision field verification.
-- Implementation field remains NOT_RUN_JUSTIFIED unless the read-only decision field first passes and a safe business slice is separately authorized.
-- Default prompt bytes, model calls, Skill loads, state writes, repository scans, agents and workflows must all remain delta zero.
+- Structural semantic authority count: one (`CHATGPT_SEMANTIC_SELECTION`).
+- Runtime action-selection count: zero; `runtime_selected_action` is always false.
+- Task state writer count: one existing Task Contract writer.
+- New state authorities, managers, workflows, agents and model calls: zero.
+- Private Pro internals are not inspected, copied or persisted. Community integration remains limited to existing public project facts and CLI envelopes.
+- Legacy Architecture Guard strings remain a deprecated compatibility input only. New and legacy decision inputs cannot coexist.
 
+## Verification
+
+- Required A–K action, abstraction, large-cohesive-file, consolidation, deletion, fabrication and staleness scenarios pass.
+- Patch-on-patch evidence can drive `CONSOLIDATE_SIMPLIFY` without creating another state machine.
+- Perspective and Structural Decision share one external observed-fact catalog and preserve separate model-native semantics.
+- Focused structural/Perspective tests: 46 passed after the final patch-on-patch case.
+- Final full affected regressions: Core 196, Workspace 173, Quality 116 (`485/485`).
+- Schema parsing, Python compilation, diff checks, Architecture Guard, Privacy Guard and five-plugin/42-Skill coherence are release-independent closing gates for this enhancement.
+
+## Real project decision field
+
+- `FIELD-UI-A`: a real Vue/TypeScript project. A growing execution-error projection has one cohesive authority and multiple known consumers. The model selected `MODIFY_EXISTING` and explicitly rejected premature abstraction.
+- `FIELD-SERVER-B`: a real multi-service Python backend. Two active readiness modules were byte-identical, changed together, shared the same policy authority and had two proven service consumers. The model selected `CONSOLIDATE_SIMPLIFY` with an explicit compatibility migration and rollback boundary.
+- Both projects were dirty before observation. HEAD, status fingerprint and bound source SHA-256 remained unchanged across the field; no business source or `.ai` content was modified.
+- Implementation field: `NOT_RUN_JUSTIFIED`. Read-only evidence was sufficient, both working trees had active unrelated work, and no business-source mutation was authorized.
+
+## Governance tax
+
+- Default route serialized output: 7538 bytes before and after, with the same SHA-256.
+- Default route median P95: 0.0628 ms before, 0.0629 ms after (`+0.0001 ms`).
+- Explicit structural validation median P95: 0.2041 ms.
+- Default prompt, model call, Skill load, state write, repository scan, agent, workflow and manager deltas: zero.
+- Compact on-demand guidance adds 827 bytes across three existing Skills; at most 654 bytes across any two selected Skills in this change set.
+
+Evidence:
+
+- `docs/evidence/NEXT-02-structural-field.json`
+- `docs/evidence/NEXT-02-governance-tax.json`

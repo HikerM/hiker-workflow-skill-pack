@@ -18,6 +18,7 @@ from goal_contract import ensure_contract as ensure_goal_contract, task_binding,
 from governance_documents import ensure_supporting_docs, render_context, render_project_state
 from governance_quality import quality_lineage, verify_quality_lineage
 from implementation_guard import enforce_registry as enforce_implementation_registry
+from structural_change_decision import validate_receipt as validate_structural_receipt
 from task_router import execution_class_for
 
 SCHEMA = "2.0.0"
@@ -486,6 +487,15 @@ def set_change_contract(root: Path, args: argparse.Namespace) -> dict[str, Any]:
     for key, value in list_fields.items():
         if value is not None:
             contract[key] = list(dict.fromkeys(value))
+    structural_file = getattr(args, "structural_change_decision_file", None)
+    if structural_file:
+        structural_value = read_json(Path(structural_file), None)
+        receipt, receipt_errors = validate_structural_receipt(structural_value)
+        if receipt_errors or receipt is None:
+            raise RuntimeError(";".join(receipt_errors))
+        contract["structural_change_decision"] = receipt
+    if contract.get("structural_change_decision") and contract.get("structural_decisions"):
+        raise RuntimeError("STRUCTURAL_DECISION_AUTHORITY_CONFLICT")
     if args.max_blast_radius is not None:
         contract["max_blast_radius"] = args.max_blast_radius
     budget = dict(contract.get("file_growth_budget") or {})
@@ -643,7 +653,7 @@ def main() -> int:
     p = sub.add_parser("task-create"); p.add_argument("--task-id", required=True); p.add_argument("--goal", required=True); p.add_argument("--owner-agent", default="Master Agent"); p.add_argument("--ownership-lane", default="default"); p.add_argument("--branch", required=True); p.add_argument("--base-branch", default="develop"); p.add_argument("--affected-files", nargs="*"); p.add_argument("--gate-plan-file")
     p = sub.add_parser("transition", help="deprecated compatibility entry; delegates to hikerctl"); p.add_argument("--task-id", required=True); p.add_argument("--to", choices=TASK_STATES, required=True); p.add_argument("--agent-role", required=True); p.add_argument("--commit-id"); p.add_argument("--operation-id", required=True)
     p = sub.add_parser("record"); p.add_argument("--task-id", required=True); p.add_argument("--kind", choices=["commit", "review", "test", "artifact", "document", "decision", "prohibition", "risk", "completed", "pending", "release"], required=True); p.add_argument("--value", required=True); p.add_argument("--status"); p.add_argument("--command"); p.add_argument("--reason"); p.add_argument("--agent-role", required=True)
-    p = sub.add_parser("contract-set"); p.add_argument("--task-id", required=True); p.add_argument("--agent-role", required=True); p.add_argument("--gate-plan-file"); p.add_argument("--risk-class", choices=["local", "bounded", "structural"]); p.add_argument("--merge-required", action=argparse.BooleanOptionalAction, default=None); p.add_argument("--allowed-files", nargs="*"); p.add_argument("--allowed-modules", nargs="*"); p.add_argument("--protected-modules", nargs="*"); p.add_argument("--public-contract-changes", nargs="*"); p.add_argument("--behavior-invariants", nargs="*"); p.add_argument("--characterization-tests", nargs="*"); p.add_argument("--consumer-tests", nargs="*"); p.add_argument("--required-tests", nargs="*"); p.add_argument("--structural-decisions", nargs="*"); p.add_argument("--consumers", nargs="*"); p.add_argument("--max-blast-radius", type=int); p.add_argument("--warn-lines", type=int); p.add_argument("--block-lines", type=int); p.add_argument("--warn-growth", type=int); p.add_argument("--block-growth", type=int); p.add_argument("--preempt-lines", type=int); p.add_argument("--responsibility-growth", type=int)
+    p = sub.add_parser("contract-set"); p.add_argument("--task-id", required=True); p.add_argument("--agent-role", required=True); p.add_argument("--gate-plan-file"); p.add_argument("--structural-change-decision-file"); p.add_argument("--risk-class", choices=["local", "bounded", "structural"]); p.add_argument("--merge-required", action=argparse.BooleanOptionalAction, default=None); p.add_argument("--allowed-files", nargs="*"); p.add_argument("--allowed-modules", nargs="*"); p.add_argument("--protected-modules", nargs="*"); p.add_argument("--public-contract-changes", nargs="*"); p.add_argument("--behavior-invariants", nargs="*"); p.add_argument("--characterization-tests", nargs="*"); p.add_argument("--consumer-tests", nargs="*"); p.add_argument("--required-tests", nargs="*"); p.add_argument("--structural-decisions", nargs="*"); p.add_argument("--consumers", nargs="*"); p.add_argument("--max-blast-radius", type=int); p.add_argument("--warn-lines", type=int); p.add_argument("--block-lines", type=int); p.add_argument("--warn-growth", type=int); p.add_argument("--block-growth", type=int); p.add_argument("--preempt-lines", type=int); p.add_argument("--responsibility-growth", type=int)
     p = sub.add_parser("candidate-freeze"); p.add_argument("--task-id", required=True); p.add_argument("--candidate-id", required=True); p.add_argument("--review-source", default="independent-review"); p.add_argument("--agent-role", required=True)
     p = sub.add_parser("goal-rebind", help="deprecated compatibility entry; delegates to hikerctl"); p.add_argument("--task-id", required=True); p.add_argument("--agent-role", required=True); p.add_argument("--impact", choices=["affected", "unaffected"], default="affected"); p.add_argument("--impact-summary", required=True); p.add_argument("--retain-change", action="append", default=[]); p.add_argument("--revise-change", action="append", default=[]); p.add_argument("--retire-change", action="append", default=[]); p.add_argument("--operation-id", required=True)
     p = sub.add_parser("checkpoint", help="deprecated compatibility entry; delegates to hikerctl"); p.add_argument("--task-id", required=True); p.add_argument("--label", required=True); p.add_argument("--operation-id", required=True)

@@ -1,0 +1,59 @@
+{
+  "schema_version": "hiker-governance-tax-evidence/v1",
+  "enhancement_id": "NEXT-01-PERSPECTIVE-APPLICABILITY",
+  "observed_at": "2026-09-01",
+  "baseline_ref": "origin/main@11e4182192ccf59f220b0fa221d70547beb8b8fd",
+  "benchmark": {
+    "iterations": 4000,
+    "origin_main_default_route_ms": {
+      "p50": 0.0503,
+      "p95": 0.0962
+    },
+    "next01_default_route_ms": {
+      "p50": 0.0477,
+      "p95": 0.0896
+    },
+    "default_p95_delta_ms": -0.0066,
+    "separate_applicable_plan_sample_ms": {
+      "iterations": 2000,
+      "p50": 0.0959,
+      "p95": 0.2238
+    }
+  },
+  "default_path": {
+    "prompt_bytes_delta": 0,
+    "model_call_delta": 0,
+    "skill_load_delta": 0,
+    "state_write_delta": 0,
+    "task_map_output_bytes_delta": 0,
+    "agent_delta": 0,
+    "workflow_delta": 0,
+    "full_repository_scan_delta": 0
+  },
+  "on_demand_context": {
+    "all_four_affected_skill_bodies_bytes_delta": 1248,
+    "max_same_stage_two_skill_bytes_delta": 721,
+    "note": "Only the already-selected atomic Skill body pays this compact semantic guidance cost; the always-loaded catalog and descriptions are unchanged."
+  },
+  "structural": {
+    "perspective_authority_count": 1,
+    "new_state_authority_count": 0,
+    "new_manager_count": 0,
+    "task_router_lines": 539,
+    "thin_validator_lines": 219,
+    "fixed_perspective_ids": false,
+    "keyword_inference": false
+  },
+  "verification": {
+    "workspace_tests": 153,
+    "core_tests": 181,
+    "web_tests": 26,
+    "quality_tests": 112,
+    "affected_total": 472,
+    "skill_coherence": "PASS_5_PLUGINS_42_SKILLS",
+    "architecture_gate": "PASS",
+    "privacy_gate": "PASS_805_TEXT_ENTRIES_0_FINDINGS",
+    "governance_tax_regression": false,
+    "model_freedom_regression": false
+  }
+}

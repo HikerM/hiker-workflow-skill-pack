@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 
 from gate_applicability import plan_from_model_proposal, validate_plan as validate_gate_plan
+from perspective_applicability import validate_plan as validate_perspective_plan
 from workspacelib import RESOURCE_HARD_MAX, atomic_json
 
 
@@ -164,6 +165,12 @@ def _validated_proposal(proposal: dict | None, request: str = "", project_facts:
                 gate_applicability = validate_gate_plan(raw_gate_applicability, task_goal=request)
             except RuntimeError as exc:
                 errors.append(str(exc))
+    perspective_applicability = None
+    if "perspective_applicability" in proposal:
+        try:
+            perspective_applicability = validate_perspective_plan(proposal.get("perspective_applicability"))
+        except RuntimeError as exc:
+            errors.append(str(exc))
     raw_lanes = proposal.get("implementation_lanes", [])
     implementation_lanes: list[dict] = []
     if not isinstance(raw_lanes, list):
@@ -266,7 +273,7 @@ def _validated_proposal(proposal: dict | None, request: str = "", project_facts:
         return None, errors
     if gate_applicability and gate_applicability["gates"]["development"]["status"] == "NOT_APPLICABLE" and implementation_lanes:
         return None, ["NON_APPLICABLE_DEVELOPMENT_HAS_WRITE_LANES"]
-    return {"architecture": architecture, "client_families": families, "risk_class": risk_class, "parallel_mode": parallel_mode, "contract_change": contract_change, "implementation_lanes": implementation_lanes, "gate_applicability": gate_applicability, "independent_assurance": independent_assurance, "project_fact_fingerprint": project_fact_fingerprint}, []
+    return {"architecture": architecture, "client_families": families, "risk_class": risk_class, "parallel_mode": parallel_mode, "contract_change": contract_change, "implementation_lanes": implementation_lanes, "gate_applicability": gate_applicability, "perspective_applicability": perspective_applicability, "independent_assurance": independent_assurance, "project_fact_fingerprint": project_fact_fingerprint}, []
 
 
 def _scopes_overlap(left: list[str], right: list[str]) -> bool:
@@ -368,6 +375,7 @@ def route(text: str, tech_stack: dict | None = None, proposal: dict | None = Non
     proposed_implementation = selected["implementation_lanes"]
     independent_assurance_proposal = selected["independent_assurance"]
     gate_applicability = selected["gate_applicability"]
+    perspective_applicability = selected["perspective_applicability"]
     gate_status = lambda name, fallback=True: gate_applicability["gates"][name]["status"]
     gate_is_required = lambda name, fallback=True: gate_status(name, fallback) != "NOT_APPLICABLE"
     lanes = [
@@ -475,6 +483,7 @@ def route(text: str, tech_stack: dict | None = None, proposal: dict | None = Non
         "risk_class": risk_class,
         "contract_change": contract_change,
         "gate_applicability": gate_applicability,
+        **({"perspective_applicability": perspective_applicability} if perspective_applicability is not None else {}),
         "evidence_snapshot": _project_fact_receipt(tech_stack),
         "diagnostics": [],
         "lanes": lanes,

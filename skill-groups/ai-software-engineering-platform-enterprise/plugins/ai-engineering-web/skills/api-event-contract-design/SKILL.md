@@ -9,4 +9,6 @@ description: 为已有真实服务端技术栈设计或增量修改版本化API�
 
 公共契约必须登记消费者及最低消费者回归；破坏性变化必须采用新版本或提供迁移窗口。契约定版前，前端、客户端和服务端实现不得各自猜测字段。
 
+当已观察到的调用者、运维路径、支持流程或恢复风险会改变契约验收时，由模型在现有 Task Contract 中选择有事实引用的适用视角；不得因出现 API、caller 或 operator 字样自动添加视角，也不得借此制造新的消费者或工作流。
+
 采用 5.18 Error Contract 时只统一分类、用户消息、开发诊断、错误码、Correlation 与 Retry 语义，并映射到项目已有 REST、Problem Details、GraphQL、gRPC、C/S Local 或自有协议；不得强制改用统一 JSON。Error ID 必须能反查脱敏诊断证据，未知异常不得被 Global Handler 静默吞掉。

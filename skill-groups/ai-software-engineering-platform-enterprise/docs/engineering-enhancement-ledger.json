@@ -1,0 +1,41 @@
+{
+  "schema_version": "hiker-engineering-enhancement-ledger/v1",
+  "role": "RELEASE_EVIDENCE_INDEX",
+  "state_authority": false,
+  "authority_note": "Project, Goal, Task, Evidence and Decision Memory remain the runtime authorities. This ledger only indexes bounded enhancement proof.",
+  "allowed_statuses": [
+    "DISCOVERED",
+    "DESIGNED",
+    "IMPLEMENTED",
+    "SOURCE_VERIFIED",
+    "INTEGRATION_VERIFIED",
+    "FIELD_PROVEN",
+    "PARTIALLY_PROVEN",
+    "DEFERRED",
+    "REJECTED"
+  ],
+  "enhancements": [
+    {
+      "ENHANCEMENT_ID": "NEXT-01-PERSPECTIVE-APPLICABILITY",
+      "PROBLEM": "Engineering artifacts are commonly evaluated from the author's viewpoint even when observed actors, usage conditions and risks require other perspectives.",
+      "TARGET_CAPABILITY": "Model-native bounded perspective applicability under the existing Task Contract",
+      "WHY": "Activate relevant engineering judgment without a fixed role checklist, extra model call, default Skill load or parallel state authority.",
+      "IMPLEMENTATION_STATUS": "FIELD_PROVEN",
+      "SOURCE_EVIDENCE": [
+        "plugins/ai-engineering-workspace/scripts/perspective_applicability.py",
+        "plugins/ai-engineering-workspace/scripts/task_router.py"
+      ],
+      "TEST_EVIDENCE": [
+        "plugins/ai-engineering-workspace/tests/test_perspective_applicability.py",
+        "plugins/ai-engineering-core/tests/test_enhancement_ledger.py",
+        "docs/evidence/NEXT-01-governance-tax.json"
+      ],
+      "FIELD_EVIDENCE": [
+        "docs/evidence/NEXT-01-ui-field.json"
+      ],
+      "VERSION_INTRODUCED": "NEXT_UNRELEASED",
+      "CURRENT_AUTHORITY": "Existing Task Contract; ChatGPT selects semantics and the runtime validates invariants",
+      "REAL_PROJECT_OUTCOME": "A read-only real UI field selected two evidence-backed perspectives, preserved the page unchanged, and identified three bounded first-contact/recovery gaps plus four positive facts without extra Skill, model call, workflow or state authority."
+    }
+  ]
+}

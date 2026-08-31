@@ -1,0 +1,239 @@
+{
+  "schema_version": "hiker-perspective-field-evidence/v1",
+  "enhancement_id": "NEXT-01-PERSPECTIVE-APPLICABILITY",
+  "field_id": "NEXT-01-UI-FIELD-A",
+  "observed_at": "2026-09-01",
+  "field_mode": "READ_ONLY_REAL_PROJECT",
+  "project": {
+    "alias": "FIELD-UI-A",
+    "private_field_project": true,
+    "branch": "testing",
+    "head": "6b3725c",
+    "working_tree_dirty_before_field": true,
+    "working_tree_modified_by_field": false,
+    "source_surfaces": [
+      {
+        "ref": "src/pages/LandingPage.vue",
+        "sha256": "32c91f59c9ca64c417f57f92f3354d2e54a92e09a2e19cae13459eb7d3327a5a"
+      },
+      {
+        "ref": "src/components/auth/AuthDialog.vue",
+        "sha256": "a8bc0dd259afb38f966e9461cf3af80f9acc96d77c59f901466248fbeddc4742"
+      },
+      {
+        "ref": "src/components/auth/AuthLoginForm.vue",
+        "sha256": "280d934ef7c02adb2cad73bac9f6a2a60882abb37634b1bb27c515cf4241f483"
+      }
+    ]
+  },
+  "privacy": {
+    "absolute_project_path_persisted": false,
+    "screenshot_persisted": false,
+    "full_prompt_or_chat_persisted": false,
+    "visible_brand_and_regulatory_values_redacted": true
+  },
+  "live_browser_observations": [
+    {
+      "viewport": "1280x720",
+      "route": "/",
+      "console_errors": 0,
+      "facts": [
+        "public landing page rendered",
+        "site identity, three navigation choices and one primary action were visible",
+        "primary action opened an authentication dialog"
+      ]
+    },
+    {
+      "viewport": "390x844",
+      "route": "/",
+      "console_errors": 0,
+      "facts": [
+        "primary action remained visible",
+        "authentication dialog fit the viewport",
+        "empty credential submit produced two accessible field alerts",
+        "story copy contrast varied over the moving background"
+      ]
+    }
+  ],
+  "perspective_applicability": {
+    "schema_version": "hiker-perspective-applicability/v1",
+    "authority": "CHATGPT_SEMANTIC_SELECTION",
+    "artifacts": [
+      {
+        "id": "public-landing",
+        "type": "UI_IMPLEMENTATION",
+        "fact_refs": [
+          "source://src/pages/LandingPage.vue",
+          "browser://route-root"
+        ]
+      },
+      {
+        "id": "auth-dialog",
+        "type": "UI_IMPLEMENTATION",
+        "fact_refs": [
+          "source://src/components/auth/AuthDialog.vue",
+          "browser://auth-dialog"
+        ]
+      },
+      {
+        "id": "landing-copy",
+        "type": "COPY_TEXT",
+        "fact_refs": [
+          "dom://landing-story",
+          "dom://primary-action"
+        ]
+      }
+    ],
+    "actors": [
+      {
+        "id": "first-time-customer",
+        "fact_refs": [
+          "route://public-unauthenticated-entry"
+        ]
+      }
+    ],
+    "usage_conditions": [
+      {
+        "id": "desktop-first-contact",
+        "fact_refs": [
+          "browser://1280x720"
+        ]
+      },
+      {
+        "id": "mobile-first-contact",
+        "fact_refs": [
+          "browser://390x844"
+        ]
+      },
+      {
+        "id": "empty-credential-submit",
+        "fact_refs": [
+          "dom://two-field-alerts"
+        ]
+      }
+    ],
+    "risk_facts": [
+      {
+        "id": "undisclosed-auth-precondition",
+        "safety_critical": false,
+        "fact_refs": [
+          "browser://primary-action-to-auth-dialog"
+        ]
+      },
+      {
+        "id": "dynamic-background-readability",
+        "safety_critical": false,
+        "fact_refs": [
+          "browser://mobile-story-contrast"
+        ]
+      }
+    ],
+    "project_fact_refs": [
+      "git://head/6b3725c",
+      "runtime://vue-3-vite-8"
+    ],
+    "perspectives": [
+      {
+        "id": "customer-first-contact",
+        "rationale": "The observed public entry is the first unauthenticated product contact, so value clarity, trust and the disclosed next step affect acceptance.",
+        "basis": {
+          "artifact_ids": [
+            "public-landing",
+            "landing-copy"
+          ],
+          "actor_ids": [
+            "first-time-customer"
+          ],
+          "usage_condition_ids": [
+            "desktop-first-contact",
+            "mobile-first-contact"
+          ],
+          "risk_ids": [
+            "undisclosed-auth-precondition",
+            "dynamic-background-readability"
+          ],
+          "project_fact_refs": [
+            "git://head/6b3725c"
+          ]
+        },
+        "acceptance_refs": [
+          "metric://FIRST_CONTACT_CLARITY",
+          "metric://COPY_PROFESSIONALISM",
+          "metric://CUSTOMER_TRUST",
+          "metric://ROLE_FIT"
+        ]
+      },
+      {
+        "id": "failure-recovery",
+        "rationale": "The observed primary action crosses into authentication and an empty submission creates a recoverable error state.",
+        "basis": {
+          "artifact_ids": [
+            "auth-dialog"
+          ],
+          "actor_ids": [
+            "first-time-customer"
+          ],
+          "usage_condition_ids": [
+            "empty-credential-submit"
+          ],
+          "risk_ids": [],
+          "project_fact_refs": []
+        },
+        "acceptance_refs": [
+          "metric://ERROR_RECOVERY_CLARITY",
+          "metric://STATE_CLARITY"
+        ]
+      }
+    ]
+  },
+  "comparison": {
+    "without_perspective_applicability": {
+      "observer_basis": "artifact presentation and basic interaction only",
+      "result": "PASS_WITH_LIMITED_OBSERVER_SET",
+      "metrics": {
+        "FIRST_CONTACT_CLARITY": "NOT_EXPLICITLY_EVALUATED",
+        "STATE_CLARITY": "PASS_AUTH_DIALOG_VISIBLE",
+        "PRIMARY_ACTION_CLARITY": "PASS_ACTION_VISIBLE",
+        "ERROR_RECOVERY_CLARITY": "VALIDATION_PATH_OBSERVED",
+        "COPY_PROFESSIONALISM": "PRESENTATION_ONLY",
+        "CUSTOMER_TRUST": "NOT_EXPLICITLY_EVALUATED",
+        "ROLE_FIT": "NOT_EXPLICITLY_EVALUATED",
+        "EMPTY_ERROR_LOADING_PERMISSION_COVERAGE": "PARTIAL_UNCLASSIFIED"
+      }
+    },
+    "with_perspective_applicability": {
+      "observer_basis": "customer-first-contact and failure-recovery selected from observed facts",
+      "result": "BOUNDED_GAPS_AND_POSITIVE_FACTS_IDENTIFIED",
+      "metrics": {
+        "FIRST_CONTACT_CLARITY": "PARTIAL_VALUE_AND_CAPABILITY_BOUNDARY_NOT_EXPLICIT",
+        "STATE_CLARITY": "PASS_AUTH_DIALOG_AND_FIELD_ERRORS_CLEAR",
+        "PRIMARY_ACTION_CLARITY": "PARTIAL_ACTION_CLEAR_AUTH_PRECONDITION_UNDISCLOSED",
+        "ERROR_RECOVERY_CLARITY": "PASS_EMPTY_INPUT_RECOVERY_SERVER_FAILURE_NOT_EXERCISED",
+        "COPY_PROFESSIONALISM": "PARTIAL_CINEMATIC_TONE_CLEAR_PRODUCT_VALUE_COPY_LIMITED",
+        "CUSTOMER_TRUST": "PARTIAL_SITE_IDENTITY_AND_REGULATORY_FOOTER_PRESENT",
+        "ROLE_FIT": "PARTIAL_FIRST_TIME_CUSTOMER_CANNOT_ASSESS_CAPABILITY_BEFORE_AUTH",
+        "EMPTY_ERROR_LOADING_PERMISSION_COVERAGE": "NORMAL_AND_VALIDATION_ERROR_OBSERVED_AUTH_BOUNDARY_OBSERVED_LOADING_EMPTY_NOT_APPLICABLE_TO_STATIC_ENTRY"
+      },
+      "actionable_findings": [
+        "disclose the authentication precondition or immediate next step before the primary action",
+        "stabilize mobile story-copy readability over dynamic media",
+        "make the first-screen product value and capability boundary explicit for a first-time customer"
+      ],
+      "positive_facts": [
+        "primary action remains prominent on desktop and mobile",
+        "authentication dialog is labelled and fits the mobile viewport",
+        "empty input produces field-specific accessible alerts",
+        "site identity and regulatory footer are visible"
+      ]
+    }
+  },
+  "outcome": {
+    "page_source_changed": false,
+    "perspective_count": 2,
+    "new_skill_loads": 0,
+    "new_model_calls": 0,
+    "new_runtime_state_authorities": 0,
+    "new_workflows_or_agents": 0,
+    "verdict": "PASS_REAL_UI_PERSPECTIVE_FIELD"
+  }
+}

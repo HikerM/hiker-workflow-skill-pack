@@ -38,6 +38,7 @@ PATTERNS = (
     ("PRIVATE_KEY_BLOCK", re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----")),
 )
 SHA256SUM_LINE = re.compile(r"(?i)^[0-9a-f]{64}\s+\*?(.+)$")
+SHA256_TOKEN = re.compile(r"(?i)(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])")
 
 
 def _tracked_files(root: Path) -> list[Path]:
@@ -60,9 +61,14 @@ def _scan_text(name: str, text: str) -> list[dict[str, object]]:
             checksum = SHA256SUM_LINE.fullmatch(line.strip())
             if checksum is not None:
                 scanned_line = checksum.group(1)
+        digest_spans = [match.span() for match in SHA256_TOKEN.finditer(scanned_line)]
         for code, pattern in PATTERNS:
-            if pattern.search(scanned_line):
+            for match in pattern.finditer(scanned_line):
+                inside_digest = any(start <= match.start() and match.end() <= end for start, end in digest_spans)
+                if code == "PHONE" and inside_digest:
+                    continue
                 findings.append({"code": code, "path": name, "line": line_no})
+                break
     return findings
 
 

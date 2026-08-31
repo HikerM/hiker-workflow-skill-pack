@@ -13,11 +13,25 @@
       "p50": 0.0477,
       "p95": 0.0896
     },
-    "default_p95_delta_ms": -0.0066,
+    "next01a_default_route_ms": {
+      "p50_reference": 0.0522,
+      "p95_median_across_7_batches": 0.0653,
+      "p95_batches": [0.0881, 0.0653, 0.0547, 0.0741, 0.0579, 0.0613, 0.0861],
+      "serialized_output_bytes": 8756
+    },
+    "next01_vs_origin_main_default_p95_delta_ms": -0.0066,
+    "next01a_vs_origin_main_default_p95_delta_ms": -0.0309,
     "separate_applicable_plan_sample_ms": {
       "iterations": 2000,
       "p50": 0.0959,
       "p95": 0.2238
+    },
+    "next01a_grounded_plan_sample_ms": {
+      "iterations_per_batch": 2000,
+      "batches": 7,
+      "p50_reference": 0.1707,
+      "p95_median_across_7_batches": 0.2839,
+      "p95_batches": [0.2839, 0.2713, 0.3274, 0.349, 0.3091, 0.1919, 0.1936]
     }
   },
   "default_path": {
@@ -39,20 +53,33 @@
     "perspective_authority_count": 1,
     "new_state_authority_count": 0,
     "new_manager_count": 0,
-    "task_router_lines": 539,
-    "thin_validator_lines": 219,
+    "task_router_lines": 556,
+    "thin_validator_lines": 394,
     "fixed_perspective_ids": false,
-    "keyword_inference": false
+    "keyword_inference": false,
+    "observed_fact_catalog_is_state_authority": false,
+    "observed_fact_catalog_max_facts": 64,
+    "perspective_proposal_can_declare_catalog": false
   },
   "verification": {
-    "workspace_tests": 153,
+    "workspace_tests": 168,
     "core_tests": 181,
-    "web_tests": 26,
-    "quality_tests": 112,
-    "affected_total": 472,
+    "quality_tests": 113,
+    "affected_total": 462,
     "skill_coherence": "PASS_5_PLUGINS_42_SKILLS",
     "architecture_gate": "PASS",
-    "privacy_gate": "PASS_805_TEXT_ENTRIES_0_FINDINGS",
+    "privacy_gate": {
+      "status": "PASS",
+      "current_scanned_text_entries": 806,
+      "finding_count": 0,
+      "authority": "CURRENT_SELF_GOVERNANCE_PRIVACY_GATE",
+      "prior_observation": "PASS_805_TEXT_ENTRIES_0_FINDINGS",
+      "drift_reason": "The 805 count was captured before the final NEXT-01 tracked evidence set was complete; scanned entry count is observational, while zero findings is the release assertion.",
+      "count_is_release_identity": false,
+      "sha256_phone_false_positive_regression": "PASS"
+    },
+    "focused_perspective_tests": 23,
+    "real_ui_field_grounding": "PASS_READ_ONLY_RERUN",
     "governance_tax_regression": false,
     "model_freedom_regression": false
   }

@@ -150,7 +150,8 @@ def _validated_proposal(proposal: dict | None, request: str = "", project_facts:
     project_fact_fingerprint = str(proposal.get("project_fact_fingerprint") or "").strip().lower() or None
     if project_fact_fingerprint and not re.fullmatch(r"[0-9a-f]{64}", project_fact_fingerprint):
         errors.append("INVALID_PROJECT_FACT_FINGERPRINT")
-    observed_fact_fingerprint = _project_fact_receipt(project_facts).get("source_fingerprint")
+    project_fact_receipt = _project_fact_receipt(project_facts)
+    observed_fact_fingerprint = project_fact_receipt.get("source_fingerprint")
     if project_fact_fingerprint and not observed_fact_fingerprint:
         errors.append("PROJECT_FACT_PLANE_REQUIRED")
     elif project_fact_fingerprint and project_fact_fingerprint != observed_fact_fingerprint:
@@ -167,8 +168,23 @@ def _validated_proposal(proposal: dict | None, request: str = "", project_facts:
                 errors.append(str(exc))
     perspective_applicability = None
     if "perspective_applicability" in proposal:
+        observed_fact_catalog = (
+            project_facts.get("observed_fact_catalog")
+            if isinstance(project_facts, dict)
+            else None
+        )
+        expected_project_fact_fingerprint = (
+            observed_fact_fingerprint
+            if project_fact_receipt.get("project_fact_plane_bound")
+            else None
+        )
         try:
-            perspective_applicability = validate_perspective_plan(proposal.get("perspective_applicability"))
+            perspective_applicability = validate_perspective_plan(
+                proposal.get("perspective_applicability"),
+                observed_fact_catalog=observed_fact_catalog,
+                expected_scope_fingerprint=request_metadata(request)["request_fingerprint"],
+                expected_project_fact_fingerprint=expected_project_fact_fingerprint,
+            )
         except RuntimeError as exc:
             errors.append(str(exc))
     raw_lanes = proposal.get("implementation_lanes", [])

@@ -21,6 +21,23 @@
       "TARGET_CAPABILITY": "Model-native bounded perspective applicability under the existing Task Contract",
       "WHY": "Activate relevant engineering judgment without a fixed role checklist, extra model call, default Skill load or parallel state authority.",
       "IMPLEMENTATION_STATUS": "FIELD_PROVEN",
+      "STATUS_HISTORY": [
+        {
+          "phase": "NEXT-01",
+          "status": "FIELD_PROVEN",
+          "basis": "Read-only UI observation proved dynamic perspective selection but did not yet prove external fact-reference grounding."
+        },
+        {
+          "phase": "NEXT-01A_IN_PROGRESS",
+          "status": "PARTIALLY_PROVEN",
+          "basis": "The ledger was downgraded while external grounding, critical-risk omission and real-field rerun evidence were pending."
+        },
+        {
+          "phase": "NEXT-01A_CLOSED",
+          "status": "FIELD_PROVEN",
+          "basis": "External fact grounding, known-critical-risk omission protection, acceptance semantics, real UI rerun and affected gates passed."
+        }
+      ],
       "SOURCE_EVIDENCE": [
         "plugins/ai-engineering-workspace/scripts/perspective_applicability.py",
         "plugins/ai-engineering-workspace/scripts/task_router.py"
@@ -34,8 +51,8 @@
         "docs/evidence/NEXT-01-ui-field.json"
       ],
       "VERSION_INTRODUCED": "NEXT_UNRELEASED",
-      "CURRENT_AUTHORITY": "Existing Task Contract; ChatGPT selects semantics and the runtime validates invariants",
-      "REAL_PROJECT_OUTCOME": "A read-only real UI field selected two evidence-backed perspectives, preserved the page unchanged, and identified three bounded first-contact/recovery gaps plus four positive facts without extra Skill, model call, workflow or state authority."
+      "CURRENT_AUTHORITY": "Existing Task Contract; ChatGPT selects semantics, an external task-bounded observed-fact catalog supplies evidence receipts, and the runtime validates invariants",
+      "REAL_PROJECT_OUTCOME": "The same read-only UI field was rerun without authored source changes. All artifact, actor, usage, risk and project refs resolved in an external bounded catalog; acceptance labels were explicitly non-authoritative semantics; 23 focused tests and affected plugin gates passed."
     }
   ]
 }

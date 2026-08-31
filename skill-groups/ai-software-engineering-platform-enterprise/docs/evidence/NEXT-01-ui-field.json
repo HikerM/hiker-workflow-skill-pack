@@ -4,6 +4,11 @@
   "field_id": "NEXT-01-UI-FIELD-A",
   "observed_at": "2026-09-01",
   "field_mode": "READ_ONLY_REAL_PROJECT",
+  "evidence_role": "OBSERVATION_EVIDENCE_NOT_VALIDATOR_AUTHORITY",
+  "field_task_scope": {
+    "request_persisted": false,
+    "fingerprint": "88ecf7b18680beb348ee0b8a7925a7ebf28913c0f4e19fd99d99f264807d19ef"
+  },
   "project": {
     "alias": "FIELD-UI-A",
     "private_field_project": true,
@@ -55,6 +60,99 @@
       ]
     }
   ],
+  "grounding_closure": {
+    "closure_id": "NEXT-01A-PERSPECTIVE-EVIDENCE-GROUNDING-CLOSURE",
+    "rerun_at": "2026-09-01",
+    "same_field_project": true,
+    "same_source_hashes": true,
+    "desktop_viewport": "1280x720",
+    "mobile_viewport": "390x844",
+    "console_errors": 0,
+    "field_authored_source_changes": false,
+    "working_tree_changed_concurrently_during_field": true,
+    "concurrency_note": "Unrelated untracked business files appeared during the read-only rerun; the three bound UI source hashes and Git HEAD remained unchanged.",
+    "history_policy": "The original field remains observation evidence; this closure adds a sibling external catalog and does not rewrite it as validator authority."
+  },
+  "observed_fact_catalog": {
+    "schema_version": "hiker-observed-fact-catalog/v1",
+    "authority": "EXTERNAL_OBSERVED_EVIDENCE",
+    "scope_fingerprint": "88ecf7b18680beb348ee0b8a7925a7ebf28913c0f4e19fd99d99f264807d19ef",
+    "facts": [
+      {
+        "ref": "source://src/pages/LandingPage.vue",
+        "kind": "ARTIFACT",
+        "evidence_fingerprint": "32c91f59c9ca64c417f57f92f3354d2e54a92e09a2e19cae13459eb7d3327a5a"
+      },
+      {
+        "ref": "browser://route-root",
+        "kind": "ARTIFACT",
+        "evidence_fingerprint": "046cd6dd2f71e6e5b0490c50eb672a28e6a529c21698506f074685ddc79e37c7"
+      },
+      {
+        "ref": "source://src/components/auth/AuthDialog.vue",
+        "kind": "ARTIFACT",
+        "evidence_fingerprint": "a8bc0dd259afb38f966e9461cf3af80f9acc96d77c59f901466248fbeddc4742"
+      },
+      {
+        "ref": "browser://auth-dialog",
+        "kind": "ARTIFACT",
+        "evidence_fingerprint": "8b12415d8f91023e2855edcc6e329782203f0031c688db17fc53292ce78c3bb8"
+      },
+      {
+        "ref": "dom://landing-story",
+        "kind": "ARTIFACT",
+        "evidence_fingerprint": "705c115257580002b83e289ce0acdd02eb4d9c05ab902b1273fd4fcca8daaf88"
+      },
+      {
+        "ref": "dom://primary-action",
+        "kind": "ARTIFACT",
+        "evidence_fingerprint": "ab35e9552b10f6921308bc6195a85b84fb94ffe841eb5bc129fb7f4bfaadd0a3"
+      },
+      {
+        "ref": "route://public-unauthenticated-entry",
+        "kind": "ACTOR",
+        "evidence_fingerprint": "391d1916d98d3b0c19e4d277ba08ddfddc526e3827b3933a5e949eda6de5a8fb"
+      },
+      {
+        "ref": "browser://1280x720",
+        "kind": "USAGE",
+        "evidence_fingerprint": "0cb5cb7809448e0b870bd28c1512d95d9e95d4f6440804ca9c3bb5bd5f49123f"
+      },
+      {
+        "ref": "browser://390x844",
+        "kind": "USAGE",
+        "evidence_fingerprint": "c6097fce814cfc5445da557d083f83d487a37305c60696a06d14a707016dfebb"
+      },
+      {
+        "ref": "dom://two-field-alerts",
+        "kind": "USAGE",
+        "evidence_fingerprint": "e9f8b6ab28bc62536797378fcb11cc2f7d122a57b3e42c6da91639b5cc073cba"
+      },
+      {
+        "ref": "browser://primary-action-to-auth-dialog",
+        "kind": "RISK",
+        "evidence_fingerprint": "4d31b7df18dc5030f9428a11db5ca13beaa39d1a70615d76321e3bb67ad6f780",
+        "safety_critical": false
+      },
+      {
+        "ref": "browser://mobile-story-contrast",
+        "kind": "RISK",
+        "evidence_fingerprint": "8104febe14a1ff9efb0a4b511396226ffe69c882e2dddfe8eb250e786f7fbc70",
+        "safety_critical": false
+      },
+      {
+        "ref": "git://head/6b3725c",
+        "kind": "PROJECT",
+        "evidence_fingerprint": "404eeab1b2e5da9544a450f853fa1467f7f9b6f96503d0027e384f85ff674ca9"
+      },
+      {
+        "ref": "runtime://vue-3-vite-8",
+        "kind": "PROJECT",
+        "evidence_fingerprint": "afef945af221c83872aacab228df9350eb1e53c339e48092a6c48334bd414028"
+      }
+    ],
+    "acceptance_refs": []
+  },
   "perspective_applicability": {
     "schema_version": "hiker-perspective-applicability/v1",
     "authority": "CHATGPT_SEMANTIC_SELECTION",
@@ -157,10 +255,10 @@
           ]
         },
         "acceptance_refs": [
-          "metric://FIRST_CONTACT_CLARITY",
-          "metric://COPY_PROFESSIONALISM",
-          "metric://CUSTOMER_TRUST",
-          "metric://ROLE_FIT"
+          "semantic://FIRST_CONTACT_CLARITY",
+          "semantic://COPY_PROFESSIONALISM",
+          "semantic://CUSTOMER_TRUST",
+          "semantic://ROLE_FIT"
         ]
       },
       {
@@ -180,8 +278,8 @@
           "project_fact_refs": []
         },
         "acceptance_refs": [
-          "metric://ERROR_RECOVERY_CLARITY",
-          "metric://STATE_CLARITY"
+          "semantic://ERROR_RECOVERY_CLARITY",
+          "semantic://STATE_CLARITY"
         ]
       }
     ]
@@ -234,6 +332,8 @@
     "new_model_calls": 0,
     "new_runtime_state_authorities": 0,
     "new_workflows_or_agents": 0,
-    "verdict": "PASS_REAL_UI_PERSPECTIVE_FIELD"
+    "external_fact_refs_grounded": true,
+    "acceptance_refs_classified_as_semantic_labels": true,
+    "verdict": "PASS_REAL_UI_PERSPECTIVE_FIELD_GROUNDED"
   }
 }

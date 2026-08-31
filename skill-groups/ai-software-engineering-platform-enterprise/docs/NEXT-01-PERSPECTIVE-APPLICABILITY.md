@@ -2,7 +2,7 @@
 
 ## Boundary
 
-Perspective Applicability is an optional semantic section of the existing Task Contract. ChatGPT selects project-relevant perspectives from current Artifact, Actor, Usage Condition, Risk and Project Fact evidence. The runtime only validates declared references, bounded size, safety-critical coverage and contract shape.
+Perspective Applicability is an optional semantic section of the existing Task Contract. ChatGPT selects project-relevant perspectives from current Artifact, Actor, Usage Condition, Risk and Project Fact evidence. The runtime only validates external observed-fact references, bounded size, known safety-critical coverage and contract shape.
 
 It does not create a Perspective Manager, workflow engine, Agent pool, Skill route, state writer or model call. When omitted, the optional section is absent (semantically `NOT_APPLICABLE`) and the Task Map retains the same bytes, lanes and execution topology as the existing path.
 
@@ -24,6 +24,7 @@ It does not create a Perspective Manager, workflow engine, Agent pool, Skill rou
 ```text
 ChatGPT semantic proposal
   -> task_router.py (existing Task Contract authority)
+     -> externally supplied OBSERVED_FACT_CATALOG / Evidence Receipt
      -> perspective_applicability.py (thin validator)
   -> existing Task Map / Evidence Snapshot
 ```
@@ -35,8 +36,10 @@ The Enhancement Ledger is a release-evidence index only. Project, Goal, Task, Ev
 - No keyword-to-perspective mapping.
 - No fixed perspective checklist.
 - One to eight model-selected perspectives only when the section is applicable.
-- Each perspective cites a declared artifact and at least one observed actor, usage condition, risk or project fact.
-- Every declared safety-critical risk is covered by at least one selected perspective.
+- Artifact, actor, usage, risk and project fact references must resolve in an external observed-fact catalog bound to the current request fingerprint and, when present, the current Project Fact Plane fingerprint; the Perspective Proposal cannot declare that catalog.
+- Each perspective cites a declared artifact and at least one externally observed actor, usage condition, risk or project fact.
+- Every known task-bounded safety-critical risk is covered by at least one model-selected perspective, even when the Proposal omits or downgrades it.
+- Formal acceptance references must be externally bound; otherwise they remain explicit `SEMANTIC_ACCEPTANCE_LABEL` values and do not masquerade as metric authority.
 - The validator never creates an artifact, actor, workflow, lane, Skill, Agent or runtime state.
 - Artifact types describe supported inputs; they do not require every project to contain every artifact.
 

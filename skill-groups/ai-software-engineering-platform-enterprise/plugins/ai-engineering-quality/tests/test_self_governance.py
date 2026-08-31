@@ -77,6 +77,16 @@ class SelfGovernanceTests(unittest.TestCase):
         findings = _scan_text("dist/SHA256SUMS.txt", f"{'a' * 64}  release-{phone}.zip")
         self.assertEqual(["PHONE"], [item["code"] for item in findings])
 
+    def test_privacy_does_not_misclassify_json_sha256_but_still_finds_adjacent_phone(self):
+        fingerprint = "eca2efd516ad730ea57f6f78671d3aeab6a8e5c9d062606d661d14651260773b"
+        self.assertEqual([], _scan_text("evidence.json", json.dumps({"scope_fingerprint": fingerprint})))
+        phone = "138" + "0000" + "0000"
+        findings = _scan_text(
+            "evidence.json",
+            json.dumps({"scope_fingerprint": fingerprint, "contact": phone}),
+        )
+        self.assertEqual(["PHONE"], [item["code"] for item in findings])
+
     def test_architecture_gate_enforces_thin_cli_and_single_task_writer(self):
         report = architecture_gate(REPOSITORY, SUITE)
         self.assertEqual("PASS", report["status"], report["errors"])

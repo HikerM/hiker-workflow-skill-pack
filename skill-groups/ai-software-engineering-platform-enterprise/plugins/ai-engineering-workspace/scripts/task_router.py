@@ -6,7 +6,7 @@ import json
 import re
 from pathlib import Path
 
-from gate_applicability import validate_plan as validate_gate_plan
+from gate_applicability import plan_from_model_proposal, validate_plan as validate_gate_plan
 from workspacelib import RESOURCE_HARD_MAX, atomic_json
 
 
@@ -138,6 +138,14 @@ def _validated_proposal(proposal: dict | None, request: str = "", project_facts:
     independent_assurance = proposal.get("independent_assurance")
     if independent_assurance is not None and not isinstance(independent_assurance, bool):
         errors.append("INVALID_ASSURANCE_INDEPENDENCE: independent_assurance必须是boolean或省略")
+    semantic_basis_fields = (
+        "repository_change", "runtime_change", "architecture_impact",
+        "shared_scope", "release_impact", "merge_required",
+    )
+    for field in semantic_basis_fields:
+        value = proposal.get(field)
+        if value is not None and type(value) is not bool:
+            errors.append(f"INVALID_GATE_BASIS:{field}")
     project_fact_fingerprint = str(proposal.get("project_fact_fingerprint") or "").strip().lower() or None
     if project_fact_fingerprint and not re.fullmatch(r"[0-9a-f]{64}", project_fact_fingerprint):
         errors.append("INVALID_PROJECT_FACT_FINGERPRINT")
@@ -154,22 +162,9 @@ def _validated_proposal(proposal: dict | None, request: str = "", project_facts:
         else:
             try:
                 gate_applicability = validate_gate_plan(raw_gate_applicability, task_goal=request)
-                if gate_applicability["risk_class"] != risk_class:
-                    errors.append("GATE_RISK_CLASS_CONFLICT: routing与gate applicability风险等级不一致")
-                hard_independence = risk_class == "structural" or any(
-                    gate_applicability["basis"].get(name) for name in ("architecture_impact", "shared_scope", "release_impact")
-                )
-                if independent_assurance is False and hard_independence:
-                    errors.append("ASSURANCE_INDEPENDENCE_REQUIRED_BY_RISK")
             except RuntimeError as exc:
                 errors.append(str(exc))
     raw_lanes = proposal.get("implementation_lanes", [])
-    if (
-        independent_assurance is False
-        and risk_class == "structural"
-        and "ASSURANCE_INDEPENDENCE_REQUIRED_BY_RISK" not in errors
-    ):
-        errors.append("ASSURANCE_INDEPENDENCE_REQUIRED_BY_RISK")
     implementation_lanes: list[dict] = []
     if not isinstance(raw_lanes, list):
         errors.append("INVALID_IMPLEMENTATION_LANES: implementation_lanes 必须是数组")
@@ -249,6 +244,24 @@ def _validated_proposal(proposal: dict | None, request: str = "", project_facts:
 
         if any(visit(node) for node in graph):
             errors.append("CYCLIC_IMPLEMENTATION_LANES: 动态实现通道存在循环依赖")
+    if not errors and gate_applicability is None:
+        gate_applicability = plan_from_model_proposal(request, {
+            **proposal,
+            "implementation_lanes": implementation_lanes,
+        })
+    if gate_applicability is not None:
+        if gate_applicability["risk_class"] != risk_class:
+            errors.append("GATE_RISK_CLASS_CONFLICT: routing与gate applicability风险等级不一致")
+        assurance_required = any(
+            gate_applicability["gates"][name]["status"] == "REQUIRED"
+            for name in ("review", "testing")
+        )
+        hard_independence = assurance_required and (
+            risk_class == "structural"
+            or any(gate_applicability["basis"].get(name) for name in ("architecture_impact", "shared_scope", "release_impact"))
+        )
+        if independent_assurance is False and hard_independence:
+            errors.append("ASSURANCE_INDEPENDENCE_REQUIRED_BY_RISK")
     if errors:
         return None, errors
     if gate_applicability and gate_applicability["gates"]["development"]["status"] == "NOT_APPLICABLE" and implementation_lanes:
@@ -270,8 +283,13 @@ def _execution_topology(lanes: list[dict], risk_class: str, gate_applicability: 
     active = [item for item in lanes if item.get("required")]
     writers = [item for item in active if item.get("execution_class") == "WRITE"]
     basis = (gate_applicability or {}).get("basis") or {}
-    risk_requires_independence = risk_class == "structural" or any(
-        bool(basis.get(name)) for name in ("architecture_impact", "shared_scope", "release_impact")
+    assurance_required = any(
+        item.get("required") and item.get("execution_class") == "ASSURE"
+        for item in active
+    )
+    risk_requires_independence = assurance_required and (
+        risk_class == "structural"
+        or any(bool(basis.get(name)) for name in ("architecture_impact", "shared_scope", "release_impact"))
     )
     independent_assurance = risk_requires_independence or independent_assurance_proposal is True
     local_writer_reuse = risk_class == "local" and len(writers) == 1
@@ -350,9 +368,7 @@ def route(text: str, tech_stack: dict | None = None, proposal: dict | None = Non
     proposed_implementation = selected["implementation_lanes"]
     independent_assurance_proposal = selected["independent_assurance"]
     gate_applicability = selected["gate_applicability"]
-    gate_status = lambda name, fallback=True: (
-        gate_applicability["gates"][name]["status"] if gate_applicability else ("REQUIRED" if fallback else "NOT_APPLICABLE")
-    )
+    gate_status = lambda name, fallback=True: gate_applicability["gates"][name]["status"]
     gate_is_required = lambda name, fallback=True: gate_status(name, fallback) != "NOT_APPLICABLE"
     lanes = [
         lane(

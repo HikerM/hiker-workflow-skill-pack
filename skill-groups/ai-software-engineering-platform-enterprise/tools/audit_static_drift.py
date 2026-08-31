@@ -70,6 +70,9 @@ def audit(suite: Path = SUITE) -> dict[str, Any]:
         errors.append("capability metadata authority marker is missing")
     if "from capability_metadata import" not in route_contract or "from capability_metadata import" not in suite_router:
         errors.append("routing metadata is duplicated instead of derived from capability_metadata")
+    for dead_map in ("FRONTEND_TOKENS", "BACKEND_TOKENS", "CLIENT_TOKENS"):
+        if dead_map in suite_router:
+            errors.append(f"dead semantic token authority remains in suite_router: {dead_map}")
 
     governance = _read(suite, workspace + "governance_state.py", errors)
     convergence = _read(suite, workspace + "convergence_guard.py", errors)
@@ -102,6 +105,21 @@ def audit(suite: Path = SUITE) -> dict[str, Any]:
     for token in ("bs-frontend", "bs-backend", "cs-client", "backend-service"):
         if token in task_router:
             errors.append(f"fixed architecture topology remains active: {token}")
+
+    governance_skill = _read(suite, workspace.replace("scripts/", "skills/multi-agent-project-governance/") + "SKILL.md", errors)
+    role_contract = _read(suite, workspace.replace("scripts/", "skills/multi-agent-project-governance/references/") + "agent-role-contracts.md", errors)
+    lifecycle_skill = _read(suite, workspace.replace("scripts/", "skills/task-lifecycle-manager/") + "SKILL.md", errors)
+    state_model = _read(suite, workspace.replace("scripts/", "skills/multi-agent-project-governance/references/") + "state-and-task-model.md", errors)
+    semantic_sources = governance_skill + role_contract + lifecycle_skill + state_model
+    for obsolete in (
+        "七角色控制平面",
+        "分配七类角色",
+        "总控强制执行的固定角色槽",
+        "状态只能按 `Created",
+        "合法状态：`Created",
+    ):
+        if obsolete in semantic_sources:
+            errors.append(f"obsolete fixed workflow or role ontology remains: {obsolete}")
 
     production = _production_scripts(suite, errors)
     checked_bytes = 0
@@ -140,6 +158,17 @@ def audit(suite: Path = SUITE) -> dict[str, Any]:
         "runtime_imports_added": 0,
         "default_prompt_bytes_added": 0,
         "excluded_constant_classes": ["security_protocol", "resource_hard_limit", "state_machine", "machine_contract"],
+        "static_authority_classification": {
+            "suite_router.FRONTEND_TOKENS": "DEAD_CODE_REMOVED",
+            "suite_router.BACKEND_TOKENS": "DEAD_CODE_REMOVED",
+            "suite_router.CLIENT_TOKENS": "DEAD_CODE_REMOVED",
+            "suite_router.VALID_STAGES": "DETERMINISTIC_PARSER",
+            "suite_router.VALID_ARCHITECTURES": "DETERMINISTIC_PARSER",
+            "capability_metadata.MODE_STAGES": "COMPATIBILITY_ALIAS",
+            "backend_guard.NODE_FRAMEWORKS": "DETERMINISTIC_PARSER",
+            "backend_guard.PYTHON_FRAMEWORKS": "DETERMINISTIC_PARSER",
+            "client_stack.FAMILY_MARKERS": "DETERMINISTIC_PARSER",
+        },
     }
 
 

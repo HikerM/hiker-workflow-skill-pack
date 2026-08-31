@@ -28,18 +28,6 @@ PLUGIN_DISPLAY = {
     "ai-engineering-quality": "05 质量、风险与发布",
 }
 
-FRONTEND_TOKENS = ("vue", "react", "next.js", "next", "nuxt", "angular", "svelte", "vite", "web-node")
-BACKEND_TOKENS = (
-    "nestjs", "express", "fastify", "koa", "@hapi/hapi", "fastapi", "django",
-    "flask", "litestar", "sanic", "spring boot", "spring-boot", "quarkus",
-    "micronaut", "asp.net", "microsoft.net.sdk.web", "laravel", "rails", "backend", "server",
-)
-CLIENT_TOKENS = (
-    "unity", "wpf", "winui", "winforms", "avalonia", "maui", "qt", "qml",
-    "electron", "tauri", "flutter", "android", "swiftui", "uikit", "appkit",
-    "react native", "react-native", "javafx", "swing", "lvgl",
-)
-
 VALID_STAGES = {"planning", "design", "development", "review", "testing", "merge", "release", "governance", "unknown"}
 VALID_ARCHITECTURES = {"bs", "cs", "backend", "hybrid", "tooling", "unknown"}
 VALID_MODES = {"greenfield", "brownfield", "existing", "unknown"}

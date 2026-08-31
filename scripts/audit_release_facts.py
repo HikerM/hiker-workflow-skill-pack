@@ -90,6 +90,17 @@ def sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
+def canonical_release_bytes(value: bytes) -> bytes:
+    """Match deterministic package EOL normalization without changing binaries."""
+    if b"\r\n" not in value or b"\x00" in value:
+        return value
+    try:
+        value.decode("utf-8")
+    except UnicodeDecodeError:
+        return value
+    return value.replace(b"\r\n", b"\n")
+
+
 def load_version_source(root: Path) -> dict[str, str]:
     path = root / VERSION_SOURCE
     value = json.loads(read_text(path))
@@ -437,7 +448,9 @@ def _audit_archives(
             errors.append(f"{archive_path.name}: archived manifest differs from source")
         if not source_readme_path.is_file():
             errors.append(f"{plugin_name}: source README_CN.md is missing")
-        elif sha256_bytes(archived_readme) != sha256_bytes(source_readme_path.read_bytes()):
+        elif sha256_bytes(canonical_release_bytes(archived_readme)) != sha256_bytes(
+            canonical_release_bytes(source_readme_path.read_bytes())
+        ):
             errors.append(f"{archive_path.name}: archived README_CN.md is stale")
         source_skill_count = len(list((suite / "plugins" / plugin_name / "skills").glob("*/SKILL.md")))
         if archived_skill_count != source_skill_count:

@@ -16,7 +16,7 @@ sys.path.insert(0, str(SUITE / "tools"))
 sys.path.insert(0, str(REPOSITORY / "scripts"))
 
 from audit_public_content import _scan_text
-from audit_release_facts import audit as audit_release_facts, synchronize
+from audit_release_facts import audit as audit_release_facts, canonical_release_bytes, synchronize
 from benchmark_product_assurance import benchmark as benchmark_product_assurance
 from benchmark_governance_precision import benchmark as benchmark_governance_precision
 from benchmark_delivery_velocity import benchmark as benchmark_delivery_velocity
@@ -110,6 +110,10 @@ class SelfGovernanceTests(unittest.TestCase):
         self.assertEqual(0, report["runtime_imports_added"])
         self.assertFalse(report["full_repository_scan"])
         self.assertEqual("CI_RELEASE_OR_EXPLICIT_AUDIT_ONLY", report["execution_scope"])
+        classification = report["static_authority_classification"]
+        self.assertEqual("DEAD_CODE_REMOVED", classification["suite_router.FRONTEND_TOKENS"])
+        self.assertEqual("DETERMINISTIC_PARSER", classification["suite_router.VALID_STAGES"])
+        self.assertEqual("COMPATIBILITY_ALIAS", classification["capability_metadata.MODE_STAGES"])
         with tempfile.TemporaryDirectory() as td:
             copied = Path(td) / "suite"
             shutil.copytree(SUITE, copied, ignore=shutil.ignore_patterns("dist", "__pycache__", "*.pyc"))
@@ -148,6 +152,9 @@ class SelfGovernanceTests(unittest.TestCase):
         self.assertEqual(0, report["default_token_impact"]["injected_prompt_bytes"])
 
     def test_package_facts_detect_source_change_after_candidate_build(self):
+        self.assertEqual(b"current\nreadme\n", canonical_release_bytes(b"current\r\nreadme\r\n"))
+        binary = b"binary\x00value\r\n"
+        self.assertEqual(binary, canonical_release_bytes(binary))
         with tempfile.TemporaryDirectory() as td:
             suite = Path(td) / "suite"
             plugin = suite / "plugins" / "demo"

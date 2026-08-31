@@ -36,6 +36,7 @@ def applicability(goal: str, required: set[str], risk: str = "local") -> dict:
             "architecture_impact": risk == "structural",
             "shared_scope": risk == "structural",
             "release_impact": risk == "structural",
+            "merge_required": "merge" in required,
         },
         "gates": {
             gate: {
@@ -109,6 +110,9 @@ class ResponsibilityDecouplingTests(unittest.TestCase):
         )
 
     def test_role_compatibility_collapses_to_three_execution_families(self):
+        self.assertEqual("control", role_family("CONTROL"))
+        self.assertEqual("writer", role_family("WRITE"))
+        self.assertEqual("assurance", role_family("ASSURE"))
         self.assertEqual("control", role_family("Master Agent"))
         self.assertEqual("control", role_family("Document Agent"))
         self.assertEqual("writer", role_family("Developer Agent"))

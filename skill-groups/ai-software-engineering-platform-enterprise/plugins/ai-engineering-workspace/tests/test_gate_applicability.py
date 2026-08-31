@@ -14,8 +14,8 @@ sys.path.insert(0, str(PLUGIN / "scripts"))
 
 from closure_gate import evaluate as closure_evaluate
 from dispatch_guard import observe as dispatch_observe
-from gate_applicability import GATES, SCHEMA, fingerprint, gate_required, last_applicable_state, transition_path, validate_plan
-from governance_state import create_task, init_project, set_change_contract, transition
+from gate_applicability import GATES, SCHEMA, fingerprint, gate_required, last_applicable_state, plan_for, resolve_existing_or_pending_plan, transition_path, validate_plan
+from governance_state import create_task, init_project, load_task, set_change_contract, transition
 from task_router import route
 
 
@@ -36,6 +36,7 @@ def plan(goal: str, *, required: set[str], basis: dict[str, bool] | None = None,
             "architecture_impact": False,
             "shared_scope": False,
             "release_impact": False,
+            "merge_required": False,
         },
         "gates": {
             gate: {
@@ -48,9 +49,24 @@ def plan(goal: str, *, required: set[str], basis: dict[str, bool] | None = None,
 
 
 class GateApplicabilityTests(unittest.TestCase):
-    def test_structural_risk_cannot_skip_any_gate(self):
-        with self.assertRaisesRegex(RuntimeError, "REQUIRED_GATE_CANNOT_BE_SKIPPED"):
-            validate_plan(plan("高风险变更", required=set(), risk="structural"), task_goal="高风险变更")
+    def test_structural_risk_does_not_create_work_when_no_work_exists(self):
+        normalized = validate_plan(plan("高风险待判断事项", required=set(), risk="structural"), task_goal="高风险待判断事项")
+        self.assertTrue(all(item["status"] == "NOT_APPLICABLE" for item in normalized["gates"].values()))
+
+    def test_structural_risk_deepens_assurance_only_for_existing_work(self):
+        goal = "修改一个高风险实现切片"
+        candidate = plan(goal, required={"development", "review", "testing"}, risk="structural", basis={
+            "repository_change": True,
+            "runtime_change": False,
+            "architecture_impact": False,
+            "shared_scope": False,
+            "release_impact": False,
+            "merge_required": False,
+        })
+        normalized = validate_plan(candidate, task_goal=goal)
+        self.assertEqual("NOT_APPLICABLE", normalized["gates"]["planning"]["status"])
+        self.assertEqual("NOT_APPLICABLE", normalized["gates"]["merge"]["status"])
+        self.assertEqual("NOT_APPLICABLE", normalized["gates"]["release"]["status"])
 
     def test_runtime_and_shared_contract_cannot_skip_assurance(self):
         candidate = plan(
@@ -62,6 +78,7 @@ class GateApplicabilityTests(unittest.TestCase):
                 "architecture_impact": False,
                 "shared_scope": False,
                 "release_impact": False,
+                "merge_required": True,
             },
         )
         contract = {
@@ -99,6 +116,7 @@ class GateApplicabilityTests(unittest.TestCase):
                 "architecture_impact": False,
                 "shared_scope": False,
                 "release_impact": True,
+                "merge_required": False,
             },
         )
         normalized = validate_plan(candidate, task_goal=goal, change_contract={})
@@ -106,23 +124,18 @@ class GateApplicabilityTests(unittest.TestCase):
         self.assertFalse(gate_required(task, "merge"))
         self.assertEqual("Testing", last_applicable_state(task, "release"))
 
-    def test_conditional_gate_is_model_visible_but_cannot_be_silently_skipped(self):
+    def test_unresolved_conditional_cannot_execute(self):
         goal = "先判断是否需要额外复验"
         candidate = plan(goal, required=set())
         candidate["gates"]["testing"] = {"status": "CONDITIONAL", "reason_code": "MODEL_DECISION_PENDING"}
-        normalized = validate_plan(candidate, task_goal=goal, change_contract={})
-        task = {"goal": goal, "change_contract": {}, "gate_applicability": normalized}
-        self.assertTrue(gate_required(task, "testing"))
-        with self.assertRaisesRegex(RuntimeError, "required lifecycle gate cannot be skipped: testing"):
-            transition_path(task, "Created", "Released", {"Planning"})
+        with self.assertRaisesRegex(RuntimeError, "UNRESOLVED_CONDITIONAL_CANNOT_EXECUTE:testing"):
+            validate_plan(candidate, task_goal=goal, change_contract={})
         routed = route(goal, proposal={
             "architecture": "unknown", "client_families": [], "risk_class": "local",
             "contract_change": False, "gate_applicability": candidate,
         })
-        testing = next(item for item in routed["lanes"] if item["lane"] == "testing")
-        self.assertEqual("CONDITIONAL", testing["applicability"])
-        self.assertEqual("CONDITIONAL", testing["status"])
-        self.assertEqual(0, routed["execution_topology"]["default_new_agent_count"])
+        self.assertEqual("REJECTED", routed["status"])
+        self.assertTrue(any("UNRESOLVED_CONDITIONAL_CANNOT_EXECUTE" in item for item in routed["diagnostics"]))
 
     def test_non_repository_task_can_close_without_feature_lifecycle(self):
         with tempfile.TemporaryDirectory() as td:
@@ -177,13 +190,14 @@ class GateApplicabilityTests(unittest.TestCase):
             create_task(root, ns(task_id="KG-001", goal=goal, owner_agent="Planning Agent", branch="feature/KG-001-local", base_branch="develop", affected_files=[]))
             applicability = plan(
                 goal,
-                required={"development", "merge"},
+                required={"development"},
                 basis={
                     "repository_change": True,
                     "runtime_change": False,
                     "architecture_impact": False,
                     "shared_scope": False,
                     "release_impact": False,
+                    "merge_required": False,
                 },
             )
             plan_path = root / "gate-plan.json"
@@ -191,8 +205,8 @@ class GateApplicabilityTests(unittest.TestCase):
             set_change_contract(root, self.contract_args("KG-001", plan_path, allowed_files=["README.md"]))
             developed = transition(root, ns(task_id="KG-001", to="Development", agent_role="Developer Agent", commit_id=None))
             self.assertEqual(["Planning"], developed["history"][-1]["skipped_not_applicable_states"])
-            with self.assertRaisesRegex(RuntimeError, "required lifecycle gate cannot be skipped: merge"):
-                transition(root, ns(task_id="KG-001", to="Released", agent_role="Master Agent", commit_id=None))
+            released = transition(root, ns(task_id="KG-001", to="Released", agent_role="Master Agent", commit_id=None))
+            self.assertEqual("Released", released["state"])
 
     def test_local_merge_does_not_require_non_applicable_quality_or_document_gates(self):
         with tempfile.TemporaryDirectory() as td:
@@ -208,6 +222,7 @@ class GateApplicabilityTests(unittest.TestCase):
                     "architecture_impact": False,
                     "shared_scope": False,
                     "release_impact": False,
+                    "merge_required": True,
                 },
             )
             task = {
@@ -234,6 +249,43 @@ class GateApplicabilityTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(RuntimeError, "task gate applicability is unsafe"):
             gate_required(task, "testing")
+
+        with self.assertRaisesRegex(RuntimeError, "INCOMPLETE_GATE_APPLICABILITY"):
+            resolve_existing_or_pending_plan(task, {})
+
+    def test_only_legacy_missing_plan_uses_compatibility_all_required(self):
+        legacy = {"goal": "旧任务", "change_contract": {}, "schema_version": "2.0.0"}
+        normalized = plan_for(legacy)
+        self.assertEqual("RUNTIME_LEGACY_COMPATIBILITY", normalized["authority"])
+        self.assertTrue(all(item["status"] == "REQUIRED" for item in normalized["gates"].values()))
+
+    def test_normal_new_task_does_not_use_compatibility_all_required(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            self.repo(root)
+            init_project(root, ns(project_id="PROJECT-A", architecture="unknown", version="1.0.0", database_version="unknown", api_version="unknown"))
+            goal = "修改一个明确文件"
+            created = create_task(root, ns(
+                task_id="KG-001", goal=goal, owner_agent="CONTROL",
+                branch="feature/KG-001", base_branch="develop", affected_files=[],
+            ))
+            self.assertIsNone(created["gate_applicability"])
+            self.assertEqual("NEW_TASK_MODEL_PLAN_PENDING", created["gate_plan_origin"])
+            transition(root, ns(task_id="KG-001", to="Planning", agent_role="CONTROL", commit_id=None))
+            args = self.contract_args("KG-001", root / "unused.json", allowed_files=["README.md"])
+            args.gate_plan_file = None
+            set_change_contract(root, args)
+            planned = load_task(root, "KG-001")
+            self.assertEqual("MODEL_STRUCTURED_CONTRACT", planned["gate_plan_origin"])
+            statuses = {name: item["status"] for name, item in planned["gate_applicability"]["gates"].items()}
+            self.assertEqual("REQUIRED", statuses["development"])
+            self.assertEqual("REQUIRED", statuses["merge"])
+            self.assertEqual("NOT_APPLICABLE", statuses["architecture"])
+            self.assertEqual("NOT_APPLICABLE", statuses["release"])
+            self.assertNotIn(
+                "COMPATIBILITY_FAIL_CLOSED",
+                {item["reason_code"] for item in planned["gate_applicability"]["gates"].values()},
+            )
 
     def contract_args(self, task_id: str, plan_path: Path, *, allowed_files: list[str]) -> argparse.Namespace:
         return ns(

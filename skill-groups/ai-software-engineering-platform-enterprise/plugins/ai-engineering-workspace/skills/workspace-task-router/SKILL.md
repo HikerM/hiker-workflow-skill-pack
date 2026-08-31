@@ -28,7 +28,7 @@ python <plugin-root>/scripts/task_router.py --root . --request "需求文本" --
 - 写范围重叠产生 `BLOCK_SCOPE_CONFLICT`；不同文件共享权威产生 `BLOCK_AUTHORITY_CONFLICT`。阻断理由来自真实所有权，而不是固定 frontend/backend 流程。
 - 两个真实独立范围可由模型提议并行，Runtime 验证后最多激活两个写绑定；不能证明独立时串行。
 - `contract_change=true` 才生成契约责任；`false` 或未声明不得创建虚假契约通道。
-- Assurance 是否独立由风险事实或模型提案决定。结构、高共享或发布风险不得降低独立性；普通任务不机械创建 Review/Test Agent。
+- Assurance 是否独立由风险事实或模型提案决定。结构、高共享或发布风险不得降低独立性；普通任务不机械创建独立 ASSURE 执行实体。
 - `Responsibility != Agent != Provider Session != Worktree != Task`。历史角色名只作为兼容职责标签。
 - 自动路由不扩大创建桌面任务、Worktree、合并、发布或其他外部写入权限。
 

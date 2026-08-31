@@ -13,8 +13,7 @@ from typing import Any
 from workspacelib import atomic_json, effective_budget, load_state, locked_state, read_json, repo_root, run, safe_id, state_lock, worktree_fingerprint
 from bounded_context import crop, ensure_policy, retain_checkpoints
 from convergence_guard import assess as convergence_assess
-from gate_applicability import default_plan as default_gate_plan
-from gate_applicability import gate_required, last_applicable_state, load_plan as load_gate_plan, transition_path, validate_plan as validate_gate_plan
+from gate_applicability import gate_required, last_applicable_state, resolve_existing_or_pending_plan, resolve_plan_input, transition_path
 from goal_contract import ensure_contract as ensure_goal_contract, task_binding, verify_binding
 from governance_documents import ensure_supporting_docs, render_context, render_project_state
 from governance_quality import quality_lineage, verify_quality_lineage
@@ -227,6 +226,27 @@ def create_task(root: Path, args: argparse.Namespace) -> dict[str, Any]:
     max_open = effective_budget("task", project.get("parallel_budget", {}))["max_total_active_tasks"]
     if len(open_tasks) >= max_open:
         raise RuntimeError(f"total open task budget exceeded: {len(open_tasks)}/{max_open}")
+    change_contract = {
+        "allowed_files": args.affected_files or [],
+        "allowed_modules": [],
+        "protected_modules": [],
+        "public_contract_changes": [],
+        "behavior_invariants": [],
+        "characterization_tests": [],
+        "consumer_tests": [],
+        "required_tests": [],
+        "structural_decisions": [],
+        "consumers": [],
+        "max_blast_radius": 80,
+        "file_growth_budget": {"warn_lines": 400, "block_lines": 700, "warn_growth": 80, "block_growth": 200},
+    }
+    initial_gate_plan = resolve_plan_input(
+        root,
+        task_goal=args.goal,
+        change_contract=change_contract,
+        raw_plan=getattr(args, "gate_applicability", None),
+        plan_file=getattr(args, "gate_plan_file", None),
+    )
     task = {
         "schema_version": SCHEMA,
         "project_id": project["project_id"],
@@ -241,21 +261,9 @@ def create_task(root: Path, args: argparse.Namespace) -> dict[str, Any]:
         "branch": args.branch,
         "base_branch": args.base_branch,
         "affected_files": args.affected_files or [],
-        "change_contract": {
-            "allowed_files": args.affected_files or [],
-            "allowed_modules": [],
-            "protected_modules": [],
-            "public_contract_changes": [],
-            "behavior_invariants": [],
-            "characterization_tests": [],
-            "consumer_tests": [],
-            "required_tests": [],
-            "structural_decisions": [],
-            "consumers": [],
-            "max_blast_radius": 80,
-            "file_growth_budget": {"warn_lines": 400, "block_lines": 700, "warn_growth": 80, "block_growth": 200},
-        },
-        "gate_applicability": default_gate_plan(args.goal),
+        "change_contract": change_contract,
+        "gate_applicability": initial_gate_plan,
+        "gate_plan_origin": "MODEL_SEMANTIC_SELECTION" if initial_gate_plan else "NEW_TASK_MODEL_PLAN_PENDING",
         "dependencies": getattr(args, "dependencies", None) or [],
         "commits": [],
         "review": {"status": "PENDING", "records": []},
@@ -488,28 +496,18 @@ def set_change_contract(root: Path, args: argparse.Namespace) -> dict[str, Any]:
     contract["file_growth_budget"] = budget
     gate_plan_file = getattr(args, "gate_plan_file", None)
     if gate_plan_file:
-        plan_path = Path(gate_plan_file)
-        if not plan_path.is_absolute():
-            plan_path = root / plan_path
-        plan_path = plan_path.resolve()
-        try:
-            plan_path.relative_to(root.resolve())
-        except ValueError as exc:
-            raise RuntimeError("gate applicability plan must remain inside the project root") from exc
-        task["gate_applicability"] = validate_gate_plan(
-            load_gate_plan(plan_path), task_goal=str(task.get("goal") or ""), change_contract=contract
-        )
-    else:
-        existing_gate_plan = task.get("gate_applicability") or {}
-        if not existing_gate_plan or set((existing_gate_plan.get("gates") or {}).keys()) == set(default_gate_plan()["gates"]) and all(
-            isinstance(item, dict) and item.get("reason_code") == "COMPATIBILITY_FAIL_CLOSED"
-            for item in (existing_gate_plan.get("gates") or {}).values()
-        ):
-            existing_gate_plan = default_gate_plan(str(task.get("goal") or ""), contract)
-        task["gate_applicability"] = validate_gate_plan(
-            existing_gate_plan,
+        task["gate_applicability"] = resolve_plan_input(
+            root,
             task_goal=str(task.get("goal") or ""),
             change_contract=contract,
+            plan_file=gate_plan_file,
+        )
+        task["gate_plan_origin"] = "MODEL_SEMANTIC_SELECTION"
+    else:
+        task["gate_applicability"], task["gate_plan_origin"] = resolve_existing_or_pending_plan(
+            task, contract,
+            risk_class=str(getattr(args, "risk_class", None) or "local"),
+            merge_required=getattr(args, "merge_required", None),
         )
     task["change_contract"] = contract
     task["affected_files"] = contract.get("allowed_files", [])
@@ -642,10 +640,10 @@ def validate(root: Path, full: bool = False) -> dict[str, Any]:
 def main() -> int:
     ap = argparse.ArgumentParser(); ap.add_argument("--root", default="."); sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("init"); p.add_argument("--project-id", required=True); p.add_argument("--architecture", choices=["bs", "cs", "hybrid", "backend"], required=True); p.add_argument("--version", default="0.1.0"); p.add_argument("--database-version", default="unversioned"); p.add_argument("--api-version", default="v1")
-    p = sub.add_parser("task-create"); p.add_argument("--task-id", required=True); p.add_argument("--goal", required=True); p.add_argument("--owner-agent", default="Master Agent"); p.add_argument("--ownership-lane", default="default"); p.add_argument("--branch", required=True); p.add_argument("--base-branch", default="develop"); p.add_argument("--affected-files", nargs="*")
+    p = sub.add_parser("task-create"); p.add_argument("--task-id", required=True); p.add_argument("--goal", required=True); p.add_argument("--owner-agent", default="Master Agent"); p.add_argument("--ownership-lane", default="default"); p.add_argument("--branch", required=True); p.add_argument("--base-branch", default="develop"); p.add_argument("--affected-files", nargs="*"); p.add_argument("--gate-plan-file")
     p = sub.add_parser("transition", help="deprecated compatibility entry; delegates to hikerctl"); p.add_argument("--task-id", required=True); p.add_argument("--to", choices=TASK_STATES, required=True); p.add_argument("--agent-role", required=True); p.add_argument("--commit-id"); p.add_argument("--operation-id", required=True)
     p = sub.add_parser("record"); p.add_argument("--task-id", required=True); p.add_argument("--kind", choices=["commit", "review", "test", "artifact", "document", "decision", "prohibition", "risk", "completed", "pending", "release"], required=True); p.add_argument("--value", required=True); p.add_argument("--status"); p.add_argument("--command"); p.add_argument("--reason"); p.add_argument("--agent-role", required=True)
-    p = sub.add_parser("contract-set"); p.add_argument("--task-id", required=True); p.add_argument("--agent-role", required=True); p.add_argument("--gate-plan-file"); p.add_argument("--allowed-files", nargs="*"); p.add_argument("--allowed-modules", nargs="*"); p.add_argument("--protected-modules", nargs="*"); p.add_argument("--public-contract-changes", nargs="*"); p.add_argument("--behavior-invariants", nargs="*"); p.add_argument("--characterization-tests", nargs="*"); p.add_argument("--consumer-tests", nargs="*"); p.add_argument("--required-tests", nargs="*"); p.add_argument("--structural-decisions", nargs="*"); p.add_argument("--consumers", nargs="*"); p.add_argument("--max-blast-radius", type=int); p.add_argument("--warn-lines", type=int); p.add_argument("--block-lines", type=int); p.add_argument("--warn-growth", type=int); p.add_argument("--block-growth", type=int); p.add_argument("--preempt-lines", type=int); p.add_argument("--responsibility-growth", type=int)
+    p = sub.add_parser("contract-set"); p.add_argument("--task-id", required=True); p.add_argument("--agent-role", required=True); p.add_argument("--gate-plan-file"); p.add_argument("--risk-class", choices=["local", "bounded", "structural"]); p.add_argument("--merge-required", action=argparse.BooleanOptionalAction, default=None); p.add_argument("--allowed-files", nargs="*"); p.add_argument("--allowed-modules", nargs="*"); p.add_argument("--protected-modules", nargs="*"); p.add_argument("--public-contract-changes", nargs="*"); p.add_argument("--behavior-invariants", nargs="*"); p.add_argument("--characterization-tests", nargs="*"); p.add_argument("--consumer-tests", nargs="*"); p.add_argument("--required-tests", nargs="*"); p.add_argument("--structural-decisions", nargs="*"); p.add_argument("--consumers", nargs="*"); p.add_argument("--max-blast-radius", type=int); p.add_argument("--warn-lines", type=int); p.add_argument("--block-lines", type=int); p.add_argument("--warn-growth", type=int); p.add_argument("--block-growth", type=int); p.add_argument("--preempt-lines", type=int); p.add_argument("--responsibility-growth", type=int)
     p = sub.add_parser("candidate-freeze"); p.add_argument("--task-id", required=True); p.add_argument("--candidate-id", required=True); p.add_argument("--review-source", default="independent-review"); p.add_argument("--agent-role", required=True)
     p = sub.add_parser("goal-rebind", help="deprecated compatibility entry; delegates to hikerctl"); p.add_argument("--task-id", required=True); p.add_argument("--agent-role", required=True); p.add_argument("--impact", choices=["affected", "unaffected"], default="affected"); p.add_argument("--impact-summary", required=True); p.add_argument("--retain-change", action="append", default=[]); p.add_argument("--revise-change", action="append", default=[]); p.add_argument("--retire-change", action="append", default=[]); p.add_argument("--operation-id", required=True)
     p = sub.add_parser("checkpoint", help="deprecated compatibility entry; delegates to hikerctl"); p.add_argument("--task-id", required=True); p.add_argument("--label", required=True); p.add_argument("--operation-id", required=True)

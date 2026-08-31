@@ -61,6 +61,9 @@ class CapabilityAuthorityTests(unittest.TestCase):
             "SOURCE_CONFLICT_SAFE =",
             "AI_STATE_DEPENDENT_SKILLS =",
             "VERSION_RECOVERY_SKILLS =",
+            "FRONTEND_TOKENS =",
+            "BACKEND_TOKENS =",
+            "CLIENT_TOKENS =",
         ):
             self.assertNotIn(duplicate, router)
         self.assertNotIn("CAPABILITY_FAMILIES: dict", contract)

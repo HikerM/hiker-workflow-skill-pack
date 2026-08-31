@@ -19,7 +19,12 @@ GATES = (
     "release",
 )
 STATUSES = {"REQUIRED", "CONDITIONAL", "NOT_APPLICABLE"}
-AUTHORITIES = {"CHATGPT_SEMANTIC_SELECTION", "USER_EXPLICIT_CONSTRAINT"}
+EXECUTABLE_STATUSES = {"REQUIRED", "NOT_APPLICABLE"}
+AUTHORITIES = {
+    "CHATGPT_SEMANTIC_SELECTION",
+    "USER_EXPLICIT_CONSTRAINT",
+    "RUNTIME_LEGACY_COMPATIBILITY",
+}
 RISK_CLASSES = {"local", "bounded", "structural"}
 BASIS_FIELDS = {
     "repository_change",
@@ -27,6 +32,7 @@ BASIS_FIELDS = {
     "architecture_impact",
     "shared_scope",
     "release_impact",
+    "merge_required",
 }
 STATE_GATES = {
     "Planning": "planning",
@@ -55,25 +61,194 @@ def fingerprint(value: str) -> str:
 
 def default_plan(task_goal: str = "", change_contract: dict[str, Any] | None = None) -> dict[str, Any]:
     """Fail-closed compatibility for tasks created before applicability existed."""
-    contract = change_contract or {}
     return {
         "schema_version": SCHEMA,
-        "authority": "CHATGPT_SEMANTIC_SELECTION",
+        "authority": "RUNTIME_LEGACY_COMPATIBILITY",
         "task_intent_fingerprint": fingerprint(task_goal),
         "deliverable_fingerprint": fingerprint("compatibility-all-required"),
         "risk_class": "structural",
         "basis": {
-            "architecture_impact": bool(contract.get("structural_decisions")),
-            "release_impact": False,
-            "repository_change": bool(contract.get("allowed_files") or contract.get("allowed_modules")),
-            "runtime_change": bool(contract.get("required_tests") or contract.get("characterization_tests") or contract.get("consumer_tests")),
-            "shared_scope": bool(contract.get("public_contract_changes") or contract.get("consumers")),
+            "architecture_impact": True,
+            "release_impact": True,
+            "repository_change": True,
+            "runtime_change": True,
+            "shared_scope": True,
+            "merge_required": True,
         },
         "gates": {
             name: {"status": "REQUIRED", "reason_code": "COMPATIBILITY_FAIL_CLOSED"}
             for name in GATES
         },
     }
+
+
+def _required_gates(risk_class: str, basis: dict[str, bool]) -> set[str]:
+    """Project explicit work into required gates without inventing absent work."""
+    required: set[str] = set()
+    if basis.get("repository_change"):
+        required.add("development")
+    if basis.get("runtime_change"):
+        required.update({"development", "testing"})
+    if basis.get("architecture_impact"):
+        required.update({"planning", "architecture", "review", "testing", "documentation"})
+    if basis.get("shared_scope"):
+        required.update({"planning", "review", "testing"})
+    if basis.get("release_impact"):
+        required.update({"review", "testing", "documentation", "release"})
+    if basis.get("merge_required"):
+        required.add("merge")
+
+    work_exists = any(basis.values())
+    if work_exists and risk_class == "bounded":
+        required.add("review")
+    elif work_exists and risk_class == "structural":
+        required.update({"review", "testing"})
+    return required
+
+
+def plan_from_model_proposal(task_goal: str, proposal: dict[str, Any]) -> dict[str, Any]:
+    """Build a machine-valid plan only from the model's structured work facts."""
+    lanes = proposal.get("implementation_lanes")
+    lanes = lanes if isinstance(lanes, list) else []
+    risk_class = str(proposal.get("risk_class") or "bounded").lower()
+    basis = {
+        "repository_change": bool(proposal.get("repository_change")) or bool(lanes),
+        "runtime_change": bool(proposal.get("runtime_change")),
+        "architecture_impact": bool(proposal.get("architecture_impact")),
+        "shared_scope": bool(proposal.get("shared_scope")) or proposal.get("contract_change") is True,
+        "release_impact": bool(proposal.get("release_impact")),
+        "merge_required": bool(proposal.get("merge_required")),
+    }
+    required = _required_gates(risk_class, basis)
+    deliverable = json.dumps(
+        {"basis": basis, "lanes": lanes, "risk_class": risk_class},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return validate_plan({
+        "schema_version": SCHEMA,
+        "authority": "CHATGPT_SEMANTIC_SELECTION",
+        "task_intent_fingerprint": fingerprint(task_goal),
+        "deliverable_fingerprint": fingerprint(deliverable),
+        "risk_class": risk_class,
+        "basis": basis,
+        "gates": {
+            name: {
+                "status": "REQUIRED" if name in required else "NOT_APPLICABLE",
+                "reason_code": "MODEL_STRUCTURED_WORK" if name in required else "NO_STRUCTURED_WORK_FACT",
+            }
+            for name in GATES
+        },
+    }, task_goal=task_goal)
+
+
+def plan_from_change_contract(
+    task_goal: str,
+    change_contract: dict[str, Any],
+    *,
+    risk_class: str = "local",
+    merge_required: bool = False,
+) -> dict[str, Any]:
+    """Project a CONTROL-authored structured contract; never inspect prose keywords."""
+    scope = list(change_contract.get("allowed_files") or []) + list(change_contract.get("allowed_modules") or [])
+    return plan_from_model_proposal(task_goal, {
+        "risk_class": risk_class,
+        "repository_change": bool(scope),
+        "runtime_change": bool(
+            change_contract.get("required_tests")
+            or change_contract.get("characterization_tests")
+            or change_contract.get("consumer_tests")
+        ),
+        "architecture_impact": bool(change_contract.get("structural_decisions")),
+        "shared_scope": bool(change_contract.get("public_contract_changes") or change_contract.get("consumers")),
+        "release_impact": False,
+        "merge_required": merge_required,
+        "implementation_lanes": [{"scope": item} for item in scope],
+    })
+
+
+def resolve_plan_input(
+    root: Path,
+    *,
+    task_goal: str,
+    change_contract: dict[str, Any],
+    raw_plan: dict[str, Any] | None = None,
+    plan_file: str | None = None,
+) -> dict[str, Any] | None:
+    """Load one bounded semantic plan source without widening Task-writer duties."""
+    if raw_plan is not None and plan_file:
+        raise RuntimeError("one semantic gate plan source is allowed")
+    if plan_file:
+        path = Path(plan_file)
+        if not path.is_absolute():
+            path = root / path
+        path = path.resolve()
+        try:
+            path.relative_to(root.resolve())
+        except ValueError as exc:
+            raise RuntimeError("gate applicability plan must remain inside the project root") from exc
+        raw_plan = load_plan(path)
+    if raw_plan is None:
+        return None
+    if not isinstance(raw_plan, dict):
+        raise RuntimeError("gate applicability plan must be a JSON object")
+    return validate_plan(raw_plan, task_goal=task_goal, change_contract=change_contract)
+
+
+def plan_from_pending_contract(
+    task: dict[str, Any],
+    change_contract: dict[str, Any],
+    *,
+    risk_class: str | None = None,
+    merge_required: bool | None = None,
+) -> dict[str, Any]:
+    """Resolve a new task at Planning from structured scope and integration facts."""
+    integration_required = (
+        bool(merge_required)
+        if merge_required is not None
+        else bool(
+            (change_contract.get("allowed_files") or change_contract.get("allowed_modules"))
+            and task.get("branch")
+            and task.get("base_branch")
+            and task.get("branch") != task.get("base_branch")
+        )
+    )
+    return plan_from_change_contract(
+        str(task.get("goal") or ""),
+        change_contract,
+        risk_class=str(risk_class or "local"),
+        merge_required=integration_required,
+    )
+
+
+def resolve_existing_or_pending_plan(
+    task: dict[str, Any],
+    change_contract: dict[str, Any],
+    *,
+    risk_class: str | None = None,
+    merge_required: bool | None = None,
+) -> tuple[dict[str, Any], str]:
+    plan = task.get("gate_applicability")
+    if not isinstance(plan, dict) and task.get("gate_plan_origin") == "NEW_TASK_MODEL_PLAN_PENDING":
+        return plan_from_pending_contract(
+            task, change_contract, risk_class=risk_class, merge_required=merge_required,
+        ), "MODEL_STRUCTURED_CONTRACT"
+    gates = plan.get("gates") if isinstance(plan, dict) else None
+    is_legacy_compatibility = (
+        isinstance(gates, dict)
+        and set(gates) == set(GATES)
+        and all(
+            isinstance(item, dict) and item.get("reason_code") == "COMPATIBILITY_FAIL_CLOSED"
+            for item in gates.values()
+        )
+    )
+    if not isinstance(plan, dict) or is_legacy_compatibility:
+        plan = default_plan(str(task.get("goal") or ""), change_contract)
+        return validate_plan(plan, task_goal=str(task.get("goal") or ""), change_contract=change_contract), "LEGACY_FAIL_CLOSED"
+    return validate_plan(
+        plan, task_goal=str(task.get("goal") or ""), change_contract=change_contract,
+    ), str(task.get("gate_plan_origin") or "MODEL_SEMANTIC_SELECTION")
 
 
 def load_plan(path: Path) -> dict[str, Any]:
@@ -130,27 +305,21 @@ def validate_plan(
             continue
         status = str(item.get("status") or "")
         reason_code = str(item.get("reason_code") or "")
-        if status not in STATUSES:
+        if status == "CONDITIONAL":
+            errors.append(f"UNRESOLVED_CONDITIONAL_CANNOT_EXECUTE:{name}")
+        elif status not in EXECUTABLE_STATUSES:
             errors.append(f"INVALID_GATE_STATUS:{name}")
         if not re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", reason_code):
             errors.append(f"INVALID_GATE_REASON:{name}")
         normalized_gates[name] = {"status": status, "reason_code": reason_code}
 
-    required: set[str] = set()
-    if risk_class == "structural":
-        required.update(GATES)
-    if basis.get("repository_change"):
-        required.update({"development", "merge"})
-    if basis.get("runtime_change"):
-        required.add("testing")
-    if basis.get("architecture_impact"):
-        required.update({"planning", "architecture", "review", "testing", "documentation"})
-    if basis.get("shared_scope"):
-        required.update({"planning", "review", "testing"})
-    if basis.get("release_impact"):
-        required.update({"review", "testing", "documentation", "release"})
+    required = _required_gates(risk_class, basis)
+    if basis.get("merge_required") and not basis.get("repository_change"):
+        errors.append("MERGE_REQUIRES_REPOSITORY_CHANGE")
+    if normalized_gates.get("merge", {}).get("status") == "REQUIRED" and not basis.get("merge_required"):
+        errors.append("MERGE_GATE_REQUIRES_INTEGRATION_FACT")
 
-    if change_contract is not None:
+    if change_contract is not None and authority != "RUNTIME_LEGACY_COMPATIBILITY":
         has_scope = bool(change_contract.get("allowed_files") or change_contract.get("allowed_modules"))
         has_tests = bool(
             change_contract.get("required_tests")
@@ -194,6 +363,8 @@ def validate_plan(
 def plan_for(task: dict[str, Any]) -> dict[str, Any]:
     plan = task.get("gate_applicability")
     if not isinstance(plan, dict):
+        if task.get("gate_plan_origin") == "NEW_TASK_MODEL_PLAN_PENDING":
+            raise RuntimeError("NORMAL_NEW_TASK_REQUIRES_SEMANTIC_GATE_PLAN")
         plan = default_plan(str(task.get("goal") or ""), task.get("change_contract") or {})
     elif set((plan.get("gates") or {}).keys()) == set(GATES) and all(
         isinstance(item, dict) and item.get("reason_code") == "COMPATIBILITY_FAIL_CLOSED"
@@ -209,7 +380,7 @@ def plan_for(task: dict[str, Any]) -> dict[str, Any]:
 def gate_required(task: dict[str, Any], gate: str) -> bool:
     if gate not in GATES:
         raise RuntimeError(f"unknown lifecycle gate: {gate}")
-    return plan_for(task)["gates"][gate]["status"] != "NOT_APPLICABLE"
+    return plan_for(task)["gates"][gate]["status"] == "REQUIRED"
 
 
 def last_applicable_state(task: dict[str, Any], before_gate: str) -> str:
@@ -228,6 +399,10 @@ def last_applicable_state(task: dict[str, Any], before_gate: str) -> str:
 
 def transition_path(task: dict[str, Any], current: str, target: str, legacy_targets: set[str]) -> list[str]:
     """Return skipped states; legacy adjacent/rework transitions remain compatible."""
+    if not isinstance(task.get("gate_applicability"), dict) and task.get("gate_plan_origin") == "NEW_TASK_MODEL_PLAN_PENDING":
+        if current == "Created" and target == "Planning":
+            return []
+        raise RuntimeError("NORMAL_NEW_TASK_REQUIRES_SEMANTIC_GATE_PLAN")
     if target in legacy_targets:
         return []
     if current not in STATE_ORDER or target not in STATE_ORDER:

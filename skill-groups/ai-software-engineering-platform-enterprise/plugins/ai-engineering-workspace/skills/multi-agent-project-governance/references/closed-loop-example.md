@@ -1,12 +1,14 @@
 # 端到端示例：KG-001 统一账户登录
 
-1. Master Agent读取项目状态，创建 `KG-001`，目标为“Web 与 Unity 客户端使用同一后端登录”。
-2. Planning Agent拆出 `bs-frontend`、`cs-client`、`contract-data`、`bs/cs-backend`，定义 401、锁定、刷新令牌和离线场景。
-3. Merge Agent/项目维护者确保 develop 存在；Developer Agent分别创建 `feature/KG-001-web-login`、`feature/KG-001-unity-login`、`feature/KG-001-auth-api` Worktree。
-4. API Contract 串行定版并锁定；Unity Agent锁定相关 Prefab 与 meta；NodeTS Agent锁定 AuthService 与 migration。
-5. 每个 Developer 完成实现和单测，提交 `feat(auth): implement KG-001 login`，记录 Commit ID，释放锁。
-6. Review Agent独立检查权限、协议兼容、Unity生命周期与重复实现，输出 PASS 或退回 Development。
-7. Test Agent运行后端/API、Web E2E、Unity PlayMode/设备验证，保存日志和截图。
-8. Document Agent更新 CHANGELOG；架构变化则更新 ARCHITECTURE，否则记录带理由的 NOT_APPLICABLE。
-9. 闭环门禁通过后，Merge Agent按依赖顺序合并到 develop，解决冲突时保留双方意图并复测。
-10. Master Agent更新 PROJECT_STATE，在发布候选通过迁移、回滚和冒烟验证后推进 Merged → Released。
+本例的结构化计划明确声明planning、development、review、testing、documentation、merge和release均适用；它不是普通Task的固定流程模板。
+
+1. CONTROL读取项目状态并创建`KG-001`，目标为“Web 与 Unity 客户端使用同一后端登录”。
+2. CONTROL按真实所有权拆出Web、Unity、合同与后端WRITE范围，定义401、锁定、刷新令牌和离线场景。
+3. 仅因这些WRITE范围已证明独立，CONTROL按预算建立必要Worktree；职责标签不产生额外Agent。
+4. API Contract串行定版并锁定；Unity WRITE通道锁定相关Prefab与meta，NodeTS WRITE通道锁定AuthService与migration。
+5. 每个适用WRITE通道完成实现和单测，提交`feat(auth): implement KG-001 login`，记录Commit ID并释放锁。
+6. 独立ASSURE检查权限、协议兼容、Unity生命周期与重复实现，输出PASS或退回WRITE修复。
+7. ASSURE运行后端/API、Web E2E、Unity PlayMode/设备验证，保存范围化日志和截图。
+8. CONTROL更新CHANGELOG；架构变化则更新ARCHITECTURE，否则保留确定性NOT_APPLICABLE。
+9. 适用Gate闭合后，获授权的CONTROL按依赖顺序合并到develop并复验冲突面。
+10. release Gate适用且迁移、回滚和冒烟证据通过后，CONTROL推进到Released。

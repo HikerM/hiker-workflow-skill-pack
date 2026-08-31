@@ -32,6 +32,7 @@ def applicability(goal: str, required: set[str], *, risk: str = "local") -> dict
             "architecture_impact": risk == "structural",
             "shared_scope": risk == "structural",
             "release_impact": risk == "structural",
+            "merge_required": "merge" in required,
         },
         "gates": {
             gate: {

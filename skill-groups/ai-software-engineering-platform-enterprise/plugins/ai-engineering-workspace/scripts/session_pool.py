@@ -26,6 +26,9 @@ RELEASE_BLOCKING_STATES = {"PAUSED_DIRTY", "RELEASE_PENDING", "ARCHIVE_REQUESTED
 TERMINAL_OUTCOMES = {"PASS", "FAIL", "CANCELLED", "SUPERSEDED"}
 RESERVATION_TTL_SECONDS = 120
 ROLE_FAMILIES = {
+    "control": "control",
+    "write": "writer",
+    "assure": "assurance",
     "master agent": "control",
     "planning agent": "control",
     "developer agent": "writer",

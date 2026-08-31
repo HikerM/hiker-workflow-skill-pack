@@ -188,11 +188,12 @@ class WorkspaceTests(unittest.TestCase):
                 session_plan(root, "PROJECT-A", "KG-001", "Developer Agent", str(root), "base-a", "EMPTY_CONFIRMED")
             self.assertEqual("{damaged", pool_path.read_text(encoding="utf-8"))
 
-    def test_router_auto_parallel_skips_unchanged_contract_lane(self):
+    def test_router_does_not_create_work_from_architecture_label(self):
         data = route("局部调整前后端现有实现", proposal={"architecture": "bs", "client_families": [], "risk_class": "local", "contract_change": False})
         names = {item["lane"] for item in data["lanes"]}
         self.assertNotIn("contract-data", names)
-        self.assertIn("implementation", names)
+        self.assertNotIn("implementation", names)
+        self.assertTrue(all(item["status"] == "NOT_APPLICABLE" for item in data["lanes"]))
         self.assertFalse({"bs-frontend", "backend-service"} & names)
         self.assertEqual("auto-safe", data["policy"]["parallel_mode"])
         self.assertEqual("project_id plus repository root plus task_id plus ownership_lane", data["policy"]["context_isolation"])
@@ -397,14 +398,14 @@ class WorkspaceTests(unittest.TestCase):
         init_project(root, ns(project_id="PROJECT-A", architecture="hybrid", version="1.0.0", database_version="001", api_version="v1"))
         create_task(root, ns(task_id=task_id, goal="登录", owner_agent="Planning Agent", branch=branch, base_branch="develop", affected_files=["src/AuthService.ts"]))
         transition(root, ns(task_id=task_id, to="Planning", agent_role="Planning Agent", commit_id=None))
-        set_change_contract(root, ns(task_id=task_id, agent_role="Planning Agent", allowed_files=["src/AuthService.ts", "evidence.log", "CHANGELOG.md", "ARCHITECTURE.md"], allowed_modules=None, protected_modules=None, public_contract_changes=None, behavior_invariants=["原有认证行为保持不变"], characterization_tests=[], consumer_tests=[], required_tests=["认证单测", "登录回归"], consumers=[], max_blast_radius=80, warn_lines=None, block_lines=None, warn_growth=None, block_growth=None))
+        set_change_contract(root, ns(task_id=task_id, agent_role="Planning Agent", risk_class="bounded", merge_required=True, allowed_files=["src/AuthService.ts", "evidence.log", "CHANGELOG.md", "ARCHITECTURE.md"], allowed_modules=None, protected_modules=None, public_contract_changes=None, behavior_invariants=["原有认证行为保持不变"], characterization_tests=[], consumer_tests=[], required_tests=["认证单测", "登录回归"], consumers=[], max_blast_radius=80, warn_lines=None, block_lines=None, warn_growth=None, block_growth=None))
         transition(root, ns(task_id=task_id, to="Development", agent_role="Developer Agent", commit_id=None))
 
     def test_architecture_label_does_not_force_frontend_backend_or_client_lanes(self):
         data = route("设计 B/S 管理端和 C/S Unity 客户端，共享 NodeTS 后端", proposal={"architecture":"hybrid", "client_families":["unity"]})
         names = {item["lane"] for item in data["lanes"]}
         self.assertEqual("hybrid", data["architecture"])
-        self.assertIn("implementation", names)
+        self.assertNotIn("implementation", names)
         self.assertFalse({"bs-frontend", "cs-client", "backend-service", "contract-data"} & names)
         self.assertIn("coarse classification only", data["policy"]["architecture_label"])
         self.assertTrue(all(item.get("agent_role") for item in data["lanes"]))
@@ -414,7 +415,7 @@ class WorkspaceTests(unittest.TestCase):
             with self.subTest(prompt=prompt):
                 data=route(prompt, proposal={"architecture":"cs", "client_families":[expected]}); names={item["lane"] for item in data["lanes"]}
                 self.assertEqual("cs",data["architecture"]);self.assertIn(expected,data["client_families"])
-                self.assertIn("implementation", names)
+                self.assertNotIn("implementation", names)
                 self.assertFalse({"cs-client","backend-service","contract-data"} & names)
 
     def test_unknown_architecture_accepts_model_proposed_real_surface(self):

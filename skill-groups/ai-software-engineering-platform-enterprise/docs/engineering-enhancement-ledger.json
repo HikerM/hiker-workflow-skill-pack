@@ -53,6 +53,28 @@
       "VERSION_INTRODUCED": "NEXT_UNRELEASED",
       "CURRENT_AUTHORITY": "Existing Task Contract; ChatGPT selects semantics, an external task-bounded observed-fact catalog supplies evidence receipts, and the runtime validates invariants",
       "REAL_PROJECT_OUTCOME": "The same read-only UI field was rerun without authored source changes. All artifact, actor, usage, risk and project refs resolved in an external bounded catalog; acceptance labels were explicitly non-authoritative semantics; 23 focused tests and affected plugin gates passed."
+    },
+    {
+      "ENHANCEMENT_ID": "NEXT-02-STRUCTURAL-CHANGE-DECISION",
+      "PROBLEM": "Existing architecture, impact, implementation and decision capabilities do not provide one evidence-grounded model-native contract for choosing whether to modify, abstract, consolidate, delete or keep the current structure.",
+      "TARGET_CAPABILITY": "Model-native Structural Change Decision Intelligence under the existing Task Contract",
+      "WHY": "Preserve model freedom while deterministically rejecting fabricated, stale, unsafe, contradictory or unbounded structural decisions.",
+      "IMPLEMENTATION_STATUS": "DISCOVERED",
+      "STATUS_HISTORY": [
+        {
+          "phase": "NEXT-02_AUDIT",
+          "status": "DISCOVERED",
+          "basis": "The bounded capability audit identified reusable fact sources, one legacy overlapping input and the missing unified five-action decision contract; no production implementation exists yet."
+        }
+      ],
+      "SOURCE_EVIDENCE": [
+        "docs/NEXT-02-STRUCTURAL-CHANGE-DECISION.md"
+      ],
+      "TEST_EVIDENCE": [],
+      "FIELD_EVIDENCE": [],
+      "VERSION_INTRODUCED": "NEXT_UNRELEASED",
+      "CURRENT_AUTHORITY": "Existing Task Contract remains authoritative; ChatGPT will select semantics and deterministic runtime validation will only enforce grounded prerequisites.",
+      "REAL_PROJECT_OUTCOME": "NOT_RUN"
     }
   ]
 }

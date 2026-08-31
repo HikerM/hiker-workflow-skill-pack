@@ -18,6 +18,10 @@ jobs:
     env:
       PYTHONUTF8: "1"
     steps:
+      - name: Configure deterministic Git line endings
+        shell: pwsh
+        run: git config --global core.autocrlf false
+
       - name: Check out candidate
         uses: actions/checkout@v4
 

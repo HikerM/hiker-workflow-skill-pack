@@ -10,7 +10,7 @@ from typing import Any
 
 from session_pool import load_pool, resolved_slot_key, role_family, runtime_identity, runtime_registration_id
 from process_identity import pid_presence
-from workspacelib import atomic_json, locked_state, repo_root, safe_id
+from workspacelib import atomic_json, locked_state, repo_root, run, safe_id
 
 
 SCHEMA = "1.0.0"
@@ -24,10 +24,7 @@ def worktree_probe(repository: Path, worktree: str | None) -> dict[str, Any]:
     if not worktree:
         return {"status": "NOT_REGISTERED", "path": None, "clean": None}
     target = Path(worktree).resolve()
-    result = subprocess.run(
-        ["git", "worktree", "list", "--porcelain"], cwd=str(repository), text=True,
-        encoding="utf-8", errors="replace", stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
-    )
+    result = run(["git", "worktree", "list", "--porcelain"], repository, check=False)
     if result.returncode != 0:
         return {"status": "PROBE_ERROR", "path": str(target), "clean": None}
     registered = {
@@ -38,10 +35,7 @@ def worktree_probe(repository: Path, worktree: str | None) -> dict[str, Any]:
         return {"status": "CLOSED", "path": str(target), "clean": True}
     if target not in registered:
         return {"status": "UNREGISTERED_PATH_EXISTS", "path": str(target), "clean": False}
-    status = subprocess.run(
-        ["git", "status", "--porcelain"], cwd=str(target), text=True,
-        encoding="utf-8", errors="replace", stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
-    )
+    status = run(["git", "status", "--porcelain"], target, check=False)
     if status.returncode != 0:
         return {"status": "PROBE_ERROR", "path": str(target), "clean": None}
     clean = not status.stdout.strip()

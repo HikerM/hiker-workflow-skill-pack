@@ -14,7 +14,7 @@ from unittest.mock import patch
 PLUGIN = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PLUGIN / "scripts"))
 
-from community_pro_bridge import detect_pro_runtime, invoke_bridge, query_project_facts, router_boundary_adoption
+from community_pro_bridge import bounded_machine_run, detect_pro_runtime, invoke_bridge, query_project_facts, router_boundary_adoption
 import suite_router
 
 
@@ -67,6 +67,15 @@ def _adoption(command: str = "attach", status: str = "LIVE_SESSION_ADOPTED") -> 
 
 
 class CommunityProBridgeTests(unittest.TestCase):
+    def test_real_machine_capture_bounds_a_single_huge_line(self):
+        completed = bounded_machine_run(
+            [sys.executable, "-c", "import sys;sys.stdout.write('x'*(2*1024*1024));sys.stderr.write('y'*(512*1024))"],
+            timeout=10,
+        )
+        self.assertEqual(0, completed.returncode)
+        self.assertLessEqual(len(completed.stdout.encode("utf-8")), 512 * 1024)
+        self.assertLessEqual(len(completed.stderr.encode("utf-8")), 128 * 1024)
+
     def test_missing_pro_runtime_falls_back_without_project_scan(self):
         with patch("community_pro_bridge.shutil.which", return_value=None):
             report = detect_pro_runtime({})

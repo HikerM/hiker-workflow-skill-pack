@@ -148,6 +148,12 @@ def admit(
     ) if routed.get("accepted") else ([], [])
     task = load_task(root, task_id)
     goal = check_goal(root, task)
+    coordination = {"ok": True, "status": "NOT_REQUIRED", "blockers": [], "warnings": []}
+    stage = str(proposal.get("stage") or "unknown").lower()
+    if task_id or stage in GOVERNED_STAGES:
+        coordination = workspace_module("goal_coordination").evaluate(
+            root, task_id=task_id, changed_paths=changed
+        )
     locks = check_locks(root, task_id, changed) if goal["ok"] else {
         "ok": False,
         "status": "SKIPPED_GOAL_STALE",
@@ -155,9 +161,11 @@ def admit(
     all_diagnostics = list(routed.get("diagnostics", [])) + diagnostics
     if not goal["ok"]:
         all_diagnostics.append({"code": "GOAL_BINDING_STALE", "message": "Task绑定的目标修订或指纹已过期"})
+    if not coordination.get("ok"):
+        for item in coordination.get("blockers", []):
+            all_diagnostics.append({"code": item.get("code", "GOAL_COORDINATION_BLOCKED"), "message": "活动目标或项目变动存在冲突，必须等待收敛"})
     if not locks.get("ok"):
         all_diagnostics.append({"code": "FILE_LOCK_GATE", "message": "变更文件存在缺失锁或所有权冲突"})
-    stage = str(proposal.get("stage") or "unknown").lower()
     epoch = {"status": "NOT_REQUIRED", "rotation_required": False}
     if (ai_root(root) / "schema.json").is_file() and (task_id or stage in GOVERNED_STAGES):
         epoch_report = assess_epoch(root)
@@ -202,6 +210,7 @@ def admit(
             "revision": goal.get("revision"),
             "fingerprint": goal.get("fingerprint"),
         },
+        "goal_coordination": coordination,
         "task": task.get("task_id") if task else None,
         "phase": stage,
         "allowed_skills": [

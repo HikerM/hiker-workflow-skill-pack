@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from corelib import ai_root, atomic_write_json, read_json, sha256_file, utc_now
+from source_surface import TraversalBudget, walk_source_files
 
 DEFAULT_MEMORY_POLICY = {
     "schema_version": "1.1.0",
@@ -127,9 +128,13 @@ def archive_checkpoint(root: Path, path: Path, data: dict[str, Any]) -> tuple[st
         with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as bundle:
             bundle.write(path, arcname=path.name)
             if state_dir.is_dir():
-                for item in sorted(state_dir.rglob("*")):
-                    if item.is_file():
-                        bundle.write(item, arcname=(Path("state") / item.relative_to(state_dir)).as_posix())
+                items, _ = walk_source_files(
+                    state_dir,
+                    TraversalBudget(max_depth=12,max_directories=2048,max_entries=10000,max_files=10000,max_observed_bytes=512*1024*1024,max_elapsed_ms=10000),
+                    ignored_directories=frozenset(),
+                )
+                for item in items:
+                    bundle.write(item, arcname=(Path("state") / item.relative_to(state_dir)).as_posix())
     index = ai_root(root) / "archive" / "checkpoints" / "index.jsonl"
     with index.open("a", encoding="utf-8", newline="\n") as handle:
         handle.write(json.dumps({"name": path.name, "created_at": data.get("created_at"), "archive": archive.relative_to(ai_root(root)).as_posix(), "sha256": sha256_file(archive)}, ensure_ascii=False) + "\n")
@@ -142,7 +147,12 @@ def enforce_checkpoint_retention(root: Path) -> dict[str, Any]:
     folder.mkdir(parents=True, exist_ok=True)
     ledger_path = ai_root(root) / "runtime" / "checkpoint-ledger.json"
     records: list[tuple[Path, dict[str, Any]]] = []
-    for path in folder.glob("*.json"):
+    paths, _ = walk_source_files(
+        folder,
+        TraversalBudget(max_depth=0,max_directories=1,max_entries=4096,max_files=4096,max_observed_bytes=128*1024*1024,max_elapsed_ms=2000),
+        ignored_directories=frozenset(),include=lambda item:item.suffix.lower()==".json",
+    )
+    for path in paths:
         data = read_json(path, {}) or {}
         if isinstance(data, dict):
             records.append((path, data))
@@ -200,7 +210,7 @@ def enforce_checkpoint_retention(root: Path) -> dict[str, Any]:
 
 
 def memory_status(root: Path) -> dict[str, Any]:
-    policy = ensure_memory_policy(root)
+    policy = read_memory_policy(root)
     active = ai_root(root) / "runtime" / "active-context.md"
     ledger = read_json(ai_root(root) / "runtime" / "checkpoint-ledger.json", {}) or {}
     return {

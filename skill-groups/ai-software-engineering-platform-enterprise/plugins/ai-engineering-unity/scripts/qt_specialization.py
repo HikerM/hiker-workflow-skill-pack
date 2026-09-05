@@ -3,10 +3,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import re
+import sys
 from pathlib import Path
 from typing import Any, Iterable
+
+CORE_SCRIPTS=Path(__file__).resolve().parents[2]/"ai-engineering-core"/"scripts"
+if str(CORE_SCRIPTS) not in sys.path:sys.path.insert(0,str(CORE_SCRIPTS))
+from source_surface import TraversalBudget,read_bounded_text,walk_source_files
 
 
 SKIP = {".git", ".ai", "build", "bin", "obj", "dist", ".venv", "venv", "node_modules"}
@@ -14,24 +18,13 @@ SUFFIXES = {".cpp", ".cc", ".cxx", ".h", ".hpp", ".qml", ".ui", ".qrc", ".pro", 
 
 
 def bounded_files(root: Path, max_depth: int = 7, max_files: int = 4000) -> tuple[list[Path], bool]:
-    root = root.resolve(); found: list[Path] = []
-    for dirpath, dirnames, filenames in os.walk(root):
-        current = Path(dirpath); rel = current.relative_to(root)
-        dirnames[:] = sorted(name for name in dirnames if name not in SKIP)
-        if len(rel.parts) >= max_depth:
-            dirnames[:] = []
-        for name in sorted(filenames):
-            path = current / name
-            if path.suffix.lower() in SUFFIXES or name in {"CMakeLists.txt", "qt.conf"}:
-                found.append(path)
-                if len(found) >= max_files:
-                    return found, True
-    return found, False
+    root=root.resolve();paths,_=walk_source_files(root,TraversalBudget(max_depth=max_depth,max_directories=4096,max_entries=50000,max_files=max(20000,max_files*10),max_observed_bytes=2*1024*1024*1024,max_elapsed_ms=10000),ignored_directories=frozenset(name.casefold() for name in SKIP),include=lambda path:path.stat().st_size<=8*1024*1024 and (path.suffix.lower() in SUFFIXES or path.name in {"CMakeLists.txt","qt.conf"}))
+    return paths[:max_files],len(paths)>max_files
 
 
 def text(path: Path) -> str:
     try:
-        return path.read_text(encoding="utf-8", errors="ignore")
+        value,truncated=read_bounded_text(path,8*1024*1024);return "" if truncated else value
     except OSError:
         return ""
 

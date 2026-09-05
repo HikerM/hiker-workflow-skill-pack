@@ -1,15 +1,16 @@
 from __future__ import annotations
-import json, os, re
+import json, re, sys
 from pathlib import Path
+
+CORE_SCRIPTS=Path(__file__).resolve().parents[2]/"ai-engineering-core"/"scripts"
+if str(CORE_SCRIPTS) not in sys.path:sys.path.insert(0,str(CORE_SCRIPTS))
+from source_surface import TraversalBudget,read_bounded_text,walk_source_files
 
 SKIP={"Library","Temp","Logs","obj","bin","Build","Builds",".git",".ai","UserSettings"}
 
 def walk_files(root:Path):
-    for dirpath,dirnames,filenames in os.walk(root):
-        dirnames[:] = [name for name in dirnames if name not in SKIP]
-        current=Path(dirpath)
-        for filename in filenames:
-            yield current/filename
+    paths,_=walk_source_files(root,TraversalBudget(max_depth=12,max_directories=4096,max_entries=50000,max_files=20000,max_observed_bytes=4*1024*1024*1024,max_elapsed_ms=10000),ignored_directories=frozenset(name.casefold() for name in SKIP),include=lambda path:path.stat().st_size<=16*1024*1024)
+    yield from paths
 
 def files(root:Path,suffixes:set[str]):
     for p in walk_files(root):
@@ -22,11 +23,12 @@ def asset_files(root:Path):
         yield from walk_files(assets)
 
 def read_json(path:Path,default=None):
-    try:return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        value,truncated=read_bounded_text(path,8*1024*1024);return default if truncated else json.loads(value)
     except Exception:return default
 
 def project_version(root:Path):
     p=root/"ProjectSettings/ProjectVersion.txt"
     if not p.exists():return None
-    m=re.search(r"m_EditorVersion:\s*([^\r\n]+)",p.read_text(encoding="utf-8",errors="ignore"))
+    m=re.search(r"m_EditorVersion:\s*([^\r\n]+)",read_bounded_text(p,64*1024)[0])
     return m.group(1).strip() if m else None

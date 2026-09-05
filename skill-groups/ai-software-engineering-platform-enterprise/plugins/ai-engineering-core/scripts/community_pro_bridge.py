@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import os
 import re
@@ -8,6 +9,8 @@ import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, Mapping, Sequence
+
+from result_fuse import CaptureBudget,CaptureReceipt,start_capture_thread
 
 
 MINIMUM_PRO_VERSION = (5, 19)
@@ -19,6 +22,27 @@ PROBE_TIMEOUT_SECONDS = 5
 ACTION_TIMEOUT_SECONDS = 30
 LOCATOR_CONTRACT_VERSION = "hiker-pro-locator/v1"
 MAX_LOCATOR_BYTES = 64 * 1024
+MAX_MACHINE_STDOUT_BYTES = 512 * 1024
+MAX_MACHINE_STDERR_BYTES = 128 * 1024
+
+
+def bounded_machine_run(command:list[str],**kwargs:Any)->subprocess.CompletedProcess[str]:
+    process=subprocess.Popen(command,cwd=kwargs.get("cwd"),env=kwargs.get("env"),stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    if process.stdout is None or process.stderr is None:
+        process.kill();raise OSError("machine command pipes unavailable")
+    stdout=io.BytesIO();stderr=io.BytesIO();stdout_receipt=CaptureReceipt();stderr_receipt=CaptureReceipt()
+    stdout_thread=start_capture_thread(process.stdout,stdout,CaptureBudget(max_spool_bytes=MAX_MACHINE_STDOUT_BYTES),stdout_receipt)
+    stderr_thread=start_capture_thread(process.stderr,stderr,CaptureBudget(max_spool_bytes=MAX_MACHINE_STDERR_BYTES),stderr_receipt)
+    try:
+        try:return_code=process.wait(timeout=kwargs.get("timeout"))
+        except subprocess.TimeoutExpired:
+            process.kill();process.wait();raise
+        stdout_thread.join(timeout=5);stderr_thread.join(timeout=5)
+        if stdout_thread.is_alive() or stderr_thread.is_alive():raise subprocess.SubprocessError("machine result capture did not converge")
+        return subprocess.CompletedProcess(command,return_code,stdout.getvalue().decode("utf-8",errors="replace"),stderr.getvalue().decode("utf-8",errors="replace"))
+    finally:
+        if process.poll() is None:process.kill()
+        process.stdout.close();process.stderr.close()
 
 
 def _result(status: str, **values: Any) -> dict[str, Any]:
@@ -134,7 +158,7 @@ def _protocol_facts(payload: dict[str, Any]) -> tuple[tuple[int, int, int], tupl
 
 def detect_pro_runtime(
     environment: Mapping[str, str] | None = None,
-    runner: Any = subprocess.run,
+    runner: Any = bounded_machine_run,
 ) -> dict[str, Any]:
     effective_environment = os.environ if environment is None else environment
     executable, detection_source = _resolve_pro_executable(effective_environment)
@@ -220,7 +244,7 @@ def invoke_bridge(
     action: str,
     boundary_proof: str | None,
     environment: Mapping[str, str] | None = None,
-    runner: Any = subprocess.run,
+    runner: Any = bounded_machine_run,
     detected: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     effective_environment = os.environ if environment is None else environment
@@ -281,7 +305,7 @@ def invoke_bridge(
 def query_project_facts(
     root: Path,
     environment: Mapping[str, str] | None = None,
-    runner: Any = subprocess.run,
+    runner: Any = bounded_machine_run,
     detected: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     effective_environment = os.environ if environment is None else environment
@@ -323,7 +347,7 @@ def query_project_facts(
 def router_boundary_adoption(
     root: Path,
     environment: Mapping[str, str] | None = None,
-    runner: Any = subprocess.run,
+    runner: Any = bounded_machine_run,
     detected: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Adopt only at the router's existing pre-write boundary; fallback remains observable."""

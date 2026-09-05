@@ -12,6 +12,7 @@ from typing import Any
 
 from corelib import ai_root, atomic_write_json, read_json
 from source_identity import identify
+from source_surface import TraversalLimitReached, is_reserved_source_path, iter_git_nul_records, read_bounded_bytes
 
 
 MANIFEST_NAMES = {
@@ -63,19 +64,16 @@ def _repo_id(root: Path) -> str:
 
 
 def _tracked_manifests(root: Path) -> list[Path]:
-    output = _git(root, "ls-files", "-z")
     found: list[Path] = []
-    for raw in output.split("\0"):
-        if not raw:
-            continue
-        path = Path(raw)
-        normalized = raw.replace("\\", "/").lower()
-        if path.name.lower() in {name.lower() for name in MANIFEST_NAMES} or "/migrations/" in f"/{normalized}/":
-            target = root / path
-            if target.is_file():
-                found.append(target)
-        if len(found) >= 500:
-            break
+    try:
+        for raw in iter_git_nul_records(root,["ls-files","-z","--",".",":(exclude).ai/**"]):
+            path = Path(raw);normalized = raw.replace("\\", "/").lower()
+            if path.name.lower() in {name.lower() for name in MANIFEST_NAMES} or "/migrations/" in f"/{normalized}/":
+                target = root / path
+                if target.is_file() and not is_reserved_source_path(root,target):found.append(target)
+            if len(found) >= 500:break
+    except (RuntimeError,TraversalLimitReached):
+        return []
     return found
 
 
@@ -84,7 +82,8 @@ def _manifest_hash(root: Path) -> str:
     for path in sorted(_tracked_manifests(root)):
         digest.update(path.relative_to(root).as_posix().encode("utf-8"))
         try:
-            digest.update(path.read_bytes())
+            raw,truncated=read_bounded_bytes(path,256*1024);digest.update(raw)
+            if truncated:digest.update(b"[TRUNCATED]")
         except OSError:
             digest.update(b"unreadable")
     return digest.hexdigest()
@@ -97,7 +96,7 @@ def current_snapshot(root: Path, identity: dict[str, Any] | None = None) -> dict
         digest = hashlib.sha256()
         candidates = [root / name for name in MANIFEST_NAMES]
         try:
-            children = sorted((item for item in root.iterdir() if item.is_dir()), key=lambda item: item.name)[:32]
+            children = sorted((item for item in root.iterdir() if item.is_dir() and not is_reserved_source_path(root,item)), key=lambda item: item.name)[:32]
         except OSError:
             children = []
         for child in children:
@@ -105,7 +104,8 @@ def current_snapshot(root: Path, identity: dict[str, Any] | None = None) -> dict
         for path in sorted(item for item in candidates if item.is_file())[:96]:
             digest.update(path.relative_to(root).as_posix().encode("utf-8"))
             try:
-                digest.update(path.read_bytes())
+                raw,truncated=read_bounded_bytes(path,256*1024);digest.update(raw)
+                if truncated:digest.update(b"[TRUNCATED]")
             except OSError:
                 digest.update(b"unreadable")
         return {
@@ -154,8 +154,18 @@ def _changed_paths(root: Path, old_head: str, new_head: str) -> tuple[list[str],
     check = _run(root, "git", "cat-file", "-e", f"{old_head}^{{commit}}")
     if check.returncode != 0:
         return [], False
-    raw = _git(root, "diff", "--name-only", "-z", old_head, new_head)
-    paths = [item.replace("\\", "/") for item in raw.split("\0") if item]
+    try:
+        paths = [
+            item.replace("\\", "/")
+            for item in iter_git_nul_records(
+                root,
+                ["diff", "--name-only", "-z", old_head, new_head, "--", ".", ":(exclude).ai/**"],
+                max_items=1001,
+                max_bytes=16 * 1024 * 1024,
+            )
+        ]
+    except (RuntimeError, TraversalLimitReached):
+        return [], False
     return paths[:1000], True
 
 

@@ -6,8 +6,12 @@ from typing import Any,Iterator
 CORE_SCRIPTS=Path(__file__).resolve().parents[2]/"ai-engineering-core"/"scripts"
 if str(CORE_SCRIPTS) not in sys.path:sys.path.insert(0,str(CORE_SCRIPTS))
 from process_identity import owner_status,process_identity
+from source_surface import TraversalLimitReached,bounded_process_run,iter_git_nul_records,is_reserved_source_path,read_bounded_bytes
 
-def run(cmd:list[str],cwd:Path,check:bool=True)->subprocess.CompletedProcess[str]:return subprocess.run(cmd,cwd=str(cwd),text=True,encoding="utf-8",errors="replace",stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=check)
+def run(cmd:list[str],cwd:Path,check:bool=True)->subprocess.CompletedProcess[str]:
+    safe=list(cmd)
+    if len(safe)>1 and safe[0]=="git" and safe[1]=="status" and "--" not in safe:safe.extend(["--",".",":(exclude).ai/**"])
+    return bounded_process_run(safe,cwd,check=check)
 def _repository_marker(path:Path)->str:
     resolved=path.resolve()
     for candidate in (resolved,*resolved.parents):
@@ -42,16 +46,18 @@ def safe_id(value:str)->str:
     return value[:100]
 def safe_branch(value:str)->str:return "/".join(safe_id(x) for x in value.split("/") if x.strip())
 def worktree_fingerprint(root:Path)->str:
-    status=run(["git","status","--porcelain=v1","-z","--untracked-files=all"],root,check=False).stdout;h=hashlib.sha256()
-    for row in status.split("\0"):
-        if len(row)<4:continue
-        raw=row[3:];path=raw.split(" -> ")[-1].replace("\\","/")
-        if path in {"PROJECT_STATE.md","CURRENT_CONTEXT.md"} or path.startswith((".ai/","node_modules/","Library/","Temp/","dist/","build/","obj/","bin/",".venv/")):continue
-        target=root/path;h.update(row[:3].encode("utf-8",errors="ignore"));h.update(path.encode("utf-8",errors="ignore"))
-        try:
-            stat=target.stat();h.update(f"{stat.st_size}:{stat.st_mtime_ns}".encode())
-            if target.is_file() and stat.st_size<=20_000_000:h.update(target.read_bytes())
-        except OSError:h.update(b"missing")
+    h=hashlib.sha256()
+    try:
+        for row in iter_git_nul_records(root,["status","--porcelain=v1","-z","--untracked-files=all","--",".",":(exclude).ai/**"]):
+            if len(row)<4:continue
+            raw=row[3:];path=raw.split(" -> ")[-1].replace("\\","/")
+            if path in {"PROJECT_STATE.md","CURRENT_CONTEXT.md"} or path.startswith(("node_modules/","Library/","Temp/","dist/","build/","obj/","bin/",".venv/")):continue
+            target=root/path;h.update(row[:3].encode("utf-8",errors="ignore"));h.update(path.encode("utf-8",errors="ignore"))
+            try:
+                stat=target.stat();h.update(f"{stat.st_size}:{stat.st_mtime_ns}".encode())
+                if target.is_file() and stat.st_size<=20_000_000 and not is_reserved_source_path(root,target):h.update(read_bounded_bytes(target,20_000_000)[0])
+            except OSError:h.update(b"missing")
+    except (RuntimeError,TraversalLimitReached):return hashlib.sha256(b"TRAVERSAL_LIMIT_REACHED").hexdigest()
     return h.hexdigest()
 _LOCK_LOCAL=threading.local();_PROCESS_LOCKS_GUARD=threading.Lock();_PROCESS_LOCKS:dict[str,threading.RLock]={}
 def _process_lock(key:str)->threading.RLock:

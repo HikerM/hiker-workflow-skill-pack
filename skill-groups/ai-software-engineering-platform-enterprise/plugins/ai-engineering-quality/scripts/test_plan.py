@@ -1,14 +1,14 @@
 from __future__ import annotations
-import argparse,json,os
+import argparse,json,sys
 from pathlib import Path
 from qualitylib import git_root,load_json,markdown_table,now,repo_ai,write_json
+CORE_SCRIPTS=Path(__file__).resolve().parents[2]/"ai-engineering-core"/"scripts"
+if str(CORE_SCRIPTS) not in sys.path:sys.path.insert(0,str(CORE_SCRIPTS))
+from source_surface import TraversalBudget,walk_source_files
 SKIP={"node_modules",".git",".ai","dist","build","Library","Temp","obj","bin",".venv","venv"}
 def walk_project_files(root:Path,max_depth:int=6):
-    for dirpath,dirnames,filenames in os.walk(root):
-        current=Path(dirpath);depth=len(current.relative_to(root).parts)
-        if depth>=max_depth:dirnames[:]=[]
-        else:dirnames[:]=[name for name in dirnames if name not in SKIP]
-        for filename in filenames:yield current/filename
+    paths,_=walk_source_files(root,TraversalBudget(max_depth=max_depth,max_directories=4096,max_entries=50000,max_files=20000,max_observed_bytes=2*1024*1024*1024,max_elapsed_ms=10000),ignored_directories=frozenset(name.casefold() for name in SKIP))
+    yield from paths
 
 def manifests(root:Path,name:str,max_depth:int=6)->list[Path]:
     return sorted(p for p in walk_project_files(root,max_depth) if p.name==name)

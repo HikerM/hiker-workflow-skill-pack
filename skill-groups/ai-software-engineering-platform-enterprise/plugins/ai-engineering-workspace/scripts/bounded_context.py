@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from workspacelib import atomic_json, locked_state, read_json
+from source_surface import TraversalBudget, walk_source_files
 
 DEFAULT_POLICY = {
     "schema_version": "1.1.0",
@@ -87,7 +88,10 @@ def limit_text(text: str, max_chars: int, source: str) -> str:
 
 def _sha(path: Path) -> str | None:
     try:
-        return hashlib.sha256(path.read_bytes()).hexdigest()
+        digest=hashlib.sha256()
+        with path.open("rb") as stream:
+            while chunk:=stream.read(128*1024):digest.update(chunk)
+        return digest.hexdigest()
     except OSError:
         return None
 
@@ -111,8 +115,8 @@ def _archive_checkpoint(root: Path, path: Path, data: dict[str, Any]) -> tuple[s
         with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as bundle:
             bundle.write(path, arcname=path.name)
             if state_dir.is_dir():
-                for item in sorted(state_dir.rglob("*")):
-                    if item.is_file(): bundle.write(item, arcname=(Path("state") / item.relative_to(state_dir)).as_posix())
+                items,_=walk_source_files(state_dir,TraversalBudget(max_depth=12,max_directories=2048,max_entries=10000,max_files=10000,max_observed_bytes=512*1024*1024,max_elapsed_ms=10000),ignored_directories=frozenset())
+                for item in items:bundle.write(item,arcname=(Path("state")/item.relative_to(state_dir)).as_posix())
     index = root / ".ai" / "archive" / "checkpoints" / "index.jsonl"
     with index.open("a", encoding="utf-8", newline="\n") as handle:
         handle.write(json.dumps({"name": path.name, "created_at": data.get("created_at"), "archive": archive.relative_to(root / '.ai').as_posix(), "sha256": _sha(archive)}, ensure_ascii=False) + "\n")
@@ -125,7 +129,8 @@ def retain_checkpoints(root: Path, updated_at: str) -> dict[str, Any]:
     folder = root / ".ai" / "runtime" / "checkpoints"; folder.mkdir(parents=True, exist_ok=True)
     ledger_path = root / ".ai" / "runtime" / "checkpoint-ledger.json"
     records = []
-    for path in folder.glob("*.json"):
+    paths,_=walk_source_files(folder,TraversalBudget(max_depth=0,max_directories=1,max_entries=4096,max_files=4096,max_observed_bytes=128*1024*1024,max_elapsed_ms=2000),ignored_directories=frozenset(),include=lambda item:item.suffix.lower()==".json")
+    for path in paths:
         data = read_json(path, {}) or {}
         if isinstance(data, dict):
             records.append((path, data))

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from workspacelib import atomic_json, read_json, repo_root, run, safe_id, state_lock, worktree_fingerprint
+from source_surface import TraversalLimitReached,iter_git_nul_records
 
 SCHEMA = "1.0.0"
 
@@ -23,20 +24,20 @@ def digest(value: str) -> str:
 def snapshot(root: Path) -> dict[str, Any]:
     head = run(["git", "rev-parse", "HEAD"], root, check=False).stdout.strip() or None
     branch = run(["git", "branch", "--show-current"], root, check=False).stdout.strip() or "DETACHED"
-    index = run(["git", "ls-files", "-s", "-z"], root, check=False).stdout
-    status = run(["git", "status", "--porcelain=v1", "-z", "--untracked-files=all"], root, check=False).stdout
-    changed = []
-    for row in status.split("\0"):
-        if len(row) < 4:
-            continue
-        path = row[3:].split(" -> ")[-1].replace("\\", "/")
-        if path == ".ai" or path.startswith(".ai/") or path in {"PROJECT_STATE.md", "CURRENT_CONTEXT.md"}:
-            continue
-        changed.append(path)
+    index_digest=hashlib.sha256();changed=[]
+    try:
+        for row in iter_git_nul_records(root,["ls-files","-s","-z","--",".",":(exclude).ai/**"]):index_digest.update(row.encode("utf-8",errors="replace"));index_digest.update(b"\0")
+        for row in iter_git_nul_records(root,["status","--porcelain=v1","-z","--untracked-files=all","--",".",":(exclude).ai/**"]):
+            if len(row)<4:continue
+            path=row[3:].split(" -> ")[-1].replace("\\","/")
+            if path in {"PROJECT_STATE.md","CURRENT_CONTEXT.md"}:continue
+            changed.append(path)
+    except (RuntimeError,TraversalLimitReached) as exception:
+        raise RuntimeError("TRAVERSAL_LIMIT_REACHED:candidate_snapshot") from exception
     source_fingerprint = worktree_fingerprint(root)
     return {
         "repo_root": str(root), "branch": branch, "candidate_commit": head,
-        "index_hash": digest(index), "dirty_diff_hash": source_fingerprint,
+        "index_hash": index_digest.hexdigest(), "dirty_diff_hash": source_fingerprint,
         "file_set_hash": digest("\n".join(sorted(set(changed)))),
         "changed_files": sorted(set(changed)), "worktree_fingerprint": source_fingerprint,
     }

@@ -23,6 +23,7 @@ from detect_project import detect
 from engineering_manifests import discover_engineering_manifests
 from source_identity import identify
 from source_surface import TraversalBudget,TraversalLimitReached,is_reserved_source_path,walk_source_files
+from legacy_content_policy import classify
 from workspacelib import worktree_fingerprint
 
 
@@ -31,6 +32,13 @@ def git(root:Path,*args:str)->None:
 
 
 class StateIsolationTests(unittest.TestCase):
+    def test_inert_legacy_content_is_preserved_but_authority_paths_review(self):
+        self.assertEqual("SAFE_PRESERVED_CONTENT", classify("tmp/model/tool.py"))
+        self.assertEqual("SAFE_PRESERVED_CONTENT", classify("logs/history.json"))
+        self.assertEqual("UNKNOWN_REQUIRES_REVIEW", classify("runtime/ownership.json"))
+        self.assertEqual("UNKNOWN_REQUIRES_REVIEW", classify("governance/identity.json"))
+        self.assertEqual("UNKNOWN_REQUIRES_REVIEW", classify("../escape.py"))
+
     def test_source_and_routing_scans_never_enter_large_ai(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);(root/"package.json").write_text('{"dependencies":{"express":"5"}}',encoding="utf-8")

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from technology_markers import PROJECT_MARKER_PATHS, STATE_FINGERPRINT_NAMES
+from source_surface import TraversalLimitReached, is_reserved_source_path, iter_git_nul_records, read_bounded_bytes
 
 PROJECT_MARKERS = PROJECT_MARKER_PATHS
 STATE_MANIFEST_NAMES = STATE_FINGERPRINT_NAMES

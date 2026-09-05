@@ -12,6 +12,7 @@ CORE_SCRIPTS = Path(__file__).resolve().parents[2] / "ai-engineering-core" / "sc
 if str(CORE_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(CORE_SCRIPTS))
 from resource_budget import effective_value  # noqa: E402
+from source_surface import read_bounded_bytes, read_bounded_text  # noqa: E402
 
 SKIP = {"node_modules", "dist", "build", ".git", ".next", ".nuxt", "coverage", ".cache", ".ai"}
 SOURCE_EXT = {".ts", ".tsx", ".js", ".jsx", ".vue", ".svelte", ".css", ".scss", ".less"}

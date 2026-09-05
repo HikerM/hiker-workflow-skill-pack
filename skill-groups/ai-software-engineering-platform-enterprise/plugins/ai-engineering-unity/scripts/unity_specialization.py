@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -12,6 +13,7 @@ CORE_SCRIPTS = Path(__file__).resolve().parents[2] / "ai-engineering-core" / "sc
 if str(CORE_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(CORE_SCRIPTS))
 from resource_budget import effective_budget  # noqa: E402
+from source_surface import read_bounded_text  # noqa: E402
 
 
 SKIP = {"Library", "Temp", "Logs", "obj", "bin", "Build", "Builds", ".git", ".ai", "UserSettings"}

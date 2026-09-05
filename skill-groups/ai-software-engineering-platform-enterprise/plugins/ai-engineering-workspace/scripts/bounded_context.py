@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from workspacelib import RESOURCE_DEFAULT_BUDGETS, atomic_json, effective_budget, locked_state, read_json
+from source_surface import TraversalBudget, walk_source_files
 
 DEFAULT_POLICY = {
     "schema_version": "1.1.0",

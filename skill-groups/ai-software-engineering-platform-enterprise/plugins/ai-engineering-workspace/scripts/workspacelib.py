@@ -7,6 +7,7 @@ CORE_SCRIPTS=Path(__file__).resolve().parents[2]/"ai-engineering-core"/"scripts"
 if str(CORE_SCRIPTS) not in sys.path:sys.path.insert(0,str(CORE_SCRIPTS))
 from process_identity import owner_status,process_identity
 from resource_budget import DEFAULT_BUDGETS as RESOURCE_DEFAULT_BUDGETS,HARD_MAX as RESOURCE_HARD_MAX,effective_budget,effective_value
+from source_surface import TraversalLimitReached,bounded_process_run,iter_git_nul_records,is_reserved_source_path,read_bounded_bytes
 
 def run(cmd:list[str],cwd:Path,check:bool=True)->subprocess.CompletedProcess[str]:
     safe=list(cmd)

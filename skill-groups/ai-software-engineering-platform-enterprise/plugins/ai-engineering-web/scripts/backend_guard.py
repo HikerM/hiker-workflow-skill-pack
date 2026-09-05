@@ -14,6 +14,8 @@ CORE_SCRIPTS = Path(__file__).resolve().parents[2] / "ai-engineering-core" / "sc
 if str(CORE_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(CORE_SCRIPTS))
 from resource_budget import effective_budget  # noqa: E402
+from source_surface import TraversalBudget, read_bounded_bytes, walk_source_files  # noqa: E402
+from source_surface import read_bounded_text  # noqa: E402
 
 
 SKIP = {".git", ".ai", "node_modules", "dist", "build", "obj", "bin", ".venv", "venv", "vendor", "target", "coverage"}
@@ -21,6 +23,11 @@ MARKERS = {"package.json", "pyproject.toml", "requirements.txt", "pom.xml", "bui
 CONTRACT_NAMES = {"openapi.json", "openapi.yaml", "openapi.yml", "swagger.json", "swagger.yaml", "swagger.yml", "schema.graphql"}
 NODE_FRAMEWORKS = (("@nestjs/core", "NestJS"), ("fastify", "Fastify"), ("express", "Express"), ("koa", "Koa"), ("@hapi/hapi", "Hapi"), ("hapi", "Hapi"), ("@adonisjs/core", "AdonisJS"), ("egg", "Egg.js"))
 PYTHON_FRAMEWORKS = (("django", "Django"), ("fastapi", "FastAPI"), ("flask", "Flask"), ("litestar", "Litestar"), ("sanic", "Sanic"), ("falcon", "Falcon"), ("tornado", "Tornado"))
+
+
+def bounded_text(path: Path) -> str:
+    value, truncated = read_bounded_text(path, 8 * 1024 * 1024)
+    return "" if truncated else value
 
 
 def clean_version(value: object) -> str:

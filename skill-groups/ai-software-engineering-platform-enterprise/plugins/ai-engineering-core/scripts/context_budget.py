@@ -3,10 +3,15 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import subprocess
 from typing import Any
 
 from corelib import ai_root, read_json
 from source_surface import TraversalLimitReached, iter_git_nul_records
+
+
+def _run(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(list(args), cwd=str(root), text=True, encoding="utf-8", errors="replace", stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
 
 
 MODE_BUDGETS: dict[str, dict[str, Any]] = {

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from pro_machine_contract import MACHINE_CONTRACT_VERSION, machine_payload, protocol_facts
+from machine_runner import bounded_machine_run
 from resource_budget import HARD_MAX as RESOURCE_HARD_MAX
 
 

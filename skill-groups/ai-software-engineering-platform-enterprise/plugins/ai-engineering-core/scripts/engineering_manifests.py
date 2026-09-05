@@ -12,6 +12,7 @@ from typing import Any, Iterable
 
 from technology_markers import ENGINEERING_MANIFEST_NAMES, is_engineering_manifest as marker_is_engineering_manifest
 from resource_budget import DEFAULT_BUDGETS as RESOURCE_DEFAULT_BUDGETS, effective_budget
+from source_surface import is_reserved_source_path
 
 EXACT_MANIFESTS = ENGINEERING_MANIFEST_NAMES
 

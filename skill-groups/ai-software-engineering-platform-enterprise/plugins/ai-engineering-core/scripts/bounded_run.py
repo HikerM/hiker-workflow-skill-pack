@@ -11,6 +11,7 @@ import threading
 from pathlib import Path
 
 from corelib import ai_root, atomic_write_bytes, atomic_write_text
+from result_fuse import read_page, redact
 from resource_budget import effective_value
 
 
@@ -26,6 +27,27 @@ REDACTION_OVERLAP_CHARS = 4096
 
 def safe_id(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "-", value).strip("._-")[:80] or "tool-output"
+
+
+def read_evidence_page(root: Path, relative: str, offset: int, max_bytes: int) -> dict[str, object]:
+    candidate = (root / relative).resolve()
+    try:
+        candidate.relative_to(root.resolve())
+    except ValueError as error:
+        raise ValueError("evidence path escapes project root") from error
+    if not candidate.is_file() or candidate.is_symlink():
+        raise ValueError("evidence path is not a regular file")
+    if candidate.name == "index.json":
+        try:
+            index = json.loads(candidate.read_text(encoding="utf-8"))
+            pages = index.get("channels", {}).get("stdout", {}).get("pages", [])
+            if pages:
+                page_path = candidate.parent / str(index["generation"]) / str(pages[0]["path"])
+                if page_path.is_file() and not page_path.is_symlink():
+                    candidate = page_path
+        except (OSError, ValueError, TypeError, json.JSONDecodeError, KeyError):
+            pass
+    return read_page(candidate, offset, max_bytes)
 
 
 def _excerpt(path: Path, limit: int) -> tuple[str, bool]:
@@ -214,8 +236,10 @@ def _publish_artifact(root: Path, evidence_id: str, command: list[str], raw_stdo
     return index, stdout_excerpt, stderr_excerpt, stdout_truncated or stderr_truncated
 
 
-def run_bounded(root: Path, evidence_id: str, command: list[str], max_chars: int = 4000, timeout: int = 900, max_artifact_bytes: int | None = None) -> dict:
+def run_bounded(root: Path, evidence_id: str, command: list[str], max_chars: int = 4000, timeout: int = 900, max_artifact_bytes: int | None = None, max_spool_bytes: int | None = None) -> dict:
     max_chars = effective_value("output", "command_output_chars", max_chars)
+    if max_spool_bytes is not None:
+        max_artifact_bytes = max_spool_bytes
     max_artifact_bytes = effective_value("output", "artifact_spool_bytes", max_artifact_bytes)
     if not command:
         raise RuntimeError("a command is required after --")
@@ -225,6 +249,9 @@ def run_bounded(root: Path, evidence_id: str, command: list[str], max_chars: int
         exit_code, spool = _capture_process(root, command, raw_stdout, raw_stderr, timeout, max_artifact_bytes)
         index, stdout_excerpt, stderr_excerpt, truncated = _publish_artifact(root, evidence_id, command, raw_stdout, raw_stderr, max_chars, spool)
     index_path = ai_root(root) / "evidence" / "tool-output" / safe_id(evidence_id) / "index.json"
+    spool = index["spool"]
+    observed_bytes = int(spool.get("captured_bytes", 0)) + int(spool.get("discarded_bytes", 0)) if isinstance(spool, dict) else 0
+    stored_bytes = int(spool.get("captured_bytes", 0)) if isinstance(spool, dict) else 0
     return {
         "exit_code": exit_code,
         "command": command[:1] + (["<arguments omitted from conversation>"] if len(command) > 1 else []),
@@ -236,7 +263,10 @@ def run_bounded(root: Path, evidence_id: str, command: list[str], max_chars: int
         "evidence_sha256": index["evidence_sha256"],
         "captured_chars": index["captured_chars"],
         "artifact_pages": sum(len(channel["pages"]) for channel in index["channels"].values()),
-        "spool": index["spool"],
+        "spool": spool,
+        "observed_bytes": observed_bytes,
+        "stored_bytes": stored_bytes,
+        "returned_count": len(stdout_excerpt) + len(stderr_excerpt),
     }
 
 

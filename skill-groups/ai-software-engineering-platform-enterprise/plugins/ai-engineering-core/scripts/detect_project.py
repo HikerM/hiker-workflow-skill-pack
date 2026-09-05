@@ -5,7 +5,11 @@ from pathlib import Path
 from typing import Any
 from corelib import git_info
 from engineering_manifests import DiscoveryBudget, discover_engineering_manifests
-from technology_markers import NODE_FRAMEWORK_PACKAGES, PACKAGE_MANAGER_LOCKS
+from source_surface import TraversalBudget, TraversalLimitReached, read_bounded_text, walk_source_files
+from technology_markers import ENGINEERING_MANIFEST_NAMES, NODE_FRAMEWORK_PACKAGES, PACKAGE_MANAGER_LOCKS
+
+IGNORED={".git",".ai",".hg",".svn","node_modules","Library","Temp","obj","bin","dist","build",".venv","venv","__pycache__",".idea",".vs","DerivedData","Pods"}
+MANIFESTS=set(ENGINEERING_MANIFEST_NAMES) | {"ProjectVersion.txt", "project.pbxproj"}
 
 try:
     import tomllib
@@ -14,6 +18,15 @@ except ModuleNotFoundError:
         import tomli as tomllib
     except ModuleNotFoundError:
         tomllib = None
+
+MAX_MANIFEST_BYTES = 8 * 1024 * 1024
+
+def safe_text(path:Path)->str:
+    try:
+        value, truncated = read_bounded_text(path, MAX_MANIFEST_BYTES)
+        return "" if truncated else value
+    except OSError:
+        return ""
 
 def safe_json(path:Path)->dict[str,Any]:
     try:

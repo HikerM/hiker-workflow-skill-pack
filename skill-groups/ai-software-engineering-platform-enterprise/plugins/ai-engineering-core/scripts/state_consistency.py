@@ -13,6 +13,7 @@ from typing import Any
 
 from corelib import SCHEMA_VERSION, ai_root, atomic_write_json, read_json, utc_now
 from source_identity import identify
+from source_surface import TraversalLimitReached, is_reserved_source_path, iter_git_nul_records, read_bounded_bytes
 from technology_markers import STATE_FINGERPRINT_NAMES
 
 MANIFEST_NAMES = STATE_FINGERPRINT_NAMES

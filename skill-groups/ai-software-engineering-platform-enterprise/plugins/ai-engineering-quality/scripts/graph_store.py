@@ -1,9 +1,12 @@
 from __future__ import annotations
-import argparse,hashlib,json,os,posixpath,re,sqlite3
+import argparse,hashlib,json,posixpath,re,sqlite3,sys
 from contextlib import contextmanager
 from collections import deque
 from pathlib import Path
 from qualitylib import git_root,head,matches_any,now,posix,repo_ai,worktree_fingerprint,write_json
+CORE_SCRIPTS=Path(__file__).resolve().parents[2]/"ai-engineering-core"/"scripts"
+if str(CORE_SCRIPTS) not in sys.path:sys.path.insert(0,str(CORE_SCRIPTS))
+from source_surface import TraversalBudget,walk_source_files
 SCHEMA="""
 PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;
 CREATE TABLE IF NOT EXISTS nodes(path TEXT PRIMARY KEY,kind TEXT,language TEXT,module TEXT,sha256 TEXT,mtime_ns INTEGER,size INTEGER,commit_sha TEXT,indexed_at TEXT);
@@ -28,21 +31,11 @@ def digest(path:Path)->str:
     return h.hexdigest()
 BASE_SKIP={".git",".ai","node_modules","Library","Temp","Logs","obj","bin","dist","build","Build","Builds",".venv","venv","__pycache__","coverage",".next",".nuxt"}
 def candidates(root:Path,excluded:list[str])->list[Path]:
-    out=[]
-    for dirpath,dirnames,filenames in os.walk(root):
-        current=Path(dirpath)
-        rel_dir=posix(str(current.relative_to(root))) if current!=root else ""
-        kept=[]
-        for name in dirnames:
-            child=posix(f"{rel_dir}/{name}" if rel_dir else name)
-            if name in BASE_SKIP or matches_any(child,excluded) or matches_any(child+"/placeholder",excluded):continue
-            kept.append(name)
-        dirnames[:] = kept
-        for filename in filenames:
-            p=current/filename;rel=posix(str(p.relative_to(root)))
-            if matches_any(rel,excluded):continue
-            if p.suffix.lower() in EXT or p.name in {"package.json","pyproject.toml","pom.xml","build.gradle","build.gradle.kts","go.mod","Cargo.toml","composer.json","manifest.json","ProjectVersion.txt"} or p.suffix.lower()==".csproj":out.append(p)
-    return out
+    def include(p:Path)->bool:
+        rel=posix(str(p.relative_to(root)))
+        return p.stat().st_size<=20_000_000 and not matches_any(rel,excluded) and (p.suffix.lower() in EXT or p.name in {"package.json","pyproject.toml","pom.xml","build.gradle","build.gradle.kts","go.mod","Cargo.toml","composer.json","manifest.json","ProjectVersion.txt"} or p.suffix.lower()==".csproj")
+    paths,_=walk_source_files(root,TraversalBudget(max_depth=20,max_directories=10000,max_entries=100000,max_files=50000,max_observed_bytes=8*1024*1024*1024,max_elapsed_ms=30000),ignored_directories=frozenset(name.casefold() for name in BASE_SKIP),include=include)
+    return paths
 def import_tokens(path:Path,language:str)->set[str]:
     if path.stat().st_size>1_500_000 or path.suffix.lower() in {".prefab",".unity",".asset",".mat",".controller",".anim",".meta"}:return set()
     try:text=path.read_text(encoding="utf-8",errors="ignore")

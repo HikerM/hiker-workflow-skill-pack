@@ -71,6 +71,8 @@ def _is_reparse_or_symlink(path: Path) -> bool:
 
 
 def _relative(root: Path, path: Path) -> str | None:
+    if is_reserved_source_path(root, path):
+        return None
     try:
         return Path(os.path.abspath(path)).relative_to(root).as_posix()
     except ValueError:

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from process_identity import owner_status, process_identity
+from source_surface import bounded_process_run
 
 SCHEMA_VERSION = "1.0.0"
 
@@ -22,7 +23,10 @@ def utc_now() -> str:
 
 
 def run(cmd: list[str], cwd: Path, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(cmd, cwd=str(cwd), text=True, encoding="utf-8", errors="replace", stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=check)
+    safe = list(cmd)
+    if len(safe) > 1 and safe[0] == "git" and safe[1] == "status" and "--" not in safe:
+        safe.extend(["--", ".", ":(exclude).ai/**"])
+    return bounded_process_run(safe, cwd, check=check)
 
 
 def git_root(path: Path) -> Path:

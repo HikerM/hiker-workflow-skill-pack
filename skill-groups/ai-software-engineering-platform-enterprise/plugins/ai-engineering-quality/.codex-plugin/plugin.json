@@ -14,9 +14,9 @@
   ],
   "skills": "./skills/",
   "interface": {
-    "displayName": "05 质量、风险与发布",
-    "shortDescription": "独立设计与视觉就绪、完整变更风险及发布门禁",
-    "longDescription": "编码前独立重建设计追踪链，审核设计系统、视觉丰富度与语义深度；变更阶段覆盖暂存、未暂存和未跟踪文件，识别需求与设计影响、契约不同步、回归范围和发布证据。",
+    "displayName": "05 \u8d28\u91cf\u3001\u98ce\u9669\u4e0e\u53d1\u5e03",
+    "shortDescription": "\u72ec\u7acb\u8bbe\u8ba1\u4e0e\u89c6\u89c9\u5c31\u7eea\u3001\u5b8c\u6574\u53d8\u66f4\u98ce\u9669\u53ca\u53d1\u5e03\u95e8\u7981",
+    "longDescription": "\u7f16\u7801\u524d\u72ec\u7acb\u91cd\u5efa\u8bbe\u8ba1\u8ffd\u8e2a\u94fe\uff0c\u5ba1\u6838\u8bbe\u8ba1\u7cfb\u7edf\u3001\u89c6\u89c9\u4e30\u5bcc\u5ea6\u4e0e\u8bed\u4e49\u6df1\u5ea6\uff1b\u53d8\u66f4\u9636\u6bb5\u8986\u76d6\u6682\u5b58\u3001\u672a\u6682\u5b58\u548c\u672a\u8ddf\u8e2a\u6587\u4ef6\uff0c\u8bc6\u522b\u9700\u6c42\u4e0e\u8bbe\u8ba1\u5f71\u54cd\u3001\u5951\u7ea6\u4e0d\u540c\u6b65\u3001\u56de\u5f52\u8303\u56f4\u548c\u53d1\u5e03\u8bc1\u636e\u3002",
     "developerName": "Hiker",
     "category": "Productivity",
     "capabilities": [
@@ -24,9 +24,9 @@
       "Write"
     ],
     "defaultPrompt": [
-      "独立审核当前设计是否达到编码条件。",
-      "评估全部本地改动风险并判断是否重开设计复审。",
-      "审核当前版本是否达到发布条件。"
+      "\u72ec\u7acb\u5ba1\u6838\u5f53\u524d\u8bbe\u8ba1\u662f\u5426\u8fbe\u5230\u7f16\u7801\u6761\u4ef6\u3002",
+      "\u8bc4\u4f30\u5168\u90e8\u672c\u5730\u6539\u52a8\u98ce\u9669\u5e76\u5224\u65ad\u662f\u5426\u91cd\u5f00\u8bbe\u8ba1\u590d\u5ba1\u3002",
+      "\u5ba1\u6838\u5f53\u524d\u7248\u672c\u662f\u5426\u8fbe\u5230\u53d1\u5e03\u6761\u4ef6\u3002"
     ],
     "brandColor": "#B24A2A",
     "composerIcon": "./assets/icon.png",

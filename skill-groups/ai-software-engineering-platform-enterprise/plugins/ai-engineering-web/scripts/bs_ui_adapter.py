@@ -5,8 +5,12 @@ import hashlib
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
+CORE_SCRIPTS=Path(__file__).resolve().parents[2]/"ai-engineering-core"/"scripts"
+if str(CORE_SCRIPTS) not in sys.path:sys.path.insert(0,str(CORE_SCRIPTS))
+from source_surface import TraversalLimitReached,iter_git_nul_records,is_reserved_source_path,read_bounded_text
 
 
 EXTENSIONS = {".vue", ".tsx", ".jsx", ".svelte", ".html"}
@@ -45,7 +49,7 @@ def _technology(root: Path, paths: list[Path]) -> dict[str, Any]:
             current = current.parent
     for manifest in sorted(set(manifests)):
         try:
-            data = json.loads(manifest.read_text(encoding="utf-8"))
+            raw,truncated=read_bounded_text(manifest,8*1024*1024);data = {} if truncated else json.loads(raw)
         except Exception:
             continue
         dependencies = {**(data.get("dependencies") or {}), **(data.get("devDependencies") or {})}
@@ -56,8 +60,9 @@ def _technology(root: Path, paths: list[Path]) -> dict[str, Any]:
 
 
 def _changed(root: Path) -> list[Path]:
-    process = subprocess.run(["git", "diff", "--name-only", "--diff-filter=ACMR", "HEAD"], cwd=root, text=True, encoding="utf-8", errors="replace", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    return [root / row.strip() for row in process.stdout.splitlines() if row.strip() and ".." not in Path(row.strip()).parts]
+    try:rows=list(iter_git_nul_records(root,["diff","--name-only","-z","--diff-filter=ACMR","HEAD","--",".",":(exclude).ai/**"],max_items=MAX_FILES+1))
+    except (RuntimeError,TraversalLimitReached):return []
+    return [root/row for row in rows if row and ".." not in Path(row).parts]
 
 
 def _explicit(root: Path, requested: list[str]) -> list[Path]:
@@ -66,7 +71,8 @@ def _explicit(root: Path, requested: list[str]) -> list[Path]:
         relative = Path(item)
         if relative.is_absolute() or ".." in relative.parts:
             continue
-        paths.append(root / relative)
+        candidate=root/relative
+        if not is_reserved_source_path(root,candidate):paths.append(candidate)
     return paths
 
 
@@ -76,7 +82,7 @@ def observe(root: Path, requested: list[str], changed: bool = False) -> dict[str
     technology = _technology(root, paths)
     components = []
     for path in paths:
-        text = path.read_text(encoding="utf-8", errors="ignore")[:200_000]
+        text = read_bounded_text(path,200_000)[0]
         rel = path.relative_to(root).as_posix()
         name = _component_name(path, text)
         code_fingerprint = _fingerprint(path)

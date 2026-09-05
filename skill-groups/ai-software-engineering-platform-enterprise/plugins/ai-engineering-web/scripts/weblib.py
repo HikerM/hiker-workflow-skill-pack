@@ -18,7 +18,8 @@ SOURCE_EXT = {".ts", ".tsx", ".js", ".jsx", ".vue", ".svelte", ".css", ".scss", 
 
 
 def read_json(path: Path, default=None):
-    try: return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        text,truncated=read_bounded_text(path,8*1024*1024);return default if truncated else json.loads(text)
     except Exception: return default
 
 
@@ -44,7 +45,7 @@ def source_inventory(root: Path, max_files: int = 5000) -> tuple[list[Path], boo
 
 
 def digest(path: Path) -> str:
-    h = hashlib.sha256(); h.update(path.read_bytes()); return h.hexdigest()
+    h = hashlib.sha256(); h.update(read_bounded_bytes(path,8*1024*1024)[0]); return h.hexdigest()
 
 
 def glob_match(path: str, pattern: str) -> bool:

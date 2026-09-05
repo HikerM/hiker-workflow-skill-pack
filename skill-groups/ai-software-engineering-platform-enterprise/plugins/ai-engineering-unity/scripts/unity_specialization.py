@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import re
 import sys
 from pathlib import Path
@@ -39,14 +38,14 @@ def bounded_files(root: Path, max_depth: int = 9, max_files: int = 6000) -> tupl
 
 def text(path: Path) -> str:
     try:
-        return path.read_text(encoding="utf-8", errors="ignore")
+        value,truncated=read_bounded_text(path,16*1024*1024);return "" if truncated else value
     except OSError:
         return ""
 
 
 def load_json(path: Path) -> dict[str, Any]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
+        value = json.loads(text(path))
         return value if isinstance(value, dict) else {}
     except (OSError, json.JSONDecodeError):
         return {}

@@ -26,6 +26,7 @@ from dispatch_state import (
 )
 from event_budget import action_allowed, record_stream_activity
 from goal_contract import verify_binding
+from goal_coordination import evaluate as evaluate_goal_coordination
 from session_pool import bind as bind_slot
 from session_pool import complete as complete_slot
 from session_pool import plan as plan_slot
@@ -123,6 +124,7 @@ def observe(root: Path, args: argparse.Namespace) -> dict[str, Any]:
         "ok": True,
         "status": "TASK_NOT_INITIALIZED",
     }
+    goal_coordination = evaluate_goal_coordination(root, task_id=args.task_id)
     task_map = read_json(root / ".ai" / "workspace" / "task-map.json", {}) or {}
     lane_contract = next((item for item in task_map.get("lanes", []) if item.get("ownership_lane") == lane), {})
     serial_with = set(lane_contract.get("serial_with") or [])
@@ -155,6 +157,8 @@ def observe(root: Path, args: argparse.Namespace) -> dict[str, Any]:
         blocked_action, blocked_reason = "BLOCK_TASK_CONTROL", "任务已暂停或调整，禁止继续派发"
     elif not goal_check["ok"]:
         blocked_action, blocked_reason = "BLOCK_GOAL_DRIFT", "任务绑定的目标修订已过期，禁止按旧目标继续"
+    elif not goal_coordination["ok"]:
+        blocked_action, blocked_reason = "BLOCK_GOAL_COORDINATION", "活动目标或项目变动存在冲突，必须等待修订事务或范围收敛"
     elif (task.get("goal_adjustment") or {}).get("status") == "REPLAN_REQUIRED":
         blocked_action, blocked_reason = "BLOCK_REPLAN_REQUIRED", "目标已重新绑定但变更契约尚未对账，禁止继续旧实现"
     elif active_authority_conflicts:
@@ -191,6 +195,7 @@ def observe(root: Path, args: argparse.Namespace) -> dict[str, Any]:
         "create_allowed": create_allowed,
         "fallback": fallback,
         "goal_check": goal_check,
+        "goal_coordination": goal_coordination,
         "desktop_pressure": {"level": pressure.get("level"), "action": pressure.get("action")},
         "lane_contract": lane_contract,
         "scope_conflicts": active_scope_conflicts,

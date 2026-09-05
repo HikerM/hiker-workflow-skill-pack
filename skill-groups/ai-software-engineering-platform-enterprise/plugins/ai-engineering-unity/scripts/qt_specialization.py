@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import re
 import sys
 from pathlib import Path
@@ -39,7 +38,7 @@ def bounded_files(root: Path, max_depth: int = 7, max_files: int = 4000) -> tupl
 
 def text(path: Path) -> str:
     try:
-        return path.read_text(encoding="utf-8", errors="ignore")
+        value,truncated=read_bounded_text(path,8*1024*1024);return "" if truncated else value
     except OSError:
         return ""
 

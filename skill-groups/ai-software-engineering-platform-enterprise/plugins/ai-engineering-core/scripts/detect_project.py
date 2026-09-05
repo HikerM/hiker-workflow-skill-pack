@@ -17,7 +17,7 @@ except ModuleNotFoundError:
 
 def safe_json(path:Path)->dict[str,Any]:
     try:
-        data=json.loads(path.read_text(encoding="utf-8"));return data if isinstance(data,dict) else {}
+        data=json.loads(safe_text(path));return data if isinstance(data,dict) else {}
     except Exception:return {}
 def safe_toml(text:str)->dict[str,Any]:
     if tomllib is None:return {}
@@ -27,7 +27,7 @@ def safe_toml(text:str)->dict[str,Any]:
 def first_text(*paths:Path)->str|None:
     for p in paths:
         try:
-            value=p.read_text(encoding="utf-8",errors="ignore").strip()
+            value=safe_text(p).strip()
             if value:return value.splitlines()[0].strip()
         except OSError:pass
     return None
@@ -57,7 +57,7 @@ def detect_package_json(path:Path)->dict[str,Any]:
 
 def detect_unity(path:Path)->dict[str,Any]|None:
     if path.parent.name!="ProjectSettings":return None
-    root=path.parent.parent;manifest=root/"Packages/manifest.json";text=path.read_text(encoding="utf-8",errors="ignore");m=re.search(r"m_EditorVersion:\s*([^\r\n]+)",text);packages=safe_json(manifest).get("dependencies",{}) if manifest.exists() else {}
+    root=path.parent.parent;manifest=root/"Packages/manifest.json";text=safe_text(path);m=re.search(r"m_EditorVersion:\s*([^\r\n]+)",text);packages=safe_json(manifest).get("dependencies",{}) if manifest.exists() else {}
     ui=[]
     if isinstance(packages,dict):
         if "com.unity.ugui" in packages:ui.append("UGUI")
@@ -67,13 +67,13 @@ def detect_unity(path:Path)->dict[str,Any]|None:
 def detect_python(path:Path)->dict[str,Any]:
     root=path.parent;deps=[];version=first_text(root/".python-version")
     if path.name=="pyproject.toml":
-        data=safe_toml(path.read_text(encoding="utf-8"))
+        data=safe_toml(safe_text(path))
         project=data.get("project",{}) if isinstance(data,dict) else {}
         if isinstance(project,dict):version=version or project.get("requires-python");raw=project.get("dependencies",[]);deps.extend(map(str,raw if isinstance(raw,list) else []))
         poetry=(data.get("tool",{}) or {}).get("poetry",{}) if isinstance(data,dict) else {}
         if isinstance(poetry,dict) and isinstance(poetry.get("dependencies"),dict):deps.extend(str(x) for x in poetry["dependencies"].keys())
     else:
-        try:deps=[x.strip() for x in path.read_text(encoding="utf-8",errors="ignore").splitlines() if x.strip() and not x.lstrip().startswith("#")]
+        try:deps=[x.strip() for x in safe_text(path).splitlines() if x.strip() and not x.lstrip().startswith("#")]
         except OSError:pass
     low="\n".join(deps).lower();frameworks=[name for token,name in [("fastapi","FastAPI"),("django","Django"),("flask","Flask"),("sqlalchemy","SQLAlchemy"),("pydantic","Pydantic")] if token in low]
     return {"kind":"python","root":str(root),"name":root.name,"languages":[{"name":"Python","version":version}],"frameworks":frameworks,"dependencies":deps[:500],"manifest":str(path)}
@@ -117,7 +117,7 @@ def detect_maven(path:Path)->dict[str,Any]:
     return {"kind":"java","root":str(root),"name":root.name,"languages":[{"name":"Java","version":props.get("java.version") or props.get("maven.compiler.source")}],"frameworks":frameworks,"manifest":str(path)}
 
 def detect_simple(path:Path)->dict[str,Any]|None:
-    root=path.parent;text=path.read_text(encoding="utf-8",errors="ignore")
+    root=path.parent;text=safe_text(path)
     if path.name=="go.mod":
         m=re.search(r"^go\s+([^\s]+)",text,re.M);return {"kind":"go","root":str(root),"name":root.name,"languages":[{"name":"Go","version":m.group(1) if m else None}],"manifest":str(path)}
     if path.name=="Cargo.toml":
@@ -160,7 +160,7 @@ def detect_simple(path:Path)->dict[str,Any]|None:
         return {"kind":"apple-xcode","root":str(path.parent.parent),"name":path.parent.parent.name,"languages":[{"name":"Swift","version":next(iter(re.findall(r'SWIFT_VERSION\s*=\s*([^;]+);',text)),None)}],"frameworks":frameworks,"platforms":[x for x in [{"name":"iOS","version":ios.group(1).strip() if ios else None},{"name":"macOS","version":mac.group(1).strip() if mac else None}] if x["version"]],"manifest":str(path)}
     if path.name=="Gemfile":return {"kind":"ruby","root":str(root),"name":root.name,"languages":[{"name":"Ruby","version":first_text(root/".ruby-version")}],"frameworks":[{"name":"Rails","version":None}] if "rails" in text.lower() else [],"manifest":str(path)}
     if path.name=="pubspec.yaml":
-        sdk=re.search(r"sdk:\s*['\"]?([^'\"\n]+)",text);flutter="flutter:" in text;metadata=(root/".metadata").read_text(encoding="utf-8",errors="ignore") if (root/".metadata").exists() else "";lock=(root/"pubspec.lock").read_text(encoding="utf-8",errors="ignore") if (root/"pubspec.lock").exists() else ""
+        sdk=re.search(r"sdk:\s*['\"]?([^'\"\n]+)",text);flutter="flutter:" in text;metadata=safe_text(root/".metadata") if (root/".metadata").exists() else "";lock=safe_text(root/"pubspec.lock") if (root/"pubspec.lock").exists() else ""
         flutter_constraint=re.search(r"flutter:\s*['\"]?([^'\"\n]+)",text)
         fvm=safe_json(root/".fvmrc").get("flutter") or safe_json(root/".fvm/fvm_config.json").get("flutterSdkVersion")
         pinned=fvm or first_text(root/".flutter-version");lock_constraint=re.search(r"sdks:\s*(?:\r?\n)+\s*dart:\s*[^\n]+(?:\r?\n)+\s*flutter:\s*['\"]?([^'\"\n]+)",lock)
@@ -172,13 +172,29 @@ def detect_simple(path:Path)->dict[str,Any]|None:
         return {"kind":"flutter" if flutter else "dart","root":str(root),"name":root.name,"languages":[{"name":"Dart","version":sdk.group(1).strip() if sdk else None}],"frameworks":[framework] if flutter else [],"manifest":str(path)}
     return None
 
+def candidate_scan(root:Path,max_depth:int)->tuple[list[Path],dict[str,Any]]:
+    files,metrics=walk_source_files(
+        root,
+        TraversalBudget(max_depth=max_depth),
+        ignored_directories=frozenset(name.casefold() for name in IGNORED),
+        include=lambda candidate:candidate.name in MANIFESTS or candidate.suffix in {".csproj",".pro"},
+    )
+    return sorted(set(files)),{"status":"COMPLETE",**metrics.__dict__}
+
 def candidates(root:Path,max_depth:int)->list[Path]:
     budget=DiscoveryBudget(max_depth=max(0,min(max_depth,8)),max_dirs=256,max_manifests=128,max_bytes=4*1024*1024,max_entries_per_dir=512)
     report=discover_engineering_manifests(root,budget=budget)
     return [root/item["path"] for item in report["manifests"]]
 def detect(root:Path,max_depth:int=6)->dict[str,Any]:
-    root=root.resolve();projects=[];seen=set()
-    for path in candidates(root,max_depth):
+    root=root.resolve();projects=[];seen=set();oversized=0
+    try:
+        found,traversal=candidate_scan(root,max_depth)
+    except TraversalLimitReached as exception:
+        return {"schema_version":"1.0.0","repository":git_info(root),"scan_root":str(root),"projects":[],"monorepo":False,"unknown":True,"uncertainties":["源码扫描达到确定性遍历预算"],"traversal":exception.receipt()}
+    for path in found:
+        try:
+            if path.stat().st_size>MAX_MANIFEST_BYTES:oversized+=1;continue
+        except OSError:continue
         item=None
         if path.name=="package.json":item=detect_package_json(path)
         elif path.name=="ProjectVersion.txt":item=detect_unity(path)
@@ -190,7 +206,9 @@ def detect(root:Path,max_depth:int=6)->dict[str,Any]:
         key=(str(item.get("root")),str(item.get("kind")))
         if key in seen:continue
         seen.add(key);projects.append(item)
-    return {"schema_version":"1.0.0","repository":git_info(root),"scan_root":str(root),"projects":projects,"monorepo":len(projects)>1,"unknown":not projects,"uncertainties":["未安装依赖时框架版本可能保留声明范围"] if projects else ["未找到受支持的工程清单"]}
+    uncertainties=(["未安装依赖时框架版本可能保留声明范围"] if projects else ["未找到受支持的工程清单"])
+    if oversized:uncertainties.append(f"{oversized} 个工程清单超过单文件读取预算")
+    return {"schema_version":"1.0.0","repository":git_info(root),"scan_root":str(root),"projects":projects,"monorepo":len(projects)>1,"unknown":not projects,"uncertainties":uncertainties,"traversal":traversal}
 def main()->int:
     ap=argparse.ArgumentParser();ap.add_argument("--root",default=".");ap.add_argument("--max-depth",type=int,default=6);ap.add_argument("--output");a=ap.parse_args();data=detect(Path(a.root),a.max_depth);text=json.dumps(data,ensure_ascii=False,indent=2)
     if a.output:Path(a.output).write_text(text+"\n",encoding="utf-8")

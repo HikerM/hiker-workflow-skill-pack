@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 import tempfile
@@ -27,16 +28,10 @@ def safe_id(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "-", value).strip("._-")[:80] or "tool-output"
 
 
-def redact(text: str) -> str:
-    output = text
-    for pattern in SECRET_PATTERNS:
-        output = pattern.sub(r"\1[REDACTED]", output)
-    return output
-
-
-def excerpt(text: str, limit: int) -> tuple[str, bool]:
-    if len(text) <= limit:
-        return text, False
+def _excerpt(path: Path, limit: int) -> tuple[str, bool]:
+    size = path.stat().st_size
+    if size <= limit:
+        return path.read_text(encoding="utf-8", errors="replace"), False
     head = max(1, limit * 2 // 3)
     tail = max(1, limit - head)
     return text[:head].rstrip() + "\n... 已截断，完整脱敏输出见 artifact_reference ...\n" + text[-tail:].lstrip(), True
@@ -285,6 +280,7 @@ def main() -> int:
     parser.add_argument("--root", default=".")
     parser.add_argument("--evidence-id")
     parser.add_argument("--max-output-chars", type=int, default=4000)
+    parser.add_argument("--max-spool-bytes", type=int, default=8 * 1024 * 1024)
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--max-artifact-bytes", type=int)
     parser.add_argument("--retrieve-artifact")
@@ -307,7 +303,7 @@ def main() -> int:
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
     result = run_bounded(root, args.evidence_id, command, max(500, args.max_output_chars), args.timeout, args.max_artifact_bytes)
     print(json.dumps({"ok": result["exit_code"] == 0, "result": result}, ensure_ascii=False, indent=2))
-    return result["exit_code"]
+    return int(result["exit_code"])
 
 
 if __name__ == "__main__":

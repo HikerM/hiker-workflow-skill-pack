@@ -3,10 +3,14 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
 from qualitylib import write_json
+CORE_SCRIPTS=Path(__file__).resolve().parents[2]/"ai-engineering-core"/"scripts"
+if str(CORE_SCRIPTS) not in sys.path:sys.path.insert(0,str(CORE_SCRIPTS))
+from source_surface import TraversalBudget,walk_source_files
 
 PATTERNS = [
     ("PASSWORD", re.compile(r"(?i)(password|passwd|pwd|密码)\s*[:=：]?\s*([^\s,;，；]{4,})"), "BLOCK"),
@@ -35,8 +39,10 @@ def redact_text(text: str) -> tuple[str, list[dict[str, Any]]]:
 
 
 def scan(source: Path, output: Path | None, max_files: int = 500, max_bytes: int = 2_000_000) -> dict[str, Any]:
-    files = [source] if source.is_file() else [path for path in sorted(source.rglob("*")) if path.is_file() and path.suffix.lower() in TEXT_SUFFIXES]
-    files = files[:max_files]
+    if source.is_file():files=[source]
+    else:
+        found,_=walk_source_files(source,TraversalBudget(max_depth=12,max_directories=4096,max_entries=20000,max_files=max(5000,max_files*10),max_observed_bytes=512*1024*1024,max_elapsed_ms=10000),ignored_directories=frozenset(),include=lambda path:path.suffix.lower() in TEXT_SUFFIXES)
+        files=found[:max_files]
     findings: list[dict[str, Any]] = []
     written: list[str] = []
     for path in files:

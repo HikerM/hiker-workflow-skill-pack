@@ -120,7 +120,7 @@ def _resolve_pro_executable(environment: Mapping[str, str]) -> tuple[str | None,
 
 def detect_pro_runtime(
     environment: Mapping[str, str] | None = None,
-    runner: Any = subprocess.run,
+    runner: Any = bounded_machine_run,
 ) -> dict[str, Any]:
     effective_environment = os.environ if environment is None else environment
     executable, detection_source = _resolve_pro_executable(effective_environment)
@@ -453,7 +453,7 @@ def invoke_bridge(
     action: str,
     boundary_proof: str | None,
     environment: Mapping[str, str] | None = None,
-    runner: Any = subprocess.run,
+    runner: Any = bounded_machine_run,
     detected: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     effective_environment = os.environ if environment is None else environment
@@ -514,7 +514,7 @@ def invoke_bridge(
 def query_project_facts(
     root: Path,
     environment: Mapping[str, str] | None = None,
-    runner: Any = subprocess.run,
+    runner: Any = bounded_machine_run,
     detected: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     effective_environment = os.environ if environment is None else environment
@@ -556,7 +556,7 @@ def query_project_facts(
 def router_boundary_adoption(
     root: Path,
     environment: Mapping[str, str] | None = None,
-    runner: Any = subprocess.run,
+    runner: Any = bounded_machine_run,
     detected: dict[str, Any] | None = None,
     authority_facts: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:

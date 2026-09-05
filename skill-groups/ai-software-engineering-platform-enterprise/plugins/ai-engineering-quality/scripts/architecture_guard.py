@@ -11,13 +11,14 @@ from typing import Any
 
 from change_set import collect
 from graph_store import impact, import_tokens, resolve_token
-from qualitylib import git_root, head, load_json, matches_any, now, posix, repo_ai, worktree_fingerprint, write_json
+from qualitylib import git, git_root, head, load_json, matches_any, now, posix, repo_ai, worktree_fingerprint, write_json
 
 
 DEFAULT_BUDGET = {
     "preempt_lines": 320, "warn_lines": 400, "block_lines": 700,
     "responsibility_growth": 1, "warn_growth": 80, "block_growth": 200,
 }
+MAX_HISTORICAL_TEXT_BYTES = 2_000_000
 DECLARATION = re.compile(
     r"^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?(?:class|interface|type|enum|function|def|record|struct)\s+[A-Za-z_$][\w$]*"
     r"|^\s*(?:export\s+)?(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=",
@@ -47,15 +48,21 @@ def text_lines(path: Path) -> int | None:
 
 
 def git_lines(root: Path, rel: str, ref: str = "HEAD") -> int:
-    result = subprocess.run(["git", "show", f"{ref}:{rel}"], cwd=root, text=True, encoding="utf-8", errors="replace", stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-    return len(result.stdout.splitlines()) if result.returncode == 0 else 0
+    return len(git_text(root, rel, ref).splitlines())
 
 
 def git_text(root: Path, rel: str, ref: str = "HEAD") -> str:
-    result = subprocess.run(
-        ["git", "show", f"{ref}:{rel}"], cwd=root, text=True, encoding="utf-8", errors="replace",
-        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-    )
+    normalized = posix(rel)
+    if normalized == ".ai" or normalized.startswith(".ai/"):
+        return ""
+    spec = f"{ref}:{normalized}"
+    size = git(root, "cat-file", "-s", spec, check=False)
+    try:
+        if size.returncode != 0 or int(size.stdout.strip()) > MAX_HISTORICAL_TEXT_BYTES:
+            return ""
+    except ValueError:
+        return ""
+    result = git(root, "show", spec, check=False)
     return result.stdout if result.returncode == 0 else ""
 
 
@@ -85,10 +92,7 @@ def structural_decisions(contract: dict[str, Any]) -> tuple[dict[str, dict[str, 
 
 
 def recent_line_trajectory(root: Path, rel: str, current: int, limit: int = 4) -> list[int]:
-    result = subprocess.run(
-        ["git", "log", "--format=%H", f"-n{limit}", "--", rel], cwd=root, text=True,
-        encoding="utf-8", errors="replace", stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-    )
+    result = git(root, "log", "--format=%H", f"-n{limit}", "--", rel, check=False)
     commits = [line.strip() for line in result.stdout.splitlines() if line.strip()]
     historical = [git_lines(root, rel, commit) for commit in reversed(commits)]
     return historical + [current]

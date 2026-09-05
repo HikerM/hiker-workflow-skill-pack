@@ -3,10 +3,14 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
 from qualitylib import git, git_root, posix
+CORE_SCRIPTS=Path(__file__).resolve().parents[2]/"ai-engineering-core"/"scripts"
+if str(CORE_SCRIPTS) not in sys.path:sys.path.insert(0,str(CORE_SCRIPTS))
+from source_surface import TraversalLimitReached,iter_git_nul_records,is_reserved_source_path
 
 
 TEXT_EXTENSIONS = {
@@ -43,14 +47,16 @@ def _is_runtime_file(path: str) -> bool:
 
 
 def _tracked_files(root: Path, mode: str) -> list[str]:
-    if mode == "changed":
-        names: set[str] = set()
-        for args in (("diff", "--name-only", "-z"), ("diff", "--cached", "--name-only", "-z"), ("ls-files", "--others", "--exclude-standard", "-z")):
-            result = git(root, *args, check=False)
-            names.update(posix(item) for item in result.stdout.split("\0") if item)
-        return sorted(names)
-    result = git(root, "ls-files", "-z", check=False)
-    return [posix(item) for item in result.stdout.split("\0") if item][:20_000]
+    commands=[("diff","--name-only","-z","--",".",":(exclude).ai/**"),("diff","--cached","--name-only","-z","--",".",":(exclude).ai/**"),("ls-files","--others","--exclude-standard","-z","--",".",":(exclude).ai/**")] if mode=="changed" else [("ls-files","-z","--",".",":(exclude).ai/**")]
+    names:set[str]=set()
+    try:
+        for args in commands:
+            for item in iter_git_nul_records(root,list(args),max_items=20000):
+                normalized=posix(item)
+                if not is_reserved_source_path(root,root/normalized):names.add(normalized)
+    except (RuntimeError,TraversalLimitReached):
+        return []
+    return sorted(names)[:20000]
 
 
 def _looks_user_visible(line: str) -> bool:

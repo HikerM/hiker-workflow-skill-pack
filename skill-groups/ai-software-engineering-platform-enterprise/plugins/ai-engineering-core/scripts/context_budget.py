@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 from pathlib import Path
 from typing import Any
 
 from corelib import ai_root, read_json
+from source_surface import TraversalLimitReached, iter_git_nul_records
 
 
 MODE_BUDGETS: dict[str, dict[str, Any]] = {
@@ -62,20 +62,13 @@ SCOPE_EXPANSION_SIGNALS = {
 }
 
 
-def _run(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        list(args), cwd=root, text=True, encoding="utf-8", errors="replace",
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
-    )
-
-
 def tracked_file_count(root: Path) -> int | None:
     if not any((candidate / ".git").exists() for candidate in (root.resolve(), *root.resolve().parents)):
         return None
-    result = _run(root, "git", "ls-files", "-z")
-    if result.returncode != 0:
+    try:
+        return sum(1 for _ in iter_git_nul_records(root,["ls-files","-z","--",".",":(exclude).ai/**"]))
+    except (RuntimeError, TraversalLimitReached):
         return None
-    return sum(1 for item in result.stdout.split("\0") if item)
 
 
 def closed_task_count(root: Path) -> int:

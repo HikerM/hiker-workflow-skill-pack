@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import re
 import sys
 from pathlib import Path
@@ -16,6 +15,10 @@ CORE_SCRIPTS = Path(__file__).resolve().parents[2] / "ai-engineering-core" / "sc
 if str(CORE_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(CORE_SCRIPTS))
 from resource_budget import effective_budget  # noqa: E402
+
+CORE_SCRIPTS=Path(__file__).resolve().parents[2]/"ai-engineering-core"/"scripts"
+if str(CORE_SCRIPTS) not in sys.path:sys.path.insert(0,str(CORE_SCRIPTS))
+from source_surface import TraversalBudget,read_bounded_bytes,read_bounded_text,walk_source_files
 
 
 SKIP = {".git", ".ai", "node_modules", "vendor", "dist", "build", "coverage", ".venv", "venv", "tmp", "storage"}
@@ -43,7 +46,7 @@ def bounded_files(root: Path, max_depth: int = 7, max_files: int = 4000) -> tupl
 
 def read_text(path: Path) -> str:
     try:
-        return path.read_text(encoding="utf-8", errors="ignore")
+        value,truncated=read_bounded_text(path,8*1024*1024);return "" if truncated else value
     except OSError:
         return ""
 
@@ -57,7 +60,7 @@ def fingerprint(paths: Iterable[Path], root: Path) -> str:
     for path in sorted(paths):
         digest.update(path.relative_to(root).as_posix().encode("utf-8"))
         try:
-            digest.update(path.read_bytes())
+            digest.update(read_bounded_bytes(path,2*1024*1024)[0])
         except OSError:
             pass
     return digest.hexdigest()
@@ -80,7 +83,7 @@ def finding(rule: str, path: Path, root: Path, severity: str = "MEDIUM") -> dict
 
 def json_file(path: Path) -> dict[str, Any]:
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(read_text(path))
         return data if isinstance(data, dict) else {}
     except (OSError, json.JSONDecodeError):
         return {}

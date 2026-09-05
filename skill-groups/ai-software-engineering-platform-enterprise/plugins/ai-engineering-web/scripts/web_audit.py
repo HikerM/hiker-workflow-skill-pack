@@ -5,12 +5,16 @@ import hashlib
 import json
 import re
 import subprocess
+import sys
 from collections import Counter
 from pathlib import Path
 from typing import Any, Iterable
 
 from component_registry import build as build_registry
 from weblib import SOURCE_EXT, digest, read_json, source_inventory
+CORE_SCRIPTS=Path(__file__).resolve().parents[2]/"ai-engineering-core"/"scripts"
+if str(CORE_SCRIPTS) not in sys.path:sys.path.insert(0,str(CORE_SCRIPTS))
+from source_surface import TraversalLimitReached,iter_git_nul_records,is_reserved_source_path
 
 
 HEX = re.compile(r"#[0-9a-fA-F]{3,8}\b")
@@ -32,20 +36,16 @@ REQUIRED_COMPOSITION_FIELDS = {
 
 def _run_git(root: Path, args: list[str]) -> list[str]:
     try:
-        result = subprocess.run(
-            ["git", *args], cwd=str(root), text=True, encoding="utf-8", errors="replace",
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
-        )
-        return [line.strip().replace("\\", "/") for line in result.stdout.splitlines() if line.strip()]
-    except OSError:
+        return [item.strip().replace("\\","/") for item in iter_git_nul_records(root,[*args,"-z","--",".",":(exclude).ai/**"],max_items=20000) if item.strip()]
+    except (OSError,RuntimeError,TraversalLimitReached):
         return []
 
 
 def _changed_sources(root: Path) -> list[Path]:
-    changed = set(_run_git(root, ["diff", "--name-only", "--diff-filter=ACMRT", "HEAD", "--"]))
+    changed = set(_run_git(root, ["diff", "--name-only", "--diff-filter=ACMRT", "HEAD"]))
     changed.update(_run_git(root, ["ls-files", "--others", "--exclude-standard"]))
     paths = [root / name for name in sorted(changed)]
-    return [path for path in paths if path.is_file() and path.suffix.lower() in SOURCE_EXT]
+    return [path for path in paths if path.is_file() and path.suffix.lower() in SOURCE_EXT and not is_reserved_source_path(root,path)]
 
 
 def _surface_utility_count(text: str) -> int:

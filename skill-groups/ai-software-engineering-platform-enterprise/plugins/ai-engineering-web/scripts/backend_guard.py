@@ -53,7 +53,7 @@ def bounded_files(root: Path, max_depth: int = 4, max_dirs: int = 240) -> list[P
 
 
 def package_signal(path: Path) -> dict:
-    try: data = json.loads(path.read_text(encoding="utf-8"))
+    try: data = json.loads(bounded_text(path))
     except Exception: return {}
     deps = {str(k).lower(): v for section in ("dependencies", "devDependencies") for k, v in (data.get(section) or {}).items()}
     selected = next(((key, label) for key, label in NODE_FRAMEWORKS if key in deps), None)
@@ -63,7 +63,7 @@ def package_signal(path: Path) -> dict:
 
 
 def python_signal(path: Path) -> dict:
-    text = path.read_text(encoding="utf-8", errors="ignore"); runtime = "unknown"
+    text = bounded_text(path); runtime = "unknown"
     if path.name == "pyproject.toml":
         match = re.search(r'^\s*requires-python\s*=\s*["\']([^"\']+)["\']', text, re.MULTILINE)
         if match: runtime = match.group(1)
@@ -76,7 +76,7 @@ def python_signal(path: Path) -> dict:
 
 def dotnet_signal(path: Path) -> dict:
     try:
-        text = path.read_text(encoding="utf-8", errors="ignore"); root = ET.fromstring(text); values = [x.text for x in root.iter() if x.tag.split("}")[-1] in {"TargetFramework", "TargetFrameworks"} and x.text]
+        text = bounded_text(path); root = ET.fromstring(text); values = [x.text for x in root.iter() if x.tag.split("}")[-1] in {"TargetFramework", "TargetFrameworks"} and x.text]
         runtime = ";".join(values) or "unknown"
     except Exception: return {}
     low = text.lower(); sdk = str(root.attrib.get("Sdk") or root.attrib.get("sdk") or "").lower()
@@ -87,7 +87,7 @@ def dotnet_signal(path: Path) -> dict:
 
 
 def generic_signal(path: Path) -> dict:
-    low = path.read_text(encoding="utf-8", errors="ignore").lower(); name = path.name
+    low = bounded_text(path).lower(); name = path.name
     if name in {"pom.xml", "build.gradle", "build.gradle.kts"}:
         candidates = (("spring", "Spring Boot"), ("quarkus", "Quarkus"), ("micronaut", "Micronaut")); selected = next(((token, label) for token, label in candidates if token in low), None)
         if not selected: return {}
@@ -112,7 +112,7 @@ def digest(paths: list[Path], root: Path) -> str:
     h = hashlib.sha256()
     for path in sorted(paths):
         h.update(path.relative_to(root).as_posix().encode())
-        try: h.update(path.read_bytes())
+        try: h.update(read_bounded_bytes(path,8*1024*1024)[0])
         except OSError: pass
     return h.hexdigest()
 
@@ -127,15 +127,7 @@ def detect(root: Path) -> dict:
         else: continue
         if signal and not any(x["family"] == signal["family"] and x["source"] == signal["source"] for x in stacks): stacks.append(signal)
     contracts = [p for p in files if p.name.lower() in CONTRACT_NAMES or p.suffix.lower() in {".proto", ".graphql", ".gql"}]
-    migrations = []; visited_dirs = 0
-    for dirpath, dirnames, filenames in os.walk(root):
-        visited_dirs += 1
-        if visited_dirs > 500:
-            dirnames[:] = []; break
-        rel = Path(dirpath).relative_to(root); dirnames[:] = [d for d in dirnames if d not in SKIP]
-        if len(rel.parts) > 5: dirnames[:] = []
-        if any(token in {x.lower() for x in rel.parts} for token in {"migration", "migrations", "migrate"}):
-            migrations.extend(Path(dirpath) / name for name in filenames[:200] if Path(name).suffix.lower() in {".sql", ".py", ".ts", ".js", ".cs", ".java"})
+    migrations,_=walk_source_files(root,TraversalBudget(max_depth=5,max_directories=500,max_entries=50000,max_files=20000,max_observed_bytes=2*1024*1024*1024,max_elapsed_ms=10000),ignored_directories=frozenset(name.casefold() for name in SKIP),include=lambda path:any(token in {part.lower() for part in path.relative_to(root).parts[:-1]} for token in {"migration","migrations","migrate"}) and path.suffix.lower() in {".sql",".py",".ts",".js",".cs",".java"})
     unknown = [x["family"] for x in stacks if x["runtime"] == "unknown"]
     return {"schema_version": "1.0.0", "root": str(root), "stacks": stacks, "contracts": [p.relative_to(root).as_posix() for p in contracts], "migrations": [p.relative_to(root).as_posix() for p in migrations[:200]], "contract_fingerprint": digest(contracts, root), "unknown_runtime_families": unknown, "bounded_scan": {"manifest_max_depth": 4, "manifest_max_dirs": 240, "migration_max_dirs": 500}}
 

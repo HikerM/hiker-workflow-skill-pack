@@ -113,9 +113,6 @@ def _head_facts(git_dir: Path, common_dir: Path) -> tuple[str | None, str | None
 
 
 def _tracked_inventory(repo: Path, scope: Path, marker_limit: int = 96, manifest_limit: int = 500) -> dict[str, Any]:
-    result = _git(repo, "ls-files", "-z")
-    if result.returncode:
-        return {"count": None, "markers": [], "manifest_hash": hashlib.sha256(b"").hexdigest()}
     markers: list[Path] = []
     manifests: list[Path] = []
     count = 0
@@ -125,41 +122,41 @@ def _tracked_inventory(repo: Path, scope: Path, marker_limit: int = 96, manifest
         scope_prefix = ""
     marker_names = {name.lower() for name in PROJECT_MARKERS}
     state_names = {name.lower() for name in STATE_MANIFEST_NAMES}
-    for raw in result.stdout.split("\0"):
-        if not raw:
-            continue
-        count += 1
-        rel = Path(raw)
-        normalized = rel.as_posix()
-        in_scope = not scope_prefix or normalized == scope_prefix or normalized.startswith(scope_prefix + "/")
-        if not in_scope:
-            continue
-        marker_candidate = rel.name.lower() in marker_names or normalized.lower() in marker_names or rel.suffix.lower() in {".sln", ".csproj"}
-        lower = normalized.lower()
-        state_candidate = rel.name.lower() in state_names or "/migrations/" in f"/{lower}/"
-        if not marker_candidate and not state_candidate:
-            continue
-        candidate = repo / rel
-        if (
-            len(markers) < marker_limit
-            and marker_candidate
-            and candidate.is_file()
-        ):
-            markers.append(candidate)
-        if (
-            len(manifests) < manifest_limit
-            and state_candidate
-            and candidate.is_file()
-        ):
-            manifests.append(candidate)
+    try:
+        records=iter_git_nul_records(repo,["ls-files","-z","--",".",":(exclude).ai/**"])
+        for raw in records:
+            count += 1
+            rel = Path(raw)
+            normalized = rel.as_posix()
+            in_scope = not scope_prefix or normalized == scope_prefix or normalized.startswith(scope_prefix + "/")
+            if not in_scope:
+                continue
+            marker_candidate = rel.name.lower() in marker_names or normalized.lower() in marker_names or rel.suffix.lower() in {".sln", ".csproj"}
+            lower = normalized.lower()
+            state_candidate = rel.name.lower() in state_names or "/migrations/" in f"/{lower}/"
+            if not marker_candidate and not state_candidate:
+                continue
+            candidate = repo / rel
+            if is_reserved_source_path(repo,candidate):
+                continue
+            if len(markers) < marker_limit and marker_candidate and candidate.is_file():
+                markers.append(candidate)
+            if len(manifests) < manifest_limit and state_candidate and candidate.is_file():
+                manifests.append(candidate)
+    except (RuntimeError,TraversalLimitReached):
+        return {"count": None,"markers":[],"manifest_hash":hashlib.sha256(b"").hexdigest(),"status":"TRAVERSAL_LIMIT_REACHED"}
     digest = hashlib.sha256()
+    bytes_read=0
     for path in sorted(manifests):
         digest.update(path.relative_to(repo).as_posix().encode("utf-8"))
         try:
-            digest.update(path.read_bytes())
+            raw,truncated=read_bounded_bytes(path,min(256*1024,4*1024*1024-bytes_read))
+            bytes_read+=len(raw);digest.update(raw)
+            if truncated:digest.update(b"[TRUNCATED]")
         except OSError:
             digest.update(b"unreadable")
-    return {"count": count, "markers": markers, "manifest_hash": digest.hexdigest()}
+        if bytes_read>=4*1024*1024:break
+    return {"count": count, "markers": markers, "manifest_hash": digest.hexdigest(),"status":"COMPLETE","bytes_read":bytes_read}
 
 
 def _values_for_keys(value: Any, keys: set[str]) -> list[str]:
@@ -251,12 +248,10 @@ def identify(root: Path, include_untracked_dirty: bool = True) -> dict[str, Any]
         nested.append(str(path))
     inventory = _tracked_inventory(repo, scope)
     if include_untracked_dirty:
-        raw_status = _git(scope, "status", "--porcelain=v1", "-z", "--untracked-files=all").stdout
-        dirty = any(
-            not item[3:].replace("\\", "/").startswith(".ai/")
-            for item in raw_status.split("\0")
-            if len(item) >= 4
-        )
+        try:
+            dirty=any(True for _ in iter_git_nul_records(scope,["status","--porcelain=v1","-z","--untracked-files=all","--",".",":(exclude).ai/**"],max_items=100_000))
+        except (RuntimeError,TraversalLimitReached):
+            dirty=None
     else:
         dirty = None
     return {

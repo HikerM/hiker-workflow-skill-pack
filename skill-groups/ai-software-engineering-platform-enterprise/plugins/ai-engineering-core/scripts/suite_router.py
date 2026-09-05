@@ -324,8 +324,13 @@ def route(
         if signals["source_conflicts"] and not policy_enabled(skill, "source_conflict_safe"):
             error("SOURCE_IDENTITY_CONFLICT", "检测到嵌套工作目录；只能先选择源码身份或工作目录收敛能力")
         state_policy = consistency.get("execution_policy", {})
+        # A source change is not an authority conflict.  Incremental/material
+        # drift invalidates affected evidence, but the current Goal/Task may
+        # continue from Git.  Only quarantine states may suppress recovery.
+        recoverable_drift = consistency.get("status") in {"INCREMENTAL_DRIFT", "MATERIAL_DRIFT"}
         if (
             consistency.get("status") != "STATELESS_UNMANAGED"
+            and not recoverable_drift
             and not state_policy.get("trusted_ai_state")
             and policy_enabled(skill, "requires_trusted_ai_state")
         ):
